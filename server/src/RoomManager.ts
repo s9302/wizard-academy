@@ -10,6 +10,7 @@ import { HubRoom } from "./rooms/HubRoom.ts";
 import { InfectionRoom } from "./rooms/InfectionRoom.ts";
 import { ParkourRoom } from "./rooms/ParkourRoom.ts";
 import { PlaygroundRoom } from "./rooms/PlaygroundRoom.ts";
+import { RoyaleRoom } from "./rooms/RoyaleRoom.ts";
 import type { Room } from "./rooms/Room.ts";
 import { TagRoom } from "./rooms/TagRoom.ts";
 
@@ -23,6 +24,8 @@ function createRoom(info: RoomInfo, level: Level, manager: RoomManager): Room {
       return new TagRoom(info, level);
     case "infection":
       return new InfectionRoom(info, level);
+    case "royale":
+      return new RoyaleRoom(info, level);
     case "free":
       return new PlaygroundRoom(info, level);
   }

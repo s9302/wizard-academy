@@ -11,6 +11,7 @@ export class Input {
   private jumpQueued = false;
   private restartQueued = false;
   private clickQueued = false;
+  private rightClickQueued = false;
   private element: HTMLElement;
 
   constructor(element: HTMLElement) {
@@ -26,6 +27,11 @@ export class Input {
 
     document.addEventListener("mousedown", (e) => {
       if (e.button === 0 && this.locked) this.clickQueued = true;
+      if (e.button === 2 && this.locked) this.rightClickQueued = true;
+    });
+    // Right-click is a spell while playing, not the browser menu.
+    document.addEventListener("contextmenu", (e) => {
+      if (this.locked) e.preventDefault();
     });
 
     document.addEventListener("mousemove", (e) => {
@@ -66,6 +72,13 @@ export class Input {
   consumeClick(): boolean {
     const queued = this.clickQueued;
     this.clickQueued = false;
+    return queued;
+  }
+
+  // Returns true once per right click while playing (battle royale: fireball).
+  consumeRightClick(): boolean {
+    const queued = this.rightClickQueued;
+    this.rightClickQueued = false;
     return queued;
   }
 

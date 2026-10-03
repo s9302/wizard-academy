@@ -260,3 +260,85 @@ button.link { background: none; border: none; color: var(--ink); opacity: 0.7; t
   transition: opacity 0.4s;
 }
 #levelup.show { opacity: 1; }
+
+/* ---- Battle royale ---- */
+
+#crosshair.hit {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: transparent;
+  border: 3px solid #fff;
+  transform: rotate(45deg);
+}
+
+#royale-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: 48px; /* above the controls line */
+  transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: min(420px, calc(100vw - 32px));
+}
+.hp-bar {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+#hp-fill { height: 100%; width: 100%; background: #6ee36e; transition: width 0.2s; }
+#hp-fill.mid { background: #ffd04a; }
+#hp-fill.low { background: #ff5a4a; }
+#shield-fill { position: absolute; left: 0; bottom: 0; height: 5px; background: #5ac8ff; transition: width 0.2s; }
+#shield-fill[hidden] { display: none; }
+#hp-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px #000;
+}
+
+#spell-slots { display: flex; gap: 8px; }
+.spell-slot {
+  position: relative;
+  min-width: 110px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--accent);
+  overflow: hidden;
+  text-align: center;
+}
+.spell-slot.fire { border-color: #ff7a2e; }
+.spell-slot.empty { opacity: 0.45; }
+.slot-key { font-size: 11px; opacity: 0.75; }
+.slot-name { font-size: 14px; font-weight: 700; }
+.slot-count { font-size: 14px; font-weight: 700; color: #ffb27a; }
+.slot-cooldown { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(255, 255, 255, 0.25); }
+
+/* Hurt: a quick red flash at the screen edges. In the storm: a purple haze. */
+#hurt-flash, #storm-haze {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#hurt-flash { box-shadow: inset 0 0 120px 30px rgba(255, 30, 30, 0.6); }
+#storm-haze { background: rgba(140, 50, 220, 0.18); box-shadow: inset 0 0 160px 40px rgba(170, 60, 255, 0.6); transition: opacity 0.4s; }
+#hurt-flash.show, #storm-haze.show { opacity: 1; }
+
+/* Spectating: the world goes a little grey. */
+body.spectating #game canvas { filter: saturate(0.35); }
+body.spectating #royale-bottom { opacity: 0.4; }
+
+@media (max-width: 700px) {
+  .spell-slot { min-width: 0; }
+}

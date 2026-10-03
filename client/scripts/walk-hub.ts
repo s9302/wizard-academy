@@ -65,9 +65,10 @@ const check = (ok: boolean, what: string) => {
 const xz = (p: Vec3): [number, number] => [p[0], p[2]];
 
 for (const portal of portals) {
-  // From the spawn, to the south edge of the plaza, to the portal's path, and in.
+  // From the spawn to the south edge of the plaza, around it (the pedestal
+  // is in the middle) to the portal's path, and in.
   player.teleport(...academy.spawn);
-  const entered = walk([[0, 10], xz(portalPoint(portal, 0, 0, 8)), xz(portalPoint(portal, 0, 0, -1))]);
+  const entered = walk([[0, 10], ...aroundPlaza(portal), xz(portalPoint(portal, 0, 0, 8)), xz(portalPoint(portal, 0, 0, -1))]);
   check(entered === portal.room, `walk into ${portal.room} from the spawn (entered: ${entered})`);
 
   // From behind, walking straight at it.
@@ -85,6 +86,19 @@ for (const portal of portals) {
     touching() === null && Math.abs(settled[1] - arrival[1]) < 0.3 && !player.fellOut,
     `${portal.room} arrival spot is clear ground (settled at y=${settled[1].toFixed(2)})`,
   );
+}
+
+// Points on a 10 m circle around the plaza, from due south to the portal's side.
+function aroundPlaza(portal: Portal): [number, number][] {
+  const start = Math.PI / 2;
+  let delta = Math.atan2(portal.pos[2], portal.pos[0]) - start;
+  if (delta > Math.PI) delta -= Math.PI * 2;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  const steps = Math.ceil(Math.abs(delta) / (Math.PI / 8));
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const a = start + (delta * i) / Math.max(steps, 1);
+    return [10 * Math.cos(a), 10 * Math.sin(a)] as [number, number];
+  });
 }
 
 // How far in front of the portal's centerline the player is (negative = behind).

@@ -1,7 +1,8 @@
 // The hub: a plaza in front of the academy, where everyone arrives. A ring of
 // portal arches leads to every other room: the three trials on the west side,
-// tag, infection and the playground on the east. The academy building to the
-// north is scenery (you can't go in).
+// tag, infection and the playground on the east, and the battle royale at
+// the north end, in front of the academy door. The academy building is
+// scenery (you can't go in).
 
 import { FALL_RESPAWN_Y } from "../constants.ts";
 import type { Vec3 } from "../protocol.ts";
@@ -83,6 +84,7 @@ const portalAngles: [string, number, string][] = [
   ["tag", 30, "#ff5a4a"],
   ["infection", 0, "#7dff5a"],
   ["playground", 330, "#ffd25a"],
+  ["royale", 270, "#ff3d8b"],
 ];
 
 export const portals: Portal[] = portalAngles.map(([room, degrees, color]) => {

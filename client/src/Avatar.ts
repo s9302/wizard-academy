@@ -123,7 +123,57 @@ export function createAvatar(id: number, name: string): THREE.Group {
   return group;
 }
 
+// ---- Battle royale: a health bar over the head, and a flash when hit ----
+
+const BAR_W = 128;
+const BAR_H = 20;
+
+// hp and shield are 0..1 of their maximums. Drawn on a small canvas (it only
+// changes when someone is hit, so redrawing is cheap).
+export function setAvatarHealth(group: THREE.Group, hp: number, shield: number): void {
+  let bar = group.userData.healthBar as THREE.Sprite | undefined;
+  if (!bar) {
+    const canvas = document.createElement("canvas");
+    canvas.width = BAR_W;
+    canvas.height = BAR_H;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    bar = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthWrite: false }));
+    bar.scale.set(0.9, (0.9 * BAR_H) / BAR_W, 1);
+    bar.position.y = TOP + 1.28;
+    group.add(bar);
+    group.userData.healthBar = bar;
+  }
+  const texture = bar.material.map as THREE.CanvasTexture;
+  const ctx = (texture.image as HTMLCanvasElement).getContext("2d")!;
+  ctx.clearRect(0, 0, BAR_W, BAR_H);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.fillRect(0, 0, BAR_W, BAR_H);
+  ctx.fillStyle = hp > 0.5 ? "#6ee36e" : hp > 0.25 ? "#ffd04a" : "#ff5a4a";
+  ctx.fillRect(3, 3, (BAR_W - 6) * hp, BAR_H - 6);
+  if (shield > 0) {
+    ctx.fillStyle = "#5ac8ff";
+    ctx.fillRect(3, BAR_H - 7, (BAR_W - 6) * shield, 4);
+  }
+  texture.needsUpdate = true;
+  bar.visible = true;
+}
+
+export function hideAvatarHealth(group: THREE.Group): void {
+  const bar = group.userData.healthBar as THREE.Sprite | undefined;
+  if (bar) bar.visible = false;
+}
+
+// Glow red for a moment (hit by a spell).
+export function flashAvatar(group: THREE.Group): void {
+  const parts = group.userData.parts as AvatarParts;
+  parts.bodyMat.emissive.set("#ff3030");
+  window.clearTimeout(group.userData.flashTimer);
+  group.userData.flashTimer = window.setTimeout(() => parts.bodyMat.emissive.set("#000000"), 140);
+}
+
 export function disposeAvatar(group: THREE.Group): void {
+  window.clearTimeout(group.userData.flashTimer);
   group.traverse((obj) => {
     if (obj instanceof THREE.Mesh || obj instanceof THREE.Sprite) {
       obj.geometry.dispose();

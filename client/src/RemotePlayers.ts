@@ -8,7 +8,7 @@
 
 import * as THREE from "three";
 import type { PlayerInfo, Vec3 } from "../../shared/src/protocol.ts";
-import { type AvatarStatus, createAvatar, disposeAvatar, setAvatarStatus } from "./Avatar.ts";
+import { type AvatarStatus, createAvatar, disposeAvatar, flashAvatar, setAvatarHealth, setAvatarStatus } from "./Avatar.ts";
 import type { ServerClock } from "./ServerClock.ts";
 
 const INTERP_DELAY_MS = 120;
@@ -69,6 +69,28 @@ export class RemotePlayers {
     this.statuses.clear();
     for (const id of ids) this.statuses.set(id, chaserStatus);
     for (const [id, remote] of this.remotes) setAvatarStatus(remote.avatar, this.statuses.get(id) ?? "runner");
+  }
+
+  // ---- Battle royale ----
+
+  // Hide players who are out of the round (they're spectating).
+  setVisible(id: number, visible: boolean): void {
+    const remote = this.remotes.get(id);
+    if (remote) remote.avatar.visible = visible;
+  }
+
+  forEachId(fn: (id: number) => void): void {
+    for (const id of this.remotes.keys()) fn(id);
+  }
+
+  setHealth(id: number, hp: number, shield: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) setAvatarHealth(remote.avatar, hp, shield);
+  }
+
+  flash(id: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) flashAvatar(remote.avatar);
   }
 
   // Tagging: the nearest player within `range` that you're roughly facing

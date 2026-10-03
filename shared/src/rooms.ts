@@ -2,7 +2,7 @@
 // rooms can share a level (tag and infection both use the courtyard). You
 // arrive in the hub and walk through its portals to reach the others.
 
-export type RoomMode = "hub" | "free" | "parkour" | "tag" | "infection";
+export type RoomMode = "hub" | "free" | "parkour" | "tag" | "infection" | "royale";
 
 export type RoomInfo = {
   id: string;
@@ -20,6 +20,7 @@ export const ROOMS: RoomInfo[] = [
   { id: "trial3", name: "Trial III: The Shattered Bridge", levelId: "trial3", mode: "parkour" },
   { id: "tag", name: "Tag", levelId: "courtyard", mode: "tag" },
   { id: "infection", name: "Infection: The Spreading Curse", levelId: "courtyard", mode: "infection" },
+  { id: "royale", name: "Battle Royale: Last Wizard Standing", levelId: "arena", mode: "royale" },
   { id: "playground", name: "Playground", levelId: "playground", mode: "free" },
 ];
 

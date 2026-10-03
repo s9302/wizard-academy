@@ -16,6 +16,11 @@ export const XP = {
   perCurse: 10,
   maxTagsPaid: 10, // per round, per player
 
+  // Battle royale, per finished round.
+  royaleWinner: 75, // last wizard standing
+  royaleTopThree: 20, // 2nd or 3rd
+  perElimination: 15, // max maxTagsPaid per round
+
   // A round with no other real players (only bots) pays half: practice.
   botsOnlyFraction: 0.5,
 };

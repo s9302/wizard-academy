@@ -21,6 +21,7 @@ import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
+import { Royale } from "./royale/Royale.ts";
 import { ServerClock } from "./ServerClock.ts";
 
 const FIXED_DT = 1 / 60;
@@ -30,6 +31,16 @@ const FEED_MESSAGE_MS = 6000;
 // The sun's shadow camera covers this many meters around the player.
 const SHADOW_RANGE = 40;
 const SUN_OFFSET = new THREE.Vector3(20, 35, 10);
+
+// The controls line at the bottom left, per mode.
+const MOVE_HELP = "WASD move \u00b7 Shift run \u00b7 Space jump";
+const HELP: Record<string, string> = {
+  free: `${MOVE_HELP} \u00b7 Esc pause`,
+  parkour: `${MOVE_HELP} \u00b7 R restart run \u00b7 Esc pause`,
+  tag: `${MOVE_HELP} \u00b7 Click tag \u00b7 Esc pause`,
+  infection: `${MOVE_HELP} \u00b7 Click curse \u00b7 Esc pause`,
+  royale: `${MOVE_HELP} \u00b7 Click Arcane Bolt \u00b7 Right-click Fireball \u00b7 Esc pause`,
+};
 
 export type GameOptions = {
   name: string;
@@ -59,6 +70,7 @@ export class Game {
   private parkour: ParkourHud | null = null;
   private chase: ChaseHud | null = null;
   private portals: Portals | null = null;
+  private royale: Royale | null = null;
   private onPortal: (roomId: string) => void;
   private resolveReady!: () => void;
   // Resolves once the server has welcomed us into the room (or hung up).
@@ -123,7 +135,11 @@ export class Game {
       this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, room.name);
     } else if (room.mode === "tag" || room.mode === "infection") {
       this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }));
+    } else if (room.mode === "royale") {
+      const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
+      this.royale = new Royale(this.scene, hud, this.clock, level, room.name, this.remotes, send, () => this.myId);
     }
+    document.getElementById("help")!.textContent = HELP[room.mode] ?? HELP.free;
 
     this.resize();
     window.addEventListener("resize", this.onResize);
@@ -173,6 +189,7 @@ export class Game {
 
   private onServerMessage(msg: ServerMsg): void {
     if (this.disposed) return; // still in flight when we left
+    if (this.royale?.onMessage(msg)) return;
     switch (msg.t) {
       case "welcome":
         this.myId = msg.id;
@@ -181,13 +198,17 @@ export class Game {
         this.player.teleport(...msg.spawn);
         this.input.yaw = msg.yaw ?? this.level.spawnYaw ?? 0;
         this.input.pitch = 0;
-        for (const info of msg.players) this.remotes.add(info, msg.time);
+        for (const info of msg.players) {
+          this.remotes.add(info, msg.time);
+          this.royale?.onRemoteAdded(info.id);
+        }
         this.start();
         this.resolveReady();
         break;
       case "join":
         this.clock.note(msg.time);
         this.remotes.add(msg.player, msg.time);
+        this.royale?.onRemoteAdded(msg.player.id);
         break;
       case "moved":
         this.clock.note(msg.time);
@@ -299,6 +320,7 @@ export class Game {
     window.removeEventListener("resize", this.onResize);
     window.clearTimeout(this.levelUpTimer);
 
+    this.royale?.dispose();
     this.remotes.clear();
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
@@ -315,7 +337,7 @@ export class Game {
     const hud = document.getElementById("hud")!;
     for (const child of [...hud.children]) if (!this.hudBaseline.has(child)) child.remove();
     this.feedEl.replaceChildren();
-    this.crosshairEl.classList.remove("target");
+    this.crosshairEl.classList.remove("target", "hit");
     document.getElementById("levelup")!.classList.remove("show");
     document.getElementById("bot-controls")!.hidden = true;
     document.body.classList.remove("role-it", "role-cursed");
@@ -343,7 +365,15 @@ export class Game {
     // Tagging: the crosshair turns red when someone is in reach; click to tag.
     const target = this.tagTarget();
     this.crosshairEl.classList.toggle("target", target !== null);
-    if (this.input.consumeClick() && target !== null) this.net.send({ t: "tag", target });
+    const clicked = this.input.consumeClick();
+    if (clicked && target !== null) this.net.send({ t: "tag", target });
+    // Battle royale: click casts a bolt, right-click a fireball, from your eyes
+    // along where you're looking.
+    const rightClicked = this.input.consumeRightClick();
+    if (this.royale && (clicked || rightClicked)) {
+      const dir = this.camera.getWorldDirection(new THREE.Vector3());
+      this.royale.cast(clicked ? "bolt" : "fireball", this.camera.position, dir);
+    }
 
     // Fell off the level: freeze and ask the server to respawn us (retrying
     // in case the request is lost). The reply is a "teleport" message.
@@ -380,6 +410,7 @@ export class Game {
     this.remotes.update();
     this.markers.update(now / 1000);
     this.portals?.update(now / 1000);
+    this.royale?.update(now / 1000, this.player.position, this.clock.now());
     if (this.portals) {
       const p = this.player.position;
       const target = this.portals.enteredPortal([p.x, p.y, p.z]);
@@ -397,7 +428,7 @@ export class Game {
       this.statusTimer = 0.5;
       const total = this.remotes.count + 1;
       // Modes with a center panel already show the room name there.
-      const where = this.parkour || this.chase ? "" : ` \u00b7 ${this.room.name}`;
+      const where = this.parkour || this.chase || this.royale ? "" : ` \u00b7 ${this.room.name}`;
       this.statusEl.textContent = `${this.name}${where} \u00b7 ${total} wizard${total === 1 ? "" : "s"} here`;
     }
 

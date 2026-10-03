@@ -1,6 +1,7 @@
 // Turns raw WebSocket text into a typed message, or null if it is malformed.
 // Nothing from a client is trusted until it has passed through here.
 
+import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
 
 // The world is small; anything outside this box is garbage or an attack.
@@ -50,6 +51,15 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case "bots":
       if (msg.action !== "add" && msg.action !== "remove") return null;
       return { t: "bots", action: msg.action };
+    case "cast": {
+      if (!SPELL_IDS.includes(msg.spell as SpellId) || !isVec3(msg.o) || !isVec3(msg.d)) return null;
+      if (!Number.isSafeInteger(msg.seq) || (msg.seq as number) < 0) return null;
+      // Direction must be (roughly) a unit vector; the server renormalizes it.
+      const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
+      if (len < 0.9 || len > 1.1) return null;
+      const d: Vec3 = [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len];
+      return { t: "cast", spell: msg.spell as SpellId, o: [msg.o[0], msg.o[1], msg.o[2]], d, seq: msg.seq as number };
+    }
     case "tag":
       if (!Number.isSafeInteger(msg.target) || (msg.target as number) < 1) return null;
       return { t: "tag", target: msg.target as number };

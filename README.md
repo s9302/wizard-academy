@@ -1,8 +1,8 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 6** done (the
-academy hub, with portals to every room).
+first person with friends. Built in phases; currently **Phase 7** done (combat
+and the wizard battle royale).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -82,7 +82,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `accounts-check` (run it last: it trips the login rate limit
+`hub-check`, `royale-check`, `accounts-check` (run it last: it trips the login rate limit
 for your IP).
 
 
@@ -137,6 +137,9 @@ no guest play: XP and best times need an owner.
 | Tag: least time as It | +40 |
 | Infection: surviving the curse | +50 |
 | Each tag / curse you land (max 10 per round) | +5 / +10 |
+| Finishing a battle royale round | 20 |
+| Battle royale: last wizard standing / 2nd or 3rd | +75 / +20 |
+| Each elimination (max 10 per round) | +15 |
 | Rounds with only you and bots | half XP (practice) |
 
 **Levels:** level 2 needs 100 XP, then each level needs 50 more than the last
@@ -158,9 +161,10 @@ docker compose exec postgres psql -U wizard -d wizard
 ## The Academy (hub)
 
 After logging in, **Enter the Academy** puts you in the courtyard in front of
-the academy building. Six portal arches stand in a ring around the plaza:
+the academy building. Seven portal arches stand in a ring around the plaza:
 the three trials on the west side, Tag, Infection and the Playground on the
-east. Walk into one to go there.
+east, and the Battle Royale at the north end, in front of the academy door.
+Walk into one to go there.
 
 - Each portal has a sign with the room's name, how many people are in it
   right now (bots not counted; refreshed every 2 s), and for trials your
@@ -250,7 +254,9 @@ then the next countdown. If players leave and fewer than 2 remain, the round
 is cancelled rather than declaring a winner.
 
 **Shared code:** both modes are the same rules engine,
-`server/src/rooms/ChaseRoom.ts` (round cycle, tag checks, who's chasing).
+`server/src/rooms/ChaseRoom.ts` (tag checks, who's chasing), on top of
+`RoundRoom.ts` (the round cycle, bots and XP payout, shared with the battle
+royale).
 `TagRoom.ts` and `InfectionRoom.ts` only define what a tag *does*, when a
 round ends early, and the results.
 
@@ -266,6 +272,62 @@ checking only the target's newest position would reject fair tags.
 ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 GAME_PIN=... node server/scripts/chase-check.ts http://localhost:3000
 GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000   # bots: add/remove, no wall clipping, tagging
+```
+
+## Battle royale
+
+**Last wizard standing**, in **the Ruins**: an 84 m walled bowl with a raised
+dais in the middle, a ring of broken walls (tall ones to hide behind, waist
+high ones to shoot over), arches, scattered cover, and four watchtowers with
+ramps. Same round cycle as tag: 2+ players (bots count) to start, a 5 s
+countdown, then play until one wizard is left.
+
+- **Health 100.** A **Ward** shield (up to 50) soaks damage first. Out of
+  health and you're out of the round: you keep walking around as an invisible
+  spectator (the screen goes grey) until the next round, or press Esc to leave.
+- **Arcane Bolt** (left click): always available, 20 damage, a fast glowing
+  projectile you can see coming and dodge. A 0.55 s cooldown.
+- **Fireball** (right click): needs charges from a **Fire Tome** pickup (3 per
+  tome, up to 6). Slower, 40 on a direct hit, and it explodes: 25 down to 8
+  damage to anyone within 3.5 m, unless a wall is between them and the blast.
+- **Pickups** float on glowing spots around the arena (the dais, the tower
+  tops, inside the arches and the wall ring). Walk into one to take it:
+  Fire Tome, Healing Draught (+40 health) or Ward (+50 shield). You only pick
+  up what you can use; a taken pickup comes back after 25 s.
+- **The storm.** The safe circle starts covering the whole arena, then
+  shrinks in four stages to nothing. Each stage waits (the next circle shows
+  as a white ring on the ground), then closes in. Outside it you take 2, 4, 8,
+  then 15 damage a second, and the screen goes purple. About 3.5 minutes in
+  all; most rounds end sooner.
+- **Bots:** Esc, then Bots [+]. They head into the circle when the storm
+  comes, strafe and shoot when they see someone (aiming a little ahead, with
+  some error so moving targets can dodge), and grab potions and tomes when
+  hurt or out of fireballs. They pause briefly before the first shot at
+  someone they just spotted.
+
+**What the server decides:** everything that matters. A cast message only
+says "this spell, from here, in this direction". The server checks the
+cooldown, the charges, and that "from here" is within 1.5 m of where it
+thinks your eyes are (otherwise it uses its own idea). Then it flies the
+spell itself, 20 steps a second, testing each step's line segment against
+the level's boxes and every player's capsule
+(`shared/src/levels/geometry.ts`). That's straight-line math, not a physics
+engine: the server still has no collision code for movement. Health, damage,
+pickups, the storm and the winner all live on the server.
+
+**Prediction:** your own spells are drawn the moment you click (waiting for
+the server would feel laggy); when the server's copy arrives it takes over.
+Everyone's spells are drawn on the server's clock, so a bolt flying at you is
+where the server thinks it is, and dodging works the way it looks.
+
+Numbers (damage, speeds, cooldowns, storm stages, pickups) are all in
+`shared/src/combat.ts`; the arena is `shared/src/levels/arena.ts`.
+
+```sh
+node client/scripts/walk-arena.ts   # spell-vs-wall math vs Rapier; ramps walkable; spawns/pickups reachable
+ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
+GAME_PIN=... node server/scripts/royale-check.ts http://localhost:3000   # combat rules, round, XP
+GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000     # includes a bots-only royale round
 ```
 
 ## Access PIN
@@ -415,17 +477,23 @@ server/src/      HTTP + WebSocket server, PIN gate, rooms
   validate.ts      WebSocket message validation
   rooms/Room.ts    base class every game mode extends
   rooms/ParkourRoom.ts  checkpoints, timer, leaderboard
-  rooms/ChaseRoom.ts    shared tag/infection engine (rounds, tag checks)
+  rooms/RoundRoom.ts    round cycle, bots, XP payout (tag, infection, royale)
+  rooms/ChaseRoom.ts    shared tag/infection engine (tag checks, chasers)
   rooms/TagRoom.ts, rooms/InfectionRoom.ts  the two rule sets
   rooms/PlaygroundRoom.ts  free movement
   rooms/HubRoom.ts      the academy hub: arrival spots, portal player counts
+  rooms/RoyaleRoom.ts   battle royale: spells, damage, pickups, the storm
 server/migrations/ numbered SQL schema files
 shared/src/levels/  level data (boxes, zones, portals) for client and server
 shared/src/rooms.ts room list: id, name, level, mode
 shared/src/progression.ts  XP -> level curve
-server/src/bots/   server-side bots: NavGrid (walking map + A*), ChaseBot (brain)
-server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check
-client/scripts/  simulate-course, walk-hub (physics bots)
+shared/src/combat.ts       spells, health, pickups, storm stages
+shared/src/levels/geometry.ts  line-vs-box and line-vs-player tests (spell hits)
+server/src/bots/   server-side bots: NavGrid (walking map + A*), BotWalker
+                   (path following), ChaseBot and RoyaleBot (brains)
+server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check, royale-check
+client/scripts/  simulate-course, walk-hub, walk-arena (physics bots)
+client/src/royale/ battle royale client: spells, storm, pickups, HUD
 client/src/      game client (Game.ts is the main loop)
 Caddyfile        static files, /ws proxy, security headers
 ```

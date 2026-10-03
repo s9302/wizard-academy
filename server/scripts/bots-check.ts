@@ -1,11 +1,13 @@
-// Checks server-side bots in tag and infection: adding/removing them, that
-// they move without walking through walls, that they chase and tag (or flee),
-// and that they leave when the last real player does.
+// Checks server-side bots in tag, infection and the battle royale:
+// adding/removing them, that they move without walking through walls, that
+// they chase and tag (or flee) or fight with spells, and that they leave when
+// the last real player does.
 //
 //   ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 //   GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000
 
 import WebSocket from "ws";
+import { arena } from "../../shared/src/levels/arena.ts";
 import { courtyard } from "../../shared/src/levels/courtyard.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { NavGrid } from "../src/bots/NavGrid.ts";
@@ -33,7 +35,7 @@ async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
 }
 
 const cookie = await signIn(base, pin, "test_bots");
-const grid = new NavGrid(courtyard);
+const grids: Record<string, NavGrid> = { tag: new NavGrid(courtyard), infection: new NavGrid(courtyard), royale: new NavGrid(arena) };
 
 class Client {
   ws: WebSocket;
@@ -45,6 +47,10 @@ class Client {
   positions = new Map<number, Vec3[]>();
   chaserSets: number[][] = [];
   tags = 0;
+  spellsBy = new Map<number, number>(); // caster -> spells cast
+  spellHits = 0;
+  announcements: string[] = [];
+  results: string[] = [];
 
   constructor(name: string, room: string) {
     this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie } });
@@ -63,6 +69,10 @@ class Client {
         this.positions.set(msg.id, list);
       } else if (msg.t === "chasers") this.chaserSets.push(msg.ids);
       else if (msg.t === "tagged") this.tags++;
+      else if (msg.t === "spell") this.spellsBy.set(msg.caster, (this.spellsBy.get(msg.caster) ?? 0) + 1);
+      else if (msg.t === "spellEnd" && msg.hit !== null) this.spellHits++;
+      else if (msg.t === "announce") this.announcements.push(msg.text);
+      else if (msg.t === "roundResult") this.results.push(msg.title);
     });
   }
   send(msg: object): void {
@@ -73,7 +83,8 @@ class Client {
   }
 }
 
-for (const room of ["tag", "infection"]) {
+for (const room of ["tag", "infection", "royale"]) {
+  const grid = grids[room];
   const a = new Client("Watcher", room);
   await waitFor(() => a.welcomePlayers !== null, 3000);
   for (let i = 0; i < 4; i++) a.send({ t: "bots", action: "add" });
@@ -86,7 +97,12 @@ for (const room of ["tag", "infection"]) {
   check(`${room}: removing bots`, await waitFor(() => a.botCount === 4, 2000), `count=${a.botCount}`);
 
   // Let a round play out. The watcher stands still near a spawn point.
-  await sleep(room === "tag" ? 25_000 : 30_000);
+  if (room === "royale") {
+    // A whole round: about a minute at ROUND_TIME_SCALE=0.25, often less.
+    check("royale: a round with bots finishes", await waitFor(() => a.results.some((r) => r !== "Round cancelled"), 90_000), a.results.join(" | "));
+  } else {
+    await sleep(room === "tag" ? 25_000 : 30_000);
+  }
   const ids = a.botIds().filter((id) => a.positions.has(id));
   const moved = ids.filter((id) => {
     const ps = a.positions.get(id)!;
@@ -107,7 +123,14 @@ for (const room of ["tag", "infection"]) {
   const walkwayVisits = ids.filter((id) => a.positions.get(id)!.some((p) => p[1] > 3)).length;
   console.log(`      (${walkwayVisits} bot(s) used the raised walkways)`);
 
-  if (room === "tag") {
+  if (room === "royale") {
+    const casters = ids.filter((id) => (a.spellsBy.get(id) ?? 0) > 0);
+    check("royale: bots cast spells", casters.length >= 3, `${casters.length}/${ids.length} bots cast; ${[...a.spellsBy.values()].reduce((x, y) => x + y, 0)} spells`);
+    check("royale: bot spells hit wizards", a.spellHits >= 5, `${a.spellHits} hits`);
+    const blasts = a.announcements.filter((t) => t.includes("blasted")).length;
+    check("royale: bots take each other out", blasts >= 1, `${blasts} blasted, ${a.announcements.filter((t) => t.includes("storm")).length} storm`);
+    console.log(`      (result: ${a.results.find((r) => r !== "Round cancelled")})`);
+  } else if (room === "tag") {
     check("tag: bots tag each other (It changes hands)", a.tags >= 1, `${a.tags} tags`);
   } else {
     // If the watcher (who stands still) started with the curse, nobody spreads

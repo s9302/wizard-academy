@@ -1,6 +1,8 @@
 // Every WebSocket message is a small JSON object with a "t" (type) field.
 // Client and server import these types so both sides agree on the shape.
 
+import type { PickupKind, SpellId } from "./combat.ts";
+
 export type Vec3 = [number, number, number];
 
 // ---- Client -> Server ----
@@ -26,7 +28,12 @@ export type TagMsg = { t: "tag"; target: number };
 // Tag / infection: add or remove a server-side bot.
 export type BotsMsg = { t: "bots"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg;
+// Battle royale: cast a spell from o (your eyes) in direction d (unit
+// vector). seq numbers your casts, so you can match the server's reply to the
+// spell you're already drawing.
+export type CastMsg = { t: "cast"; spell: SpellId; o: Vec3; d: Vec3; seq: number };
+
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg;
 
 // ---- Server -> Client ----
 
@@ -69,6 +76,24 @@ export type BotCountMsg = { t: "botCount"; count: number; max: number };
 // How many people (not bots) are in each room, for the portal signs.
 export type RoomCountsMsg = { t: "roomCounts"; counts: Record<string, number> };
 
+// ---- Battle royale (server -> everyone in the room) ----
+// A spell is flying. Clients draw it moving from o along d at its speed,
+// starting at server time `time`.
+export type SpellMsg = { t: "spell"; id: number; caster: number; seq: number; spell: SpellId; o: Vec3; d: Vec3; time: number };
+// It hit something at p (hit = the player it struck directly, if any).
+export type SpellEndMsg = { t: "spellEnd"; id: number; p: Vec3; hit: number | null };
+export type HealthMsg = { t: "health"; id: number; hp: number; shield: number };
+// Who is still in the round (everyone else is spectating). Sent in full on change.
+export type AliveMsg = { t: "alive"; ids: number[] };
+// The storm's current stage: the safe circle is `from` until shrinkAt, then
+// moves to `to` by endsAt. Circles are [x, z, radius]. null = no storm.
+export type ZoneState = { from: [number, number, number]; to: [number, number, number]; shrinkAt: number; endsAt: number; dps: number };
+export type ZoneMsg = { t: "zone"; zone: ZoneState | null };
+export type PickupInfo = { id: number; kind: PickupKind; p: Vec3 };
+export type PickupsMsg = { t: "pickups"; items: PickupInfo[] };
+// To one player: your fireball charges.
+export type ChargesMsg = { t: "charges"; fireball: number };
+
 // ---- Progression (server -> one player) ----
 // total = your XP after this award. The client works out the level from it.
 export type XpMsg = { t: "xp"; amount: number; reason: string; total: number };
@@ -92,4 +117,11 @@ export type ServerMsg =
   | RoundResultMsg
   | BotCountMsg
   | RoomCountsMsg
+  | SpellMsg
+  | SpellEndMsg
+  | HealthMsg
+  | AliveMsg
+  | ZoneMsg
+  | PickupsMsg
+  | ChargesMsg
   | XpMsg;

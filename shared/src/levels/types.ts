@@ -52,6 +52,7 @@ export type Level = {
   boxes: Box[];
   course?: Course; // parkour levels only
   portals?: Portal[]; // the hub only
+  pickupSpots?: Vec3[]; // battle royale: where pickups appear
 };
 
 // A point relative to a portal: `side` meters to its right (as seen walking
