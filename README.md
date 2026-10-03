@@ -1,8 +1,8 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 2** (PIN gate,
-input validation, anti-cheat basics, Cloudflare Tunnel).
+first person with friends. Built in phases; currently **Phase 2** done (PIN gate,
+input validation, anti-cheat basics, public via Cloudflare Tunnel).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -19,7 +19,7 @@ VM 104 `game` on `pve2` (Ubuntu 24.04), in `~/wizard-academy` as user `spencer`.
 |---|---|
 | `http://game:8080` (Tailscale IP) | Tailnet devices only |
 | `http://127.0.0.1:8081` | The VM itself: this is where cloudflared connects |
-| `https://wizardgame.spencersmith.win` | The internet, via the Cloudflare Tunnel (once set up) |
+| `https://wizardgame.spencersmith.win` | The internet, via the Cloudflare Tunnel |
 
 Both Caddy listeners serve the same site behind the same PIN gate. They differ
 only in where the visitor's IP address comes from (see [Access PIN](#access-pin)).
@@ -121,9 +121,10 @@ How it works:
   tunnel listener (`127.0.0.1:8081`), where only cloudflared connects, it is
   `CF-Connecting-IP`, the visitor's address as seen by Cloudflare.
 
-**`COOKIE_SECURE`:** `true` in production. Secure cookies only travel over
-HTTPS, so once it's `true`, logging in at `http://game:8080` stops working: use
-the public HTTPS address instead. Set it to `false` only for plain-HTTP testing.
+**`COOKIE_SECURE`:** `true` (the current setting). Secure cookies only travel
+over HTTPS, so logging in at `http://game:8080` doesn't work; use the public
+HTTPS address. Set it to `false` temporarily for plain-HTTP testing over the
+tailnet, then back to `true`.
 
 ## What the server checks on the WebSocket
 
@@ -142,9 +143,56 @@ the public HTTPS address instead. Set it to `false` only for plain-HTTP testing.
 
 ## Cloudflare Tunnel
 
-_Not set up yet._ It will be a new named tunnel on this VM for
-`wizardgame.spencersmith.win`, pointing at Caddy's tunnel listener on
-`127.0.0.1:8081`, separate from the website's tunnel.
+The public address is **https://wizardgame.spencersmith.win**. No router ports
+are forwarded: cloudflared on this VM makes outbound connections to Cloudflare,
+and Cloudflare sends visitors down them.
+
+| | |
+|---|---|
+| Tunnel | `wizardgame`, ID `ffb64c12-a7a4-4c29-9d92-7385cf130c0b` (separate from the website's `spencersmith-web`) |
+| DNS | `wizardgame.spencersmith.win` CNAME to the tunnel, created by `cloudflared tunnel route dns` |
+| Config | `/etc/cloudflared/config.yml` (not in git) |
+| Credentials | `/etc/cloudflared/<tunnel-id>.json`, root-only. **Secret; never commit it.** Anyone with it can run the tunnel. |
+| Service | systemd `cloudflared.service`, enabled at boot |
+
+`config.yml` sends `wizardgame.spencersmith.win` to Caddy's tunnel listener,
+`http://127.0.0.1:8081`, and everything else to the required catch-all,
+`http_status:404`. TLS is terminated at Cloudflare; the hop from cloudflared to
+Caddy is plain HTTP over loopback.
+
+How it was set up (as root):
+
+```sh
+cloudflared tunnel login                      # authorize spencersmith.win in the browser
+cloudflared tunnel create wizardgame
+cloudflared tunnel route dns wizardgame wizardgame.spencersmith.win
+# move the credentials JSON to /etc/cloudflared/, write config.yml
+cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
+cloudflared service install
+rm /root/.cloudflared/cert.pem
+```
+
+`cert.pem` from `tunnel login` can create tunnels and DNS records for the whole
+zone, so it was deleted after setup. Running the tunnel only needs the
+credentials file. To manage tunnels again (new hostname, delete), run
+`cloudflared tunnel login` again first, and delete `cert.pem` afterwards.
+
+Useful commands:
+
+```sh
+systemctl status cloudflared
+journalctl -u cloudflared -f
+sudo systemctl restart cloudflared     # after editing config.yml
+```
+
+On the tunnel listener only, Caddy redirects `http://` to `https://` (based on
+Cloudflare's `X-Forwarded-Proto`) and sends HSTS, so the PIN is never posted
+unencrypted. HTML responses carry `Cache-Control: no-transform`, which stops
+Cloudflare from injecting its analytics and bot-detection scripts. The CSP
+would block those anyway, but this keeps the page free of third parties.
+
+**To take the game offline** without touching anything else:
+`sudo systemctl stop cloudflared` (tailnet access keeps working).
 
 ## Host firewall
 

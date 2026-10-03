@@ -34,7 +34,7 @@ const connectionsPerIp = new Map<string, number>();
 // ---- HTTP ----
 
 function sendHtml(res: ServerResponse, status: number, html: string, headers: Record<string, string> = {}): void {
-  res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...headers });
+  res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, no-transform", ...headers });
   res.end(html);
 }
 

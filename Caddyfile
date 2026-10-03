@@ -63,7 +63,8 @@
 			@assets path /assets/*
 			@other not path /assets/*
 			header @assets Cache-Control "private, max-age=31536000, immutable"
-			header @other Cache-Control "no-cache"
+			# no-transform: stops Cloudflare injecting its analytics/bot scripts
+			header @other Cache-Control "no-cache, no-transform"
 			file_server
 		}
 	}
@@ -80,5 +81,13 @@
 # Requests arrive from cloudflared, so the visitor's address is the
 # CF-Connecting-IP header Cloudflare adds.
 :8081 {
+	# Visitors who typed http:// reach Cloudflare unencrypted; send them to
+	# https:// before anything (like a PIN) is posted. HSTS then makes the
+	# browser go straight to https:// next time. Not includeSubDomains, so
+	# other spencersmith.win sites are unaffected.
+	@insecure header X-Forwarded-Proto http
+	redir @insecure https://{host}{uri} 308
+	header Strict-Transport-Security "max-age=31536000"
+
 	import site {http.request.header.CF-Connecting-IP}
 }
