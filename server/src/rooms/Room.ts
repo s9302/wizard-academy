@@ -6,6 +6,7 @@ import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/pr
 import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
+import { awardXp } from "../accounts.ts";
 import type { Peer } from "../Connection.ts";
 import { SlidingWindowLimiter } from "../limits.ts";
 import { MoveCheck } from "../MoveCheck.ts";
@@ -131,6 +132,17 @@ export abstract class Room {
     } else {
       this.onMessage(player, msg);
     }
+  }
+
+  // Give XP to a player's account (bots have none) and tell them. Saving is
+  // async; the game doesn't wait for it.
+  protected giveXp(player: Player, amount: number, reason: string): void {
+    const account = player.conn.account;
+    const xp = Math.round(amount);
+    if (!account || xp <= 0) return;
+    awardXp(account.id, xp, reason)
+      .then((total) => player.conn.send({ t: "xp", amount: xp, reason, total }))
+      .catch((err) => console.error(`XP award failed for ${account.username}:`, err));
   }
 
   // Move a player. The client applies it and starts tagging its moves with

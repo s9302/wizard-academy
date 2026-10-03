@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 *.log
 
 # Cloudflare tunnel credentials must never be committed (Phase 2)

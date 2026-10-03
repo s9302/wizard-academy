@@ -19,6 +19,7 @@ import type { RoomInfo } from "../../../shared/src/rooms.ts";
 import { ChaseBot } from "../bots/ChaseBot.ts";
 import { NavGrid } from "../bots/NavGrid.ts";
 import { BotPeer } from "../Connection.ts";
+import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
 import { Room } from "./Room.ts";
 
@@ -69,6 +70,9 @@ export abstract class ChaseRoom extends Room {
   // Ends the round early (e.g. everyone is cursed).
   protected abstract isRoundOver(): boolean;
   protected abstract results(now: number): { title: string; lines: string[] };
+  // XP for a finished round (called after results()). Several entries for the
+  // same player are added up into one award.
+  protected abstract xpAwards(): { id: number; amount: number; reason: string }[];
   // Does someone joining mid-round start as a chaser?
   protected abstract lateJoinerIsChaser(): boolean;
   // Announcements, e.g. "Alice is It!"
@@ -159,6 +163,7 @@ export abstract class ChaseRoom extends Room {
     const { title, lines } = cancelled
       ? { title: "Round cancelled", lines: ["Not enough players left. Waiting for more wizards..."] }
       : this.results(now);
+    if (!cancelled) this.payXp();
     this.setState("ended", now + RESULTS_MS);
     this.broadcast({ t: "roundResult", title, lines });
     console.log(`[${this.name}] round over: ${title}`);
@@ -212,6 +217,24 @@ export abstract class ChaseRoom extends Room {
     if (msg.t === "bots" && !player.conn.isBot) {
       if (msg.action === "add") this.addBot(player);
       else this.removeBot(player);
+    }
+  }
+
+  private payXp(): void {
+    const humans = [...this.players.values()].filter((p) => !p.conn.isBot).length;
+    const practice = humans < 2; // just you and bots: half XP
+    const totals = new Map<number, { amount: number; reasons: string[] }>();
+    for (const award of this.xpAwards()) {
+      const t = totals.get(award.id) ?? { amount: 0, reasons: [] };
+      t.amount += award.amount;
+      t.reasons.push(award.reason);
+      totals.set(award.id, t);
+    }
+    for (const [id, t] of totals) {
+      const player = this.players.get(id);
+      if (!player) continue;
+      const amount = practice ? t.amount * XP.botsOnlyFraction : t.amount;
+      this.giveXp(player, amount, t.reasons.join(", ") + (practice ? " (bots only: half XP)" : ""));
     }
   }
 

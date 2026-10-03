@@ -2,12 +2,10 @@
 // Nothing from a client is trusted until it has passed through here.
 
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
-import { MAX_NAME_LENGTH } from "../../shared/src/constants.ts";
 
 // The world is small; anything outside this box is garbage or an attack.
 const MAX_COORD = 1000;
 
-const NAME_PATTERN = new RegExp(`^[A-Za-z0-9 _-]{1,${MAX_NAME_LENGTH}}$`);
 const ROOM_PATTERN = /^[a-z0-9-]{1,32}$/;
 
 function isFiniteNumber(v: unknown): v is number {
@@ -34,11 +32,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
 
   switch (msg.t) {
     case "hello": {
-      if (typeof msg.name !== "string") return null;
-      const name = msg.name.trim();
-      if (!NAME_PATTERN.test(name)) return null;
       if (typeof msg.room !== "string" || !ROOM_PATTERN.test(msg.room)) return null;
-      return { t: "hello", name, room: msg.room };
+      return { t: "hello", room: msg.room };
     }
     case "move": {
       // Clients wrap yaw into -PI..PI before sending.

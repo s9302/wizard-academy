@@ -8,6 +8,7 @@
 
 import WebSocket from "ws";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:8080").replace(/\/$/, "");
 const pin = process.env.GAME_PIN;
@@ -23,12 +24,7 @@ function check(label: string, ok: boolean, detail = ""): void {
   if (!ok) failures++;
 }
 
-const login = await fetch(`${base}/auth/pin`, { method: "POST", body: new URLSearchParams({ pin }), redirect: "manual" });
-const cookie = login.headers.get("set-cookie")?.split(";")[0];
-if (login.status !== 303 || !cookie) {
-  console.error(`Login failed: HTTP ${login.status}`);
-  process.exit(1);
-}
+const cookie = await signIn(base, pin, "test_security");
 
 class TestClient {
   ws: WebSocket;
@@ -38,8 +34,8 @@ class TestClient {
   closed: string | null = null;
 
   constructor(name: string) {
-    this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie: cookie! } });
-    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", name, room: "playground" })));
+    this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie } });
+    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", room: "playground" })));
     this.ws.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as ServerMsg;
       this.msgs.push(msg);

@@ -1,12 +1,16 @@
 // A test bot that joins and walks in circles, so you can check that other
 // players show up and move smoothly without needing a second person.
-// It logs in with the PIN like a browser would.
+// Each bot gets past the PIN and logs in to its own account (BOT_ACCOUNT
+// plus a number, default wizbot1, wizbot2... created the first time), since
+// the server allows one connection per account. For server-side bots in
+// tag/infection, use the in-game Bots [+] button instead.
 //
 //   GAME_PIN=... node server/scripts/bot.ts http://game:8080 [count] [room]
 
 import WebSocket from "ws";
 import { NET_INTERVAL_MS, WALK_SPEED } from "../../shared/src/constants.ts";
 import type { ClientMsg, ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:8080").replace(/\/$/, "");
 const count = Number(process.argv[3] ?? 1);
@@ -17,16 +21,6 @@ if (!pin) {
   process.exit(1);
 }
 
-async function login(): Promise<string> {
-  const res = await fetch(`${base}/auth/pin`, {
-    method: "POST",
-    body: new URLSearchParams({ pin: pin! }),
-    redirect: "manual",
-  });
-  const cookie = res.headers.get("set-cookie");
-  if (res.status !== 303 || !cookie) throw new Error(`login failed: HTTP ${res.status}`);
-  return cookie.split(";")[0];
-}
 
 function runBot(index: number, cookie: string): void {
   const socket = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie } });
@@ -45,7 +39,7 @@ function runBot(index: number, cookie: string): void {
     y = 0.9; // standing on the ground
   };
 
-  socket.on("open", () => send({ t: "hello", name: `Bot ${index + 1}`, room }));
+  socket.on("open", () => send({ t: "hello", room }));
 
   socket.on("message", (data) => {
     const msg = JSON.parse(data.toString()) as ServerMsg;
@@ -77,5 +71,4 @@ function runBot(index: number, cookie: string): void {
   });
 }
 
-const cookie = await login();
-for (let i = 0; i < count; i++) runBot(i, cookie);
+for (let i = 0; i < count; i++) runBot(i, await signIn(base, pin!, `${process.env.BOT_ACCOUNT ?? "wizbot"}${i + 1}`));

@@ -9,6 +9,7 @@ import WebSocket from "ws";
 import { courtyard } from "../../shared/src/levels/courtyard.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { NavGrid } from "../src/bots/NavGrid.ts";
+import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const pin = process.env.GAME_PIN;
@@ -31,9 +32,7 @@ async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   return cond();
 }
 
-const login = await fetch(`${base}/auth/pin`, { method: "POST", body: new URLSearchParams({ pin }), redirect: "manual" });
-const cookie = login.headers.get("set-cookie")?.split(";")[0];
-if (!cookie) throw new Error(`login failed: HTTP ${login.status}`);
+const cookie = await signIn(base, pin, "test_bots");
 const grid = new NavGrid(courtyard);
 
 class Client {
@@ -48,9 +47,9 @@ class Client {
   tags = 0;
 
   constructor(name: string, room: string) {
-    this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie: cookie! } });
+    this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie } });
     this.open = new Promise((r) => this.ws.on("open", () => r()));
-    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", name, room })));
+    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", room })));
     this.ws.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as ServerMsg;
       if (msg.t === "welcome") {
@@ -111,8 +110,12 @@ for (const room of ["tag", "infection"]) {
   if (room === "tag") {
     check("tag: bots tag each other (It changes hands)", a.tags >= 1, `${a.tags} tags`);
   } else {
+    // If the watcher (who stands still) started with the curse, nobody spreads
+    // it that round; look at rounds where a bot started cursed.
+    const botStarts = a.chaserSets.filter((s) => s.length === 1 && s[0] !== a.id).length;
     const maxCursed = Math.max(...a.chaserSets.map((s) => s.length));
-    check("infection: the curse spreads among bots", maxCursed >= 2, `up to ${maxCursed} cursed`);
+    if (botStarts === 0) console.log("      (skipped: the watcher drew the curse every round)");
+    else check("infection: the curse spreads among bots", maxCursed >= 2, `up to ${maxCursed} cursed`);
   }
 
   a.ws.close();

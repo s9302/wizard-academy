@@ -1,6 +1,25 @@
-# The game server and Caddy. Postgres joins in Phase 5.
+# The game server, Caddy, and Postgres (accounts, XP, best times).
 
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wizard
+      POSTGRES_DB: wizard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # No ports: only the game server (on the internal compose network) can
+    # reach the database.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wizard -d wizard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   server:
     build:
       context: .
@@ -11,6 +30,12 @@ services:
       GAME_PIN: ${GAME_PIN:?set GAME_PIN in .env}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      DATABASE_URL: postgres://wizard:${POSTGRES_PASSWORD}@postgres:5432/wizard
+      # Testing only (a separate test stack): shortens tag/infection rounds.
+      ROUND_TIME_SCALE: ${ROUND_TIME_SCALE:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
     # Not published: only Caddy (on the internal compose network) can reach it.
     expose:
       - "3000"
@@ -36,8 +61,8 @@ services:
     # Never publish on 0.0.0.0: that would expose the game to the whole
     # apartment LAN. 8080 = tailnet listener, 8081 = tunnel listener (see Caddyfile).
     ports:
-      - "${TAILNET_IP:?set TAILNET_IP in .env}:8080:8080"
-      - "127.0.0.1:8081:8081"
+      - "${TAILNET_IP:?set TAILNET_IP in .env}:${HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${TUNNEL_PORT:-8081}:8081"
     read_only: true
     tmpfs:
       - /data:uid=65534,gid=65534
@@ -46,3 +71,6 @@ services:
     security_opt: ["no-new-privileges:true"]
     mem_limit: 256m
     pids_limit: 128
+
+volumes:
+  pgdata: # the database files; survive container rebuilds (docker compose down -v deletes them!)

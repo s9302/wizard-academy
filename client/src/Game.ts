@@ -10,6 +10,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS, TAG_RANGE } from "../../shared/src/constants.ts";
 import type { Level } from "../../shared/src/levels/types.ts";
+import { levelInfo } from "../../shared/src/progression.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import type { RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
@@ -54,6 +55,8 @@ export class Game {
   private crosshairEl: HTMLElement;
   private feedEl: HTMLElement;
   private name: string;
+  private xp: number;
+  private levelUpTimer: number | undefined;
 
   private running = false;
   private lastFrame = 0;
@@ -69,18 +72,21 @@ export class Game {
     container: HTMLElement,
     input: Input,
     name: string,
+    xp: number,
     room: RoomInfo,
     level: Level,
     onDisconnect: (reason: string) => void,
   ) {
     this.input = input;
     this.name = name;
+    this.xp = xp;
     this.room = room;
     this.level = level;
     const hud = document.getElementById("hud")!;
     this.statusEl = document.getElementById("status")!;
     this.feedEl = document.getElementById("feed")!;
     this.crosshairEl = document.getElementById("crosshair")!;
+    this.showXp();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -114,7 +120,7 @@ export class Game {
       },
     });
     this.net.opened().then(
-      () => this.net.send({ t: "hello", name, room: room.id }),
+      () => this.net.send({ t: "hello", room: room.id }),
       () => {}, // onClose already reports the failure
     );
   }
@@ -203,6 +209,9 @@ export class Game {
         break;
       case "tagged":
         break; // the "chasers" and "announce" messages that follow carry the news
+      case "xp":
+        this.onXp(msg.amount, msg.reason, msg.total);
+        break;
       case "botCount":
         this.chase?.botCount(msg.count, msg.max);
         break;
@@ -221,6 +230,29 @@ export class Game {
     if (!this.chase?.playing || !this.chase.isChaser) return null;
     const skip = this.room.mode === "tag" ? "it" : "cursed";
     return this.remotes.findTarget(this.player.position, this.input.yaw, TAG_RANGE, skip);
+  }
+
+  // ---- XP and levels ----
+
+  private showXp(): void {
+    const info = levelInfo(this.xp);
+    document.getElementById("xp-level")!.textContent = `Lv ${info.level}`;
+    document.getElementById("xp-fill")!.style.width = `${(100 * info.intoLevel) / info.forNext}%`;
+  }
+
+  private onXp(amount: number, reason: string, total: number): void {
+    const before = levelInfo(this.xp).level;
+    this.xp = total;
+    this.showXp();
+    this.addFeed(`+${amount} XP \u00b7 ${reason}`);
+    const after = levelInfo(total).level;
+    if (after > before) {
+      const el = document.getElementById("levelup")!;
+      el.textContent = `Level up! You're level ${after}`;
+      el.classList.add("show");
+      window.clearTimeout(this.levelUpTimer);
+      this.levelUpTimer = window.setTimeout(() => el.classList.remove("show"), 3500);
+    }
   }
 
   // Room-wide messages, bottom right, fading after a few seconds.

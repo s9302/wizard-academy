@@ -13,18 +13,42 @@
       <div id="status"></div>
       <div id="help">WASD move &middot; Shift run &middot; Space jump &middot; Click tag &middot; R restart run &middot; Esc release mouse</div>
       <div id="feed"></div>
+      <div id="xp-hud">
+        <span id="xp-level"></span>
+        <div class="xp-bar"><div id="xp-fill"></div></div>
+      </div>
+      <div id="levelup"></div>
     </div>
 
     <div id="overlay">
       <div class="panel">
         <h1>Wizard Academy</h1>
-        <form id="join-form">
-          <label for="name">Wizard name</label>
-          <input id="name" maxlength="16" pattern="[A-Za-z0-9 _\-]{1,16}" required autocomplete="off" />
+        <!-- Shown when you're not logged in. -->
+        <form id="auth-form" hidden>
+          <label for="username">Username</label>
+          <input id="username" maxlength="16" required autocomplete="username" />
+          <label for="password">Password</label>
+          <input id="password" type="password" minlength="8" maxlength="128" required autocomplete="current-password" />
+          <div class="row">
+            <button type="submit" id="login-button">Log in</button>
+            <button type="button" id="register-button" class="secondary">Create account</button>
+          </div>
+          <p class="hint">New here? Pick a username and a password (8+ characters), then Create account.</p>
+        </form>
+
+        <!-- Shown when you are. -->
+        <div id="profile" hidden>
+          <div id="profile-name"></div>
+          <div class="xp-bar"><div id="profile-xp-fill"></div></div>
+          <div id="profile-xp-text"></div>
+          <div id="profile-times"></div>
+        </div>
+        <form id="join-form" hidden>
           <label for="room">Where to?</label>
           <select id="room"></select>
           <!-- Enabled by main.ts once the game has loaded (it's a few MB). -->
           <button type="submit" disabled>Loading&hellip;</button>
+          <button type="button" id="logout-button" class="link">Log out</button>
         </form>
         <p id="overlay-message"></p>
         <p id="resume-hint" hidden>Click to resume</p>

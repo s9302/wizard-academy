@@ -4,12 +4,14 @@
 
 import { WebSocket } from "ws";
 import type { ServerMsg } from "../../shared/src/protocol.ts";
+import type { Account } from "./accounts.ts";
 import { TokenBucket } from "./limits.ts";
 import type { Room } from "./rooms/Room.ts";
 
 export interface Peer {
   readonly id: number;
   readonly isBot: boolean;
+  readonly account: Account | null; // null for bots
   name: string;
   room: Room | null;
   send(msg: ServerMsg): void;
@@ -29,15 +31,18 @@ export class Connection implements Peer {
   readonly isBot = false;
   readonly socket: WebSocket;
   readonly ip: string; // rate-limit key, see limits.ts
+  readonly account: Account;
   readonly messageBudget = new TokenBucket(MESSAGE_BURST, MESSAGES_PER_SECOND);
   name = "";
   room: Room | null = null;
   alive = true; // flipped by the heartbeat in index.ts
 
-  constructor(socket: WebSocket, ip: string) {
+  constructor(socket: WebSocket, ip: string, account: Account) {
     this.id = nextId++;
     this.socket = socket;
     this.ip = ip;
+    this.account = account;
+    this.name = account.username;
   }
 
   send(msg: ServerMsg): void {
@@ -61,6 +66,7 @@ export class Connection implements Peer {
 export class BotPeer implements Peer {
   readonly id: number;
   readonly isBot = true;
+  readonly account = null;
   name: string;
   room: Room | null = null;
 

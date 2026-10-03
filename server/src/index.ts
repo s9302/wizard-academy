@@ -6,8 +6,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import { MAX_MESSAGE_BYTES } from "../../shared/src/constants.ts";
+import { accountFromRequest } from "./accounts.ts";
+import { handleApi } from "./api.ts";
 import { clientIp, hasValidSession, originAllowed, PIN_CSS, pinMatches, pinPage, sessionCookie } from "./auth.ts";
 import { config } from "./config.ts";
+import { migrate, waitForDb } from "./db.ts";
 import { Connection } from "./Connection.ts";
 import { rateLimitKey, SlidingWindowLimiter } from "./limits.ts";
 import { RoomManager } from "./RoomManager.ts";
@@ -29,8 +32,14 @@ const pinFailures = new SlidingWindowLimiter(5, PIN_WINDOW_MS);
 const pinFailuresGlobal = new SlidingWindowLimiter(100, PIN_WINDOW_MS);
 setInterval(() => pinFailures.sweep(), 60_000).unref();
 
+// The database must be up and current before rooms (leaderboards) start.
+await waitForDb();
+await migrate();
 const rooms = new RoomManager();
 const connections = new Set<Connection>();
+// One live connection per account: joining from a second tab or device
+// disconnects the first (otherwise extra tabs would multiply XP).
+const byAccount = new Map<number, Connection>();
 const connectionsPerIp = new Map<string, number>();
 
 // ---- HTTP ----
@@ -108,6 +117,11 @@ const http = createServer((req, res) => {
       console.error("PIN handler error:", err);
       if (!res.headersSent) res.writeHead(500).end();
     });
+  } else if (path.startsWith("/api/")) {
+    handleApi(req, res, path).catch((err) => {
+      console.error("API error:", err);
+      if (!res.headersSent) res.writeHead(500, { "content-type": "application/json" }).end('{"error":"Server error."}');
+    });
   } else if (path === "/auth/pin") {
     res.writeHead(303, { location: "/" }).end();
   } else {
@@ -136,16 +150,31 @@ http.on("upgrade", (req, socket, head) => {
   if (connections.size >= MAX_CONNECTIONS) return refuse(socket, "503 Service Unavailable");
   if ((connectionsPerIp.get(key) ?? 0) >= MAX_CONNECTIONS_PER_IP) return refuse(socket, "429 Too Many Requests");
 
-  wss.handleUpgrade(req, socket, head, (ws) => onConnection(new Connection(ws, key)));
+  // Playing needs an account too (Phase 5). Looking it up is async, so check
+  // the connection limits again once it's back.
+  accountFromRequest(req)
+    .then((account) => {
+      if (!account) return refuse(socket, "401 Unauthorized");
+      if (connections.size >= MAX_CONNECTIONS) return refuse(socket, "503 Service Unavailable");
+      if ((connectionsPerIp.get(key) ?? 0) >= MAX_CONNECTIONS_PER_IP) return refuse(socket, "429 Too Many Requests");
+      wss.handleUpgrade(req, socket, head, (ws) => onConnection(new Connection(ws, key, account)));
+    })
+    .catch((err) => {
+      console.error("account lookup failed:", err);
+      refuse(socket, "500 Internal Server Error");
+    });
 });
 
 function onConnection(conn: Connection): void {
   const socket = conn.socket;
   connections.add(conn);
+  byAccount.get(conn.account.id)?.kick("You joined from another tab or device.");
+  byAccount.set(conn.account.id, conn);
   connectionsPerIp.set(conn.ip, (connectionsPerIp.get(conn.ip) ?? 0) + 1);
 
   // The first message must be "hello" within a few seconds, or we hang up.
   const helloTimer = setTimeout(() => conn.kick("No hello received."), HELLO_TIMEOUT_MS);
+  let saidHello = false;
 
   socket.on("pong", () => (conn.alive = true));
 
@@ -157,9 +186,9 @@ function onConnection(conn: Connection): void {
 
     if (!conn.room) {
       if (msg.t !== "hello") return conn.kick("Expected hello.");
-      if (conn.name) return; // already joined once, ignore repeats
+      if (saidHello) return; // already joined once (e.g. room was full), ignore repeats
+      saidHello = true;
       clearTimeout(helloTimer);
-      conn.name = msg.name;
       rooms.join(conn, msg.room);
       return;
     }
@@ -169,6 +198,7 @@ function onConnection(conn: Connection): void {
   socket.on("close", () => {
     clearTimeout(helloTimer);
     connections.delete(conn);
+    if (byAccount.get(conn.account.id) === conn) byAccount.delete(conn.account.id);
     const count = (connectionsPerIp.get(conn.ip) ?? 1) - 1;
     if (count > 0) connectionsPerIp.set(conn.ip, count);
     else connectionsPerIp.delete(conn.ip);

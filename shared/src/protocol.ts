@@ -5,8 +5,9 @@ export type Vec3 = [number, number, number];
 
 // ---- Client -> Server ----
 
-// room = a room id from shared/src/rooms.ts (e.g. "trial1", "tag").
-export type HelloMsg = { t: "hello"; name: string; room: string };
+// room = a room id from shared/src/rooms.ts (e.g. "trial1", "tag"). Your
+// name comes from your account (the login cookie), not from this message.
+export type HelloMsg = { t: "hello"; room: string };
 // p = capsule center position, ry = yaw (facing direction) in radians.
 // tp = the number of the last server teleport the client has applied. The
 // server ignores moves sent before the client saw its latest teleport.
@@ -61,6 +62,10 @@ export type TaggedMsg = { t: "tagged"; by: number; victim: number };
 export type RoundResultMsg = { t: "roundResult"; title: string; lines: string[] };
 export type BotCountMsg = { t: "botCount"; count: number; max: number };
 
+// ---- Progression (server -> one player) ----
+// total = your XP after this award. The client works out the level from it.
+export type XpMsg = { t: "xp"; amount: number; reason: string; total: number };
+
 export type ServerMsg =
   | WelcomeMsg
   | JoinMsg
@@ -78,4 +83,5 @@ export type ServerMsg =
   | ChasersMsg
   | TaggedMsg
   | RoundResultMsg
-  | BotCountMsg;
+  | BotCountMsg
+  | XpMsg;

@@ -11,6 +11,8 @@ import type { Course, Level } from "../../../shared/src/levels/types.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
 import { inZone, segmentTouchesZone } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
+import { leaderboard, recordFinish } from "../accounts.ts";
+import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
 import { Room } from "./Room.ts";
 
@@ -30,14 +32,18 @@ export function formatTime(ms: number): string {
 export class ParkourRoom extends Room {
   private course: Course;
   private runs = new Map<number, Run>();
-  // Best time per player name, for this server session. (Phase 5 moves best
-  // times into the database, tied to real accounts.)
-  private bestTimes = new Map<string, { name: string; time: number }>();
+  // Top times from the database, cached and refreshed after each new best.
+  private board: { name: string; time: number }[] = [];
 
   constructor(info: RoomInfo, level: Level) {
     super(info, level);
     if (!level.course) throw new Error(`${level.id} has no course`);
     this.course = level.course;
+    this.refreshLeaderboard().catch((err) => console.error(`[${this.name}] leaderboard load failed:`, err));
+  }
+
+  private async refreshLeaderboard(): Promise<void> {
+    this.board = await leaderboard(this.name);
   }
 
   private newRun(): Run {
@@ -46,7 +52,7 @@ export class ParkourRoom extends Room {
 
   protected onPlayerJoined(player: Player): void {
     this.runs.set(player.conn.id, this.newRun());
-    player.conn.send({ t: "leaderboard", entries: this.leaderboard() });
+    player.conn.send({ t: "leaderboard", entries: this.board });
   }
 
   protected onPlayerLeft(player: Player): void {
@@ -110,23 +116,35 @@ export class ParkourRoom extends Room {
     }
   }
 
+  // The time is the server's, so it's final. Saving it and working out XP
+  // need the database, so the player hears about it a moment later.
   private finishRun(player: Player, run: Run, now: number): void {
     run.state = "finished";
     const time = now - run.startedAt;
-    const name = player.conn.name;
-    const key = name.toLowerCase();
-    const previous = this.bestTimes.get(key);
-    const newBest = !previous || time < previous.time;
-    if (newBest) this.bestTimes.set(key, { name, time });
-    const best = newBest ? time : previous.time;
+    const account = player.conn.account;
+    if (!account) return;
+    recordFinish(account.id, this.name, time)
+      .then(async (record) => {
+        player.conn.send({ t: "finish", time, best: record.best, newBest: record.newBest });
+        const name = player.conn.name;
+        console.log(`[${this.name}] ${name} finished in ${formatTime(time)}${record.newBest ? " (personal best)" : ""}`);
+        this.broadcast({ t: "announce", text: `${name} finished in ${formatTime(time)}${record.newBest ? " \u2014 a new personal best!" : ""}` });
 
-    player.conn.send({ t: "finish", time, best, newBest });
-    console.log(`[${this.name}] ${name} finished in ${formatTime(time)}${newBest ? " (personal best)" : ""}`);
-    this.broadcast({ t: "announce", text: `${name} finished in ${formatTime(time)}${newBest ? " — a new personal best!" : ""}` });
-    if (newBest) this.broadcast({ t: "leaderboard", entries: this.leaderboard() });
-  }
-
-  private leaderboard(): { name: string; time: number }[] {
-    return [...this.bestTimes.values()].sort((a, b) => a.time - b.time).slice(0, LEADERBOARD_SIZE);
+        const base = XP.parkourFirstClear[this.name] ?? XP.parkourDefault;
+        if (record.firstClear) {
+          this.giveXp(player, base, `First clear: ${this.info.name}`);
+        } else {
+          const bonus = record.newBest ? XP.parkourPersonalBest : 0;
+          this.giveXp(player, base * XP.parkourRepeatFraction + bonus, record.newBest ? "Cleared again, new best!" : "Cleared again");
+        }
+        if (record.newBest) {
+          await this.refreshLeaderboard();
+          this.broadcast({ t: "leaderboard", entries: this.board });
+        }
+      })
+      .catch((err) => {
+        console.error(`[${this.name}] saving finish for ${account.username} failed:`, err);
+        player.conn.send({ t: "finish", time, best: time, newBest: false });
+      });
   }
 }

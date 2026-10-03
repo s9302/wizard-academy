@@ -14,6 +14,7 @@ RUN npm ci --workspace server --omit=dev --include-workspace-root=false && npm c
 
 COPY shared/src shared/src
 COPY server/src server/src
+COPY server/migrations server/migrations
 
 USER node
 EXPOSE 3000

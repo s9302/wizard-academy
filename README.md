@@ -1,15 +1,16 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 4** done (tag and
-infection, with round start/end logic).
+first person with friends. Built in phases; currently **Phase 5** done (accounts,
+XP and levels, best times in Postgres).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
 - **Server:** Node.js 24 + TypeScript, WebSockets via `ws`. Node runs the `.ts`
   files directly, so the server has no build step.
+- **Database:** Postgres 17 for accounts, XP and best times.
 - **Deployment:** Docker Compose. Caddy serves the built client and proxies
-  `/ws` to the game server.
+  `/ws` and `/api/*` to the game server.
 
 ## Where it runs
 
@@ -57,15 +58,32 @@ Connected players are disconnected during the restart and need to reload.
 ```sh
 cp .env.example .env
 chmod 600 .env
-# fill in TAILNET_IP (tailscale ip -4), GAME_PIN, SESSION_SECRET (openssl rand -hex 32)
+# fill in TAILNET_IP (tailscale ip -4), GAME_PIN, SESSION_SECRET (openssl rand -hex 32),
+# POSTGRES_PASSWORD (openssl rand -hex 24)
 docker compose up -d --build
 ```
 
-`.env` is gitignored. Compose refuses to start if `TAILNET_IP`, `GAME_PIN` or
-`SESSION_SECRET` is missing, and the server refuses a PIN shorter than 6
+`.env` is gitignored. Compose refuses to start if `TAILNET_IP`, `GAME_PIN`,
+`SESSION_SECRET` or `POSTGRES_PASSWORD` is missing, and the server refuses a PIN shorter than 6
 characters or a secret shorter than 32.
 
 ## Testing
+
+The check scripts create test accounts, so run them against a **separate
+test copy** of the stack, never the real one. On `game`, with a `.env.test`
+(different ports, its own secrets, `COOKIE_SECURE=false`,
+`ROUND_TIME_SCALE=0.25`; `.env.*` is gitignored):
+
+```sh
+docker compose -p wizard-test --env-file .env.test up -d --build   # own containers + database
+# ...run the scripts against http://game:<its HTTP_PORT>, e.g.
+GAME_PIN=<test pin> node server/scripts/accounts-check.ts http://game:8090
+docker compose -p wizard-test --env-file .env.test down -v         # delete it all
+```
+
+Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
+`accounts-check` (run it last: it trips the login rate limit for your IP).
+
 
 - Open `http://game:8080` on a tailnet device, enter a name, click into the
   page to capture the mouse. **WASD** move, **Shift** run, **Space** jump,
@@ -87,6 +105,55 @@ characters or a secret shorter than 32.
   GAME_PIN=... node server/scripts/security-check.ts http://game:8080
   ```
 
+## Accounts, XP and levels
+
+Past the PIN, everyone signs in with their own account (username + password,
+created from the same screen). Your username is your in-game name. There's
+no guest play: XP and best times need an owner.
+
+- **Passwords** are hashed with **argon2id** (19 MiB memory, 2 passes; OWASP's
+  recommended minimum) and never stored or logged in plain text.
+- **Login cookie** `wa_account`: 30 days, HttpOnly, SameSite=Lax, Secure in
+  production, signed with `SESSION_SECRET`. It carries a session version, so
+  bumping `accounts.session_version` logs that account out everywhere.
+- **Login limits:** 10 failed logins per IP and per username per 15 minutes;
+  20 sign-ups per IP per hour (friends in one house share an IP). Wrong
+  username and wrong password get the same message and take the same time,
+  so the login can't be used to find out which usernames exist.
+- **One connection per account:** joining from another tab or device
+  disconnects the first (otherwise extra tabs would multiply XP).
+- The API (`/api/register`, `/api/login`, `/api/logout`, `/api/me`) only
+  accepts JSON from this site (Content-Type + Origin checks), which blocks
+  cross-site form posts.
+
+**XP** (all awarded by the server; amounts in `server/src/xp.ts`):
+
+| | XP |
+|---|---|
+| First clear of Trial I / II / III | 100 / 150 / 200 |
+| Clearing it again | a quarter of that, +25 for a new personal best |
+| Finishing a tag or infection round | 20 |
+| Tag: least time as It | +40 |
+| Infection: surviving the curse | +50 |
+| Each tag / curse you land (max 10 per round) | +5 / +10 |
+| Rounds with only you and bots | half XP (practice) |
+
+**Levels:** level 2 needs 100 XP, then each level needs 50 more than the last
+(`shared/src/progression.ts`). Unlocks arrive in Phase 8.
+
+**Database:** Postgres runs in its own container with no published port; only
+the game server can reach it. Data lives in the `pgdata` Docker volume, so
+it survives rebuilds (`docker compose down -v` would delete it!) and is part
+of the VM's nightly Proxmox backup. Schema changes are numbered SQL files in
+`server/migrations/`, applied automatically at server start.
+
+```sh
+# Poke at the database
+docker compose exec postgres psql -U wizard -d wizard
+#   SELECT username, xp FROM accounts ORDER BY xp DESC;
+#   SELECT * FROM xp_events ORDER BY id DESC LIMIT 20;
+```
+
 ## Parkour
 
 On the join screen, pick a trial (or the Playground). Until the hub arrives in
@@ -103,9 +170,7 @@ Phase 6, that menu is how you choose a room.
   golden arch.
 - Fall off and you reappear at your last checkpoint; the clock keeps running.
   **R** restarts the run; walking back onto the start platform also resets it.
-- The leaderboard (top right) shows the best time per name. It lives in server
-  memory, so it resets when the server restarts; Phase 5 moves it to Postgres
-  under real accounts.
+- The leaderboard (top right) shows the best time per account, from Postgres.
 
 The **server judges every run**: it starts the clock, checks checkpoints in
 order against the positions it accepted, and stops the clock at the finish.
@@ -315,6 +380,11 @@ non-root users, with memory and process limits.
 shared/src/      message types and constants used by both client and server
 server/src/      HTTP + WebSocket server, PIN gate, rooms
   auth.ts          PIN check, session cookie, PIN page
+  accounts.ts      accounts, argon2id, login cookie, XP, best times
+  api.ts           /api/register, /login, /logout, /me
+  db.ts            Postgres pool + migration runner
+  xp.ts            XP amounts
+server/migrations/ numbered SQL schema files
   limits.ts        rate limiters
   MoveCheck.ts     movement sanity check
   validate.ts      WebSocket message validation
@@ -325,6 +395,7 @@ server/src/      HTTP + WebSocket server, PIN gate, rooms
   rooms/PlaygroundRoom.ts  free movement
 shared/src/levels/  level data (boxes, zones) for client and server
 shared/src/rooms.ts room list: id, name, level, mode
+shared/src/progression.ts  XP -> level curve
 server/src/bots/   server-side bots: NavGrid (walking map + A*), ChaseBot (brain)
 server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check
 client/scripts/  simulate-course (physics bot)
@@ -336,11 +407,15 @@ Caddyfile        static files, /ws proxy, security headers
 
 ```sh
 npm install
+# Needs a Postgres: e.g. PGlite (Postgres in WebAssembly, no install), one connection:
+npx @electric-sql/pglite-socket --port=5433 &
+DATABASE_URL=postgres://postgres@127.0.0.1:5433/postgres PG_POOL_MAX=1 \
 GAME_PIN=123456 SESSION_SECRET=$(openssl rand -hex 32) COOKIE_SECURE=false \
   npm run dev:server   # game server on :3000, restarts on change
 npm run dev:client   # Vite dev server on :5173, proxies /ws and /auth to :3000
 npm run typecheck
 ```
 
-The dev server doesn't gate the page, but the WebSocket still needs a session:
-open `http://localhost:5173/auth/check` once and enter the PIN.
+The dev server doesn't gate the page, but the API and WebSocket still need a
+session: open `http://localhost:5173/auth/check` once and enter the PIN, then
+log in on the game page.

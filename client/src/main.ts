@@ -1,22 +1,34 @@
-// Page setup: the name form, pointer lock, and starting the game.
+// Page setup: logging in, the room picker, pointer lock, and starting the game.
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import { LEVELS } from "../../shared/src/levels/index.ts";
+import { levelInfo } from "../../shared/src/progression.ts";
 import { findRoom, ROOMS } from "../../shared/src/rooms.ts";
 import { Game } from "./Game.ts";
 import { Input } from "./Input.ts";
+import { formatTime } from "./ParkourHud.ts";
 import "./style.css";
 
-const container = document.getElementById("game")!;
-const overlay = document.getElementById("overlay")!;
-const form = document.getElementById("join-form") as HTMLFormElement;
-const nameInput = document.getElementById("name") as HTMLInputElement;
-const roomSelect = document.getElementById("room") as HTMLSelectElement;
-const message = document.getElementById("overlay-message")!;
-const resumeHint = document.getElementById("resume-hint")!;
-const hud = document.getElementById("hud")!;
+type Profile = { username: string; xp: number; bestTimes: Record<string, number> };
 
-const NAME_KEY = "wizard-name";
+const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+const container = $("game");
+const overlay = $("overlay");
+const authForm = $<HTMLFormElement>("auth-form");
+const usernameInput = $<HTMLInputElement>("username");
+const passwordInput = $<HTMLInputElement>("password");
+const loginButton = $<HTMLButtonElement>("login-button");
+const registerButton = $<HTMLButtonElement>("register-button");
+const profileBox = $("profile");
+const joinForm = $<HTMLFormElement>("join-form");
+const roomSelect = $<HTMLSelectElement>("room");
+const enterButton = joinForm.querySelector<HTMLButtonElement>("button[type=submit]")!;
+const logoutButton = $<HTMLButtonElement>("logout-button");
+const message = $("overlay-message");
+const resumeHint = $("resume-hint");
+const hud = $("hud");
+
+let profile: Profile | null = null;
 
 // Until the hub exists (Phase 6), you pick a room here.
 for (const room of ROOMS) {
@@ -25,19 +37,94 @@ for (const room of ROOMS) {
   option.textContent = room.name;
   roomSelect.appendChild(option);
 }
-try {
-  // Don't overwrite a name typed while the game was still loading.
-  const saved = localStorage.getItem(NAME_KEY);
-  if (saved && !nameInput.value) nameInput.value = saved;
-} catch {
-  // storage can be blocked; the name just won't be remembered
+
+// ---- Accounts ----
+
+async function api(path: string, body?: object): Promise<{ status: number; data: Record<string, unknown> }> {
+  const res = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "content-type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data: Record<string, unknown> = {};
+  try {
+    data = await res.json();
+  } catch {
+    // empty or non-JSON reply
+  }
+  return { status: res.status, data };
 }
 
-// The button stays disabled until this script has loaded; otherwise a quick
-// click would submit the form as a plain page reload.
-const enterButton = form.querySelector("button")!;
+function showLoggedOut(error = ""): void {
+  profile = null;
+  authForm.hidden = false;
+  profileBox.hidden = true;
+  joinForm.hidden = true;
+  message.textContent = error;
+  usernameInput.focus();
+}
+
+function showProfile(p: Profile): void {
+  profile = p;
+  authForm.hidden = true;
+  passwordInput.value = "";
+  message.textContent = "";
+  profileBox.hidden = false;
+  joinForm.hidden = false;
+
+  const info = levelInfo(p.xp);
+  $("profile-name").textContent = `${p.username} · Level ${info.level}`;
+  $("profile-xp-fill").style.width = `${(100 * info.intoLevel) / info.forNext}%`;
+  $("profile-xp-text").textContent = `${info.intoLevel} / ${info.forNext} XP to level ${info.level + 1}`;
+
+  const times = $("profile-times");
+  times.replaceChildren();
+  for (const room of ROOMS.filter((r) => r.mode === "parkour")) {
+    const row = document.createElement("div");
+    const best = p.bestTimes[room.id];
+    row.textContent = `${room.name.split(":")[0]}: ${best ? formatTime(best) : "not cleared yet"}`;
+    times.appendChild(row);
+  }
+}
+
+async function submitCredentials(path: "/api/login" | "/api/register"): Promise<void> {
+  if (!authForm.reportValidity()) return;
+  loginButton.disabled = registerButton.disabled = true;
+  try {
+    const { status, data } = await api(path, { username: usernameInput.value.trim(), password: passwordInput.value });
+    if (status === 200 || status === 201) showProfile(data as unknown as Profile);
+    else message.textContent = String(data.error ?? "Something went wrong.");
+  } catch {
+    message.textContent = "Couldn't reach the server.";
+  } finally {
+    loginButton.disabled = registerButton.disabled = false;
+  }
+}
+
+authForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  submitCredentials("/api/login");
+});
+registerButton.addEventListener("click", () => {
+  passwordInput.autocomplete = "new-password";
+  submitCredentials("/api/register");
+});
+logoutButton.addEventListener("click", async () => {
+  await api("/api/logout", {}).catch(() => {});
+  showLoggedOut();
+});
+
+// Logged in already (cookie from a previous visit)?
+api("/api/me")
+  .then(({ status, data }) => (status === 200 ? showProfile(data as unknown as Profile) : showLoggedOut()))
+  .catch(() => showLoggedOut("Couldn't reach the server."));
+
+// The Enter button stays disabled until this script has loaded; otherwise a
+// quick click would submit the form as a plain page reload.
 enterButton.disabled = false;
 enterButton.textContent = "Enter";
+
+// ---- Playing ----
 
 const input = new Input(container);
 let game: Game | null = null;
@@ -54,27 +141,22 @@ overlay.addEventListener("click", (e) => {
   if (game && !disconnected) input.lock();
 });
 
-form.addEventListener("submit", async (event) => {
+joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const name = nameInput.value.trim();
   const room = findRoom(roomSelect.value);
   const level = room && LEVELS[room.levelId];
-  if (!name || !room || !level) return;
-  try {
-    localStorage.setItem(NAME_KEY, name);
-  } catch {
-    // ignore
-  }
+  if (!profile || !room || !level) return;
 
   // Must be requested right away, while the click still counts as a user action.
   input.lock();
-  form.hidden = true;
+  joinForm.hidden = true;
+  profileBox.hidden = true;
   message.textContent = "";
   resumeHint.hidden = false;
 
   await RAPIER.init(); // loads the physics engine (WebAssembly)
   hud.hidden = false;
-  game = new Game(container, input, name, room, level, (reason) => {
+  game = new Game(container, input, profile.username, profile.xp, room, level, (reason) => {
     disconnected = true;
     document.exitPointerLock();
     overlay.hidden = false;

@@ -3,6 +3,7 @@
 // win if anyone is still uncursed when time runs out; the curse wins if it
 // takes everyone. Same rules engine as tag (ChaseRoom), different consequences.
 
+import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
 import { ChaseRoom } from "./ChaseRoom.ts";
 
@@ -54,6 +55,17 @@ export class InfectionRoom extends ChaseRoom {
       title: "The curse claimed everyone.",
       lines: [`All ${this.survivorsAtStart} wizards fell to the curse.`, ...spreaders.slice(0, 3)],
     };
+  }
+
+  protected xpAwards(): { id: number; amount: number; reason: string }[] {
+    const awards: { id: number; amount: number; reason: string }[] = [];
+    for (const id of this.players.keys()) {
+      awards.push({ id, amount: XP.roundPlayed, reason: "Round played" });
+      if (!this.chasers.has(id)) awards.push({ id, amount: XP.infectionSurvivor, reason: "Survived the curse" });
+      const curses = Math.min(this.curses.get(id) ?? 0, XP.maxTagsPaid);
+      if (curses) awards.push({ id, amount: curses * XP.perCurse, reason: `Cursed ${curses}` });
+    }
+    return awards;
   }
 
   protected describeTag(tagger: Player, victim: Player): string {

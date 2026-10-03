@@ -11,6 +11,7 @@
 import WebSocket from "ws";
 import { trial1 } from "../../shared/src/levels/trial1.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:8080").replace(/\/$/, "");
 const pin = process.env.GAME_PIN;
@@ -29,9 +30,7 @@ function check(label: string, ok: boolean, detail = ""): void {
   if (!ok) failures++;
 }
 
-const login = await fetch(`${base}/auth/pin`, { method: "POST", body: new URLSearchParams({ pin }), redirect: "manual" });
-const cookie = login.headers.get("set-cookie")?.split(";")[0];
-if (!cookie) throw new Error(`login failed: HTTP ${login.status}`);
+const cookie = await signIn(base, pin, "test_parkour");
 
 const ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie } });
 const msgs: ServerMsg[] = [];
@@ -47,7 +46,7 @@ ws.on("message", (data) => {
   }
 });
 await new Promise((r) => ws.on("open", r));
-ws.send(JSON.stringify({ t: "hello", name: "ParkourCheck", room: "trial1" }));
+ws.send(JSON.stringify({ t: "hello", room: "trial1" }));
 for (let i = 0; i < 100 && !msgs.some((m) => m.t === "welcome"); i++) await sleep(20);
 
 const send = (p: Vec3) => ws.send(JSON.stringify({ t: "move", p, ry: 0, tp }));
@@ -118,8 +117,10 @@ check("checkpoints count in order", JSON.stringify(reached) === "[1,2,3]", JSON.
 const done = run.find((m) => m.t === "finish") as Extract<ServerMsg, { t: "finish" }> | undefined;
 check("finishing after all checkpoints records a time", !!done, done ? `${(done.time / 1000).toFixed(2)} s, best ${done.newBest}` : "no finish");
 const board = run.filter((m) => m.t === "leaderboard").at(-1) as Extract<ServerMsg, { t: "leaderboard" }> | undefined;
-check("the leaderboard shows the time", board?.entries.some((e) => e.name === "ParkourCheck") ?? false);
+check("the leaderboard shows the time", board?.entries.some((e) => e.name === "test_parkour") ?? false);
 check("an announcement goes to the room", run.some((m) => m.t === "announce"));
+const xp = msgs.filter((m): m is Extract<ServerMsg, { t: "xp" }> => m.t === "xp");
+check("finishing awards XP", xp.length > 0, xp.map((m) => `+${m.amount} ${m.reason}`).join("; "));
 
 ws.close();
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");

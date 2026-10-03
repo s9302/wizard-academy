@@ -10,6 +10,7 @@
 
 import WebSocket from "ws";
 import type { RoundState, ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const pin = process.env.GAME_PIN;
@@ -25,9 +26,9 @@ function check(label: string, ok: boolean, detail = ""): void {
   if (!ok) failures++;
 }
 
-const login = await fetch(`${base}/auth/pin`, { method: "POST", body: new URLSearchParams({ pin }), redirect: "manual" });
-const cookie = login.headers.get("set-cookie")?.split(";")[0];
-if (!cookie) throw new Error(`login failed: HTTP ${login.status}`);
+// One account per fake player: the server allows one connection per account.
+const cookies = await Promise.all(["test_chase1", "test_chase2", "test_chase3"].map((u) => signIn(base, pin, u)));
+let nextCookie = 0;
 
 class Bot {
   ws: WebSocket;
@@ -40,8 +41,8 @@ class Bot {
   announcements: string[] = [];
 
   constructor(name: string, room: string) {
-    this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie: cookie! } });
-    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", name, room })));
+    this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie: cookies[nextCookie++ % cookies.length] } });
+    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", room })));
     this.ws.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as ServerMsg;
       if (msg.t === "welcome") {
