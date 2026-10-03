@@ -31,10 +31,25 @@ export class ChaseHud {
   private chaserCount = 0;
   private total = 0;
   private bannerTimer: number | undefined;
+  private botCountEl: HTMLElement;
+  private botAddEl: HTMLButtonElement;
+  private botRemoveEl: HTMLButtonElement;
 
-  constructor(hud: HTMLElement, clock: ServerClock, mode: RoomMode, roomName: string) {
+  // onBots: ask the server to add or remove a bot.
+  constructor(hud: HTMLElement, clock: ServerClock, mode: RoomMode, roomName: string, onBots: (action: "add" | "remove") => void) {
     this.clock = clock;
     this.mode = mode;
+
+    // Bot controls live in the pause panel (press Esc), where the mouse is free.
+    const controls = document.getElementById("bot-controls")!;
+    this.botCountEl = document.getElementById("bot-count")!;
+    this.botAddEl = document.getElementById("bot-add") as HTMLButtonElement;
+    this.botRemoveEl = document.getElementById("bot-remove") as HTMLButtonElement;
+    controls.hidden = false;
+    // Clicks here shouldn't fall through to "click to resume".
+    controls.addEventListener("click", (e) => e.stopPropagation());
+    this.botAddEl.addEventListener("click", () => onBots("add"));
+    this.botRemoveEl.addEventListener("click", () => onBots("remove"));
     const panel = el("div", "run", hud); // same look as the parkour panel
     el("div", "run-name", panel).textContent = roomName;
     this.timerEl = el("div", "run-timer", panel);
@@ -74,6 +89,12 @@ export class ChaseHud {
     this.updateRole();
   }
 
+  botCount(count: number, max: number): void {
+    this.botCountEl.textContent = String(count);
+    this.botAddEl.disabled = count >= max;
+    this.botRemoveEl.disabled = count === 0;
+  }
+
   result(title: string, lines: string[]): void {
     this.resultsEl.replaceChildren();
     const h = document.createElement("h2");
@@ -94,7 +115,7 @@ export class ChaseHud {
   private updateRole(): void {
     const { chaserCount, total } = this;
     if (this.state === "waiting") {
-      this.roleEl.textContent = "Waiting for at least 2 players";
+      this.roleEl.textContent = "Waiting for 2+ players \u00b7 Esc to add bots";
       return;
     }
     if (this.state !== "playing") {

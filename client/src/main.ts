@@ -49,7 +49,8 @@ document.addEventListener("pointerlockchange", () => {
   overlay.hidden = input.locked;
 });
 
-overlay.addEventListener("click", () => {
+overlay.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("button, select, input")) return;
   if (game && !disconnected) input.lock();
 });
 

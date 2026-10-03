@@ -6,7 +6,7 @@ import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/pr
 import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
-import type { Connection } from "../Connection.ts";
+import type { Peer } from "../Connection.ts";
 import { SlidingWindowLimiter } from "../limits.ts";
 import { MoveCheck } from "../MoveCheck.ts";
 
@@ -16,7 +16,7 @@ const MAX_STRIKES = 5;
 const STRIKE_WINDOW_MS = 30_000;
 
 export type Player = {
-  conn: Connection;
+  conn: Peer; // a real player's connection, or a bot
   p: Vec3; // last accepted position
   ry: number;
   tp: number; // how many times the server has teleported this player
@@ -82,7 +82,7 @@ export abstract class Room {
     this.tickTimer = null;
   }
 
-  join(conn: Connection): void {
+  join(conn: Peer): void {
     const spawn = this.spawnPoint();
     const player: Player = { conn, p: spawn, ry: 0, tp: 0, moveCheck: new MoveCheck() };
 
@@ -110,7 +110,7 @@ export abstract class Room {
     console.log(`[${this.name}] ${conn.name} (#${conn.id}) joined, ${this.players.size} online`);
   }
 
-  leave(conn: Connection): void {
+  leave(conn: Peer): void {
     const player = this.players.get(conn.id);
     if (!player) return;
     this.players.delete(conn.id);
@@ -120,7 +120,7 @@ export abstract class Room {
     console.log(`[${this.name}] ${conn.name} (#${conn.id}) left, ${this.players.size} online`);
   }
 
-  handleMessage(conn: Connection, msg: ClientMsg): void {
+  handleMessage(conn: Peer, msg: ClientMsg): void {
     const player = this.players.get(conn.id);
     if (!player) return;
     if (msg.t === "move") {
@@ -171,9 +171,7 @@ export abstract class Room {
   protected broadcast(msg: ServerMsg, exceptId?: number): void {
     const text = JSON.stringify(msg);
     for (const player of this.players.values()) {
-      if (player.conn.id !== exceptId && player.conn.socket.readyState === player.conn.socket.OPEN) {
-        player.conn.socket.send(text);
-      }
+      if (player.conn.id !== exceptId) player.conn.sendRaw(text);
     }
   }
 }

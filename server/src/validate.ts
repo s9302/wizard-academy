@@ -50,6 +50,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return { t: "respawn" };
     case "restart":
       return { t: "restart" };
+    case "bots":
+      if (msg.action !== "add" && msg.action !== "remove") return null;
+      return { t: "bots", action: msg.action };
     case "tag":
       if (!Number.isSafeInteger(msg.target) || (msg.target as number) < 1) return null;
       return { t: "tag", target: msg.target as number };

@@ -16,6 +16,9 @@ import { TAG_RANGE } from "../../../shared/src/constants.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, RoundState, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
+import { ChaseBot } from "../bots/ChaseBot.ts";
+import { NavGrid } from "../bots/NavGrid.ts";
+import { BotPeer } from "../Connection.ts";
 import type { Player } from "./Room.ts";
 import { Room } from "./Room.ts";
 
@@ -30,12 +33,28 @@ const MIN_PLAYERS = 2;
 const HISTORY_MS = 400; // how far back a tag may "see" (lag compensation)
 const RANGE_SLACK = 0.3; // meters, for rounding and timing
 
+const MAX_BOTS = 6;
+const BOT_NAMES = ["Bot Ash", "Bot Briar", "Bot Cinder", "Bot Dusk", "Bot Ember", "Bot Fennel"];
+
+// Bots' walking maps take a moment to build; share one per level.
+const navGrids = new Map<string, NavGrid>();
+function navGridFor(level: Level): NavGrid {
+  let grid = navGrids.get(level.id);
+  if (!grid) {
+    grid = new NavGrid(level);
+    navGrids.set(level.id, grid);
+  }
+  return grid;
+}
+
 export abstract class ChaseRoom extends Room {
   protected state: RoundState = "waiting";
   private endsAt: number | null = null;
   protected chasers = new Set<number>(); // player ids
   private canTagAt = new Map<number, number>(); // per chaser: no tagging before this time
   private history = new Map<number, { time: number; p: Vec3 }[]>();
+  private bots = new Map<number, ChaseBot>(); // by player id, in the order added
+  private lastTick = Date.now();
 
   constructor(info: RoomInfo, level: Level) {
     super(info, level);
@@ -79,6 +98,7 @@ export abstract class ChaseRoom extends Room {
   // ---- Round cycle ----
 
   protected onTick(now: number): void {
+    this.runBots(now);
     const enough = this.players.size >= MIN_PLAYERS;
     switch (this.state) {
       case "waiting":
@@ -149,6 +169,7 @@ export abstract class ChaseRoom extends Room {
   protected onPlayerJoined(player: Player): void {
     const now = Date.now();
     player.conn.send({ t: "round", state: this.state, endsAt: this.endsAt });
+    player.conn.send({ t: "botCount", count: this.bots.size, max: MAX_BOTS });
     if (this.state === "playing" && this.lateJoinerIsChaser()) {
       this.makeChaser(player.conn.id, now, START_GRACE_MS);
       this.broadcastChasers();
@@ -160,6 +181,11 @@ export abstract class ChaseRoom extends Room {
   protected onPlayerLeft(player: Player): void {
     const id = player.conn.id;
     this.history.delete(id);
+    this.bots.delete(id);
+    // Bots don't play on their own: when the last person leaves, so do they.
+    if (!player.conn.isBot && ![...this.players.values()].some((p) => !p.conn.isBot)) {
+      for (const bot of [...this.bots.values()]) this.leave(bot.peer);
+    }
     if (!this.chasers.has(id)) return;
     this.removeChaser(id);
     // The last chaser left mid-round: hand the role to a random runner.
@@ -183,6 +209,58 @@ export abstract class ChaseRoom extends Room {
 
   protected onMessage(player: Player, msg: ClientMsg): void {
     if (msg.t === "tag") this.handleTag(player, msg.target);
+    if (msg.t === "bots" && !player.conn.isBot) {
+      if (msg.action === "add") this.addBot(player);
+      else this.removeBot(player);
+    }
+  }
+
+  // ---- Bots ----
+
+  private addBot(by: Player): void {
+    if (this.bots.size >= MAX_BOTS || this.isFull) return;
+    const taken = new Set([...this.players.values()].map((p) => p.conn.name));
+    const name = BOT_NAMES.find((n) => !taken.has(n));
+    if (!name) return;
+    const peer = new BotPeer(name);
+    this.bots.set(peer.id, new ChaseBot(peer, navGridFor(this.level)));
+    this.join(peer); // through the normal join path: spawn, announce, late-joiner rules
+    this.broadcast({ t: "botCount", count: this.bots.size, max: MAX_BOTS });
+    this.broadcast({ t: "announce", text: `${by.conn.name} added ${name}.` });
+  }
+
+  private removeBot(by: Player): void {
+    const last = [...this.bots.values()].at(-1);
+    if (!last) return;
+    this.leave(last.peer);
+    this.broadcast({ t: "botCount", count: this.bots.size, max: MAX_BOTS });
+    this.broadcast({ t: "announce", text: `${by.conn.name} removed ${last.peer.name}.` });
+  }
+
+  // Each tick, every bot decides where to go and whether to tag. Their moves
+  // are relayed like a real player's, and their tags take the same checks.
+  private runBots(now: number): void {
+    const dt = Math.min(0.2, (now - this.lastTick) / 1000);
+    this.lastTick = now;
+    if (!this.bots.size) return;
+    const everyone = [...this.players.values()];
+    for (const [id, bot] of this.bots) {
+      const me = this.players.get(id);
+      if (!me) continue;
+      const action = bot.think({
+        now,
+        dt,
+        me,
+        others: everyone.filter((p) => p !== me),
+        chasers: this.chasers,
+        playing: this.state === "playing",
+      });
+      me.p = action.p;
+      me.ry = action.ry;
+      this.broadcast({ t: "moved", id, p: action.p, ry: action.ry, time: now }, id);
+      this.onPlayerMoved(me, action.p, action.p, now);
+      if (action.tag !== null) this.handleTag(me, action.tag);
+    }
   }
 
   private handleTag(tagger: Player, targetId: number): void {

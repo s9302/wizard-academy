@@ -139,6 +139,19 @@ raised walkways with ramps, low walls you can vault and tall ones you can't.
   Survivors win if anyone is uncursed when time runs out; the curse wins if
   it takes everyone. Late joiners arrive cursed.
 
+**Bots:** press **Esc** in a tag or infection room and use **Bots [−] [+]**
+in the pause panel (anyone in the room can, up to 6). Bots count as players,
+so one person plus a bot is enough for a round. Bot chasers hunt the nearest
+runner; bot runners flee from chasers and otherwise wander. They move at
+~85% of your running speed, and their tags go through the same server checks
+as yours. They leave when the last real player does.
+
+Bots run on the server. To get around walls they use a **walking map**
+(`server/src/bots/NavGrid.ts`): a 2D grid of floor heights built from the
+level's boxes, with A* pathfinding. That's not physics; the server still has
+no collision engine. A bot can hop up 1 m (crates, low walls, the fountain
+rim) and drop down, so ramps work and walls and pillars don't.
+
 **Rounds:** a round starts once 2+ players are in the room: 5 s countdown
 (everyone is moved to a different spawn point), 3 minutes of play (chasers
 can't tag for the first 3 s, so runners can scatter), then 8 s of results,
@@ -161,6 +174,7 @@ checking only the target's newest position would reject fair tags.
 # Needs shortened rounds (testing only):
 ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 GAME_PIN=... node server/scripts/chase-check.ts http://localhost:3000
+GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000   # bots: add/remove, no wall clipping, tagging
 ```
 
 ## Access PIN
@@ -311,7 +325,8 @@ server/src/      HTTP + WebSocket server, PIN gate, rooms
   rooms/PlaygroundRoom.ts  free movement
 shared/src/levels/  level data (boxes, zones) for client and server
 shared/src/rooms.ts room list: id, name, level, mode
-server/scripts/  test bot, security-check, parkour-check, chase-check
+server/src/bots/   server-side bots: NavGrid (walking map + A*), ChaseBot (brain)
+server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check
 client/scripts/  simulate-course (physics bot)
 client/src/      game client (Game.ts is the main loop)
 Caddyfile        static files, /ws proxy, security headers

@@ -99,7 +99,7 @@ export class Game {
     if (room.mode === "parkour" && level.course) {
       this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, room.name);
     } else if (room.mode === "tag" || room.mode === "infection") {
-      this.chase = new ChaseHud(hud, this.clock, room.mode, room.name);
+      this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }));
     }
 
     this.resize();
@@ -203,6 +203,9 @@ export class Game {
         break;
       case "tagged":
         break; // the "chasers" and "announce" messages that follow carry the news
+      case "botCount":
+        this.chase?.botCount(msg.count, msg.max);
+        break;
       case "roundResult":
         this.chase?.result(msg.title, msg.lines);
         break;

@@ -94,6 +94,19 @@ button:disabled { opacity: 0.6; cursor: wait; }
 #overlay-message { color: #ffb4a8; }
 #resume-hint { cursor: pointer; }
 
+#bot-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #3d3263;
+}
+#bot-controls[hidden] { display: none; }
+#bot-controls button { width: 40px; padding: 4px 0; font-size: 20px; line-height: 1; }
+#bot-count { min-width: 1.5em; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
 /* ---- Parkour HUD ---- */
 
 #run {

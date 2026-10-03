@@ -20,7 +20,10 @@ export type RestartMsg = { t: "restart" };
 // Tag / infection: "I'm touching this player." The server checks it.
 export type TagMsg = { t: "tag"; target: number };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg;
+// Tag / infection: add or remove a server-side bot.
+export type BotsMsg = { t: "bots"; action: "add" | "remove" };
+
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg;
 
 // ---- Server -> Client ----
 
@@ -56,6 +59,7 @@ export type RoundMsg = { t: "round"; state: RoundState; endsAt: number | null };
 export type ChasersMsg = { t: "chasers"; ids: number[] };
 export type TaggedMsg = { t: "tagged"; by: number; victim: number };
 export type RoundResultMsg = { t: "roundResult"; title: string; lines: string[] };
+export type BotCountMsg = { t: "botCount"; count: number; max: number };
 
 export type ServerMsg =
   | WelcomeMsg
@@ -73,4 +77,5 @@ export type ServerMsg =
   | RoundMsg
   | ChasersMsg
   | TaggedMsg
-  | RoundResultMsg;
+  | RoundResultMsg
+  | BotCountMsg;
