@@ -136,6 +136,7 @@ export class Game {
         this.clock.note(msg.time);
         this.teleportCount = 0;
         this.player.teleport(...msg.spawn);
+        this.input.yaw = this.level.spawnYaw ?? 0;
         for (const info of msg.players) this.remotes.add(info, msg.time);
         this.start();
         break;

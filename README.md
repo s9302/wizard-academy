@@ -89,8 +89,14 @@ characters or a secret shorter than 32.
 
 ## Parkour
 
-On the join screen, pick **Trial I: The Floating Steps** (or the Playground).
-Until the hub arrives in Phase 6, that menu is how you choose a room.
+On the join screen, pick a trial (or the Playground). Until the hub arrives in
+Phase 6, that menu is how you choose a room.
+
+| Trial | What it asks of you |
+|---|---|
+| I: The Floating Steps | The gentle one: wide stones, a couple of 4 m running jumps |
+| II: The Spiral Spire | Three laps, ~20 running jumps in a row that each climb 0.8 m onto 1.5 m stones; a slip costs a lap |
+| III: The Shattered Bridge | 6 m running leaps, 1 m pillars that each rise a full metre, a 0.4 m tightrope |
 
 - The timer starts when you step off the start platform. Reach the three
   checkpoints (teal platforms, crystals light up green) in order, then the
@@ -108,11 +114,14 @@ fake time.
 
 Levels are plain data in `shared/src/levels/` (boxes, spawn, kill height, and
 for parkour the start/checkpoint/finish zones), used by both client and
-server. To add a course, copy `trial1.ts`, register it in `levels/index.ts`,
-and check it's beatable with real physics:
+server. `courseKit.ts` has helpers for platforms, checkpoints and the finish
+arch. To add a course, copy a trial, register it in `levels/index.ts`, and
+check it's beatable with real physics. Varying the bot's jump timing and aim
+shows how forgiving it is:
 
 ```sh
 node client/scripts/simulate-course.ts trial1   # bot runs the course in Rapier
+node client/scripts/simulate-course.ts trial3 0.6 4   # ...jumping 0.6 m early with 4 deg aim error
 GAME_PIN=... node server/scripts/parkour-check.ts http://game:8080   # rules, via the server
 ```
 
