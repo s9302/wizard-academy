@@ -13,6 +13,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import {
+  FALL_RESPAWN_Y,
   GRAVITY,
   JUMP_SPEED,
   PLAYER_HALF_HEIGHT,
@@ -25,7 +26,6 @@ import type { Input } from "./Input.ts";
 
 const COYOTE_TIME = 0.1; // seconds
 const JUMP_BUFFER_TIME = 0.12; // seconds
-const FALL_RESPAWN_Y = -30;
 
 export class PlayerController {
   // Interpolated position for rendering (see Game.ts for why).
@@ -35,7 +35,6 @@ export class PlayerController {
   private body: RAPIER.RigidBody;
   private collider: RAPIER.Collider;
   private controller: RAPIER.KinematicCharacterController;
-  private spawn = new THREE.Vector3();
   private velocityY = 0;
   private grounded = false;
   private timeSinceGrounded = 0;
@@ -63,8 +62,12 @@ export class PlayerController {
     return this.current;
   }
 
+  // Fell off the level; Game asks the server where to respawn.
+  get fellOut(): boolean {
+    return this.current.y < FALL_RESPAWN_Y;
+  }
+
   teleport(x: number, y: number, z: number): void {
-    this.spawn.set(x, y, z);
     this.body.setTranslation({ x, y, z }, true);
     this.body.setNextKinematicTranslation({ x, y, z });
     this.current.set(x, y, z);
@@ -114,10 +117,6 @@ export class PlayerController {
     this.current.set(t.x + moved.x, t.y + moved.y, t.z + moved.z);
     this.body.setNextKinematicTranslation(this.current);
     this.world.step();
-
-    if (this.current.y < FALL_RESPAWN_Y) {
-      this.teleport(this.spawn.x, this.spawn.y, this.spawn.z);
-    }
   }
 
   // Blend between the last two physics steps. alpha is 0..1.

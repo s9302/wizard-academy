@@ -11,7 +11,11 @@ export default defineConfig({
   },
   server: {
     host: true,
-    // In development (npm run dev:client), forward /ws to the game server.
-    proxy: { "/ws": { target: "ws://localhost:3000", ws: true } },
+    // In development (npm run dev:client), forward /ws and the PIN gate to the
+    // game server. Log in once at http://localhost:5173/auth/check.
+    proxy: {
+      "/ws": { target: "ws://localhost:3000", ws: true },
+      "/auth": { target: "http://localhost:3000" },
+    },
   },
 });

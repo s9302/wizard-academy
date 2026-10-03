@@ -18,6 +18,10 @@ export const PLAYER_RADIUS = 0.35;
 export const PLAYER_HALF_HEIGHT = 0.55;
 export const EYE_HEIGHT = 0.7; // camera height above the capsule center
 
+// Falling below this height means you fell off the level; the client asks the
+// server to respawn it.
+export const FALL_RESPAWN_Y = -30;
+
 // Limits on what clients may send.
 export const MAX_NAME_LENGTH = 16;
 export const MAX_MESSAGE_BYTES = 512;

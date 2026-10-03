@@ -3,14 +3,21 @@
 
 import { WebSocket } from "ws";
 import type { ServerMsg } from "../../shared/src/protocol.ts";
+import { TokenBucket } from "./limits.ts";
 import type { Room } from "./rooms/Room.ts";
+
+// Clients send ~20 moves per second. Allow bursts (e.g. after a lag spike)
+// but nothing close to a flood.
+const MESSAGE_BURST = 60;
+const MESSAGES_PER_SECOND = 30;
 
 let nextId = 1;
 
 export class Connection {
   readonly id: number;
   readonly socket: WebSocket;
-  readonly ip: string;
+  readonly ip: string; // rate-limit key, see limits.ts
+  readonly messageBudget = new TokenBucket(MESSAGE_BURST, MESSAGES_PER_SECOND);
   name = "";
   room: Room | null = null;
   alive = true; // flipped by the heartbeat in index.ts
@@ -29,6 +36,7 @@ export class Connection {
 
   // Send an error the client can show, then hang up.
   kick(message: string): void {
+    console.warn(`kicked #${this.id} ${this.name || "(no name)"} from ${this.ip}: ${message}`);
     this.send({ t: "error", message });
     this.socket.close(4000, message.slice(0, 100));
   }

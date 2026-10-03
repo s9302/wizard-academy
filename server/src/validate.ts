@@ -39,9 +39,13 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return { t: "hello", name };
     }
     case "move": {
-      if (!isVec3(msg.p) || !isFiniteNumber(msg.ry)) return null;
-      return { t: "move", p: [msg.p[0], msg.p[1], msg.p[2]], ry: msg.ry };
+      // Clients wrap yaw into -PI..PI before sending.
+      if (!isVec3(msg.p) || !isFiniteNumber(msg.ry) || Math.abs(msg.ry) > 4) return null;
+      if (!Number.isSafeInteger(msg.tp) || (msg.tp as number) < 0) return null;
+      return { t: "move", p: [msg.p[0], msg.p[1], msg.p[2]], ry: msg.ry, tp: msg.tp as number };
     }
+    case "respawn":
+      return { t: "respawn" };
     default:
       return null;
   }

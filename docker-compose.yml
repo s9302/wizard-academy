@@ -1,4 +1,4 @@
-# Phase 1: the game server and Caddy. Postgres joins in Phase 5.
+# The game server and Caddy. Postgres joins in Phase 5.
 
 services:
   server:
@@ -8,6 +8,9 @@ services:
     restart: unless-stopped
     environment:
       PORT: "3000"
+      GAME_PIN: ${GAME_PIN:?set GAME_PIN in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
     # Not published: only Caddy (on the internal compose network) can reach it.
     expose:
       - "3000"
@@ -30,11 +33,11 @@ services:
     depends_on:
       - server
     user: "65534:65534" # nobody: Caddy only needs to read /srv and bind port 8080
-    # Published on loopback (for cloudflared later) and the Tailscale IP only.
-    # Never 0.0.0.0: that would expose the game to the whole apartment LAN.
+    # Never publish on 0.0.0.0: that would expose the game to the whole
+    # apartment LAN. 8080 = tailnet listener, 8081 = tunnel listener (see Caddyfile).
     ports:
-      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
-      - "${TAILNET_IP:?set TAILNET_IP in .env}:${HTTP_PORT:-8080}:8080"
+      - "${TAILNET_IP:?set TAILNET_IP in .env}:8080:8080"
+      - "127.0.0.1:8081:8081"
     read_only: true
     tmpfs:
       - /data:uid=65534,gid=65534

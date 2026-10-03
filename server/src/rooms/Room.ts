@@ -3,13 +3,22 @@
 // royale...) will be a subclass that overrides the hooks below.
 
 import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
-import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
+import { FALL_RESPAWN_Y, MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
 import type { Connection } from "../Connection.ts";
+import { SlidingWindowLimiter } from "../limits.ts";
+import { MoveCheck } from "../MoveCheck.ts";
+
+// A few rejected moves can happen to anyone on a bad connection; this many in
+// a short time means a cheat client.
+const MAX_STRIKES = 5;
+const STRIKE_WINDOW_MS = 30_000;
 
 export type Player = {
   conn: Connection;
-  p: Vec3;
+  p: Vec3; // last accepted position
   ry: number;
+  tp: number; // how many times the server has teleported this player
+  moveCheck: MoveCheck;
 };
 
 export abstract class Room {
@@ -17,6 +26,7 @@ export abstract class Room {
   readonly maxPlayers: number = MAX_PLAYERS_PER_ROOM;
   protected players = new Map<number, Player>();
   private tickTimer: NodeJS.Timeout | null = null;
+  private strikes = new SlidingWindowLimiter(MAX_STRIKES, STRIKE_WINDOW_MS);
 
   constructor(name: string) {
     this.name = name;
@@ -34,9 +44,13 @@ export abstract class Room {
 
   // Where a new player appears.
   protected abstract spawnPoint(): Vec3;
+  // Where a player goes after falling off the level (parkour: last checkpoint).
+  protected respawnPoint(_player: Player): Vec3 {
+    return this.spawnPoint();
+  }
   protected onPlayerJoined(_player: Player): void {}
   protected onPlayerLeft(_player: Player): void {}
-  // Messages other than movement (mode-specific actions go here later).
+  // Mode-specific messages go here later.
   protected onMessage(_player: Player, _msg: ClientMsg): void {}
   // Called NET_RATE_HZ times per second.
   protected onTick(_now: number): void {}
@@ -54,7 +68,7 @@ export abstract class Room {
 
   join(conn: Connection): void {
     const spawn = this.spawnPoint();
-    const player: Player = { conn, p: spawn, ry: 0 };
+    const player: Player = { conn, p: spawn, ry: 0, tp: 0, moveCheck: new MoveCheck() };
 
     conn.send({
       t: "welcome",
@@ -95,14 +109,41 @@ export abstract class Room {
     if (!player) return;
     if (msg.t === "move") {
       this.handleMove(player, msg);
+    } else if (msg.t === "respawn") {
+      // Only honored if the player really is falling out of the world.
+      if (player.p[1] < FALL_RESPAWN_Y + 10) this.teleport(player, this.respawnPoint(player));
     } else {
       this.onMessage(player, msg);
     }
   }
 
-  // Movement is client-authoritative: accept the position and relay it.
-  // (Phase 2 adds the speed / teleport sanity check here.)
+  // Move a player. The client applies it and starts tagging its moves with
+  // the new tp number; anything still in flight from before is ignored.
+  protected teleport(player: Player, p: Vec3): void {
+    player.tp += 1;
+    player.p = p;
+    player.moveCheck.reset();
+    player.conn.send({ t: "teleport", p, tp: player.tp });
+    this.broadcast({ t: "moved", id: player.conn.id, p, ry: player.ry, time: Date.now() }, player.conn.id);
+  }
+
+  // Movement is client-authoritative, within reason: accept the position and
+  // relay it, unless it implies impossible speed. Then snap the player back.
   protected handleMove(player: Player, msg: MoveMsg): void {
+    if (msg.tp !== player.tp) return; // sent before the client saw our last teleport
+
+    if (!player.moveCheck.allow(player.p, msg.p)) {
+      const conn = player.conn;
+      console.warn(`[${this.name}] rejected move from ${conn.name} (#${conn.id}): ${JSON.stringify(player.p)} -> ${JSON.stringify(msg.p)}`);
+      this.strikes.record(String(conn.id));
+      if (this.strikes.retryAfterMs(String(conn.id)) > 0) {
+        conn.kick("Movement rejected too many times.");
+        return;
+      }
+      this.teleport(player, player.p);
+      return;
+    }
+
     player.p = msg.p;
     player.ry = msg.ry;
     this.broadcast({ t: "moved", id: player.conn.id, p: msg.p, ry: msg.ry, time: Date.now() }, player.conn.id);

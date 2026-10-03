@@ -1,5 +1,6 @@
-# Caddy serves the built client and forwards /ws to the game server.
-# Plain HTTP only: TLS is handled by Cloudflare once the tunnel exists (Phase 2).
+# Caddy serves the built client and forwards /ws to the game server. Every
+# request except the PIN page itself must pass the game server's session check
+# first. Plain HTTP only: TLS is handled by Cloudflare at the tunnel edge.
 {
 	admin off
 	auto_https off
@@ -7,30 +8,77 @@
 	persist_config off
 }
 
-:8080 {
+# The site, shared by both listeners. {args[0]} is where the real client IP
+# comes from; it is sent to the game server as X-Client-IP (for PIN rate
+# limiting), overwriting anything the client sent itself.
+(site) {
 	encode zstd gzip
+
+	request_body {
+		max_size 16KB
+	}
 
 	header {
 		# 'wasm-unsafe-eval' is needed to start the Rapier physics engine (WebAssembly).
 		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 		X-Content-Type-Options nosniff
-		Referrer-Policy no-referrer
+		# not no-referrer: that makes browsers send "Origin: null" on POSTs,
+		# which the PIN form's Origin check (rightly) rejects
+		Referrer-Policy same-origin
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		X-Robots-Tag "noindex, nofollow"
 		-Server
 	}
 
-	handle /ws {
-		reverse_proxy server:3000
+	# The PIN page's form post and stylesheet: the only things reachable
+	# without a session.
+	handle /auth/* {
+		reverse_proxy server:3000 {
+			header_up X-Client-IP {args[0]}
+		}
 	}
 
 	handle {
-		root * /srv
-		# Hashed asset filenames never change content, so they can be cached forever.
-		# Everything else (index.html) is revalidated so updates show up on reload.
-		@assets path /assets/*
-		@other not path /assets/*
-		header @assets Cache-Control "public, max-age=31536000, immutable"
-		header @other Cache-Control "no-cache"
-		file_server
+		# Ask the game server whether this request has a valid session cookie.
+		# If not, its answer (the PIN page, HTTP 401) goes to the browser instead.
+		forward_auth server:3000 {
+			uri /auth/check
+			header_up X-Client-IP {args[0]}
+			# For /ws, don't turn the check itself into a WebSocket upgrade.
+			header_up -Upgrade
+			header_up -Connection
+		}
+
+		handle /ws {
+			reverse_proxy server:3000 {
+				header_up X-Client-IP {args[0]}
+			}
+		}
+
+		handle {
+			root * /srv
+			# Hashed asset filenames never change content, so they can be cached
+			# (privately: they're behind the PIN). index.html is revalidated so
+			# updates show up on reload.
+			@assets path /assets/*
+			@other not path /assets/*
+			header @assets Cache-Control "private, max-age=31536000, immutable"
+			header @other Cache-Control "no-cache"
+			file_server
+		}
 	}
+}
+
+# Tailnet listener (published on the Tailscale IP only). The connecting
+# address is the real client; CF-Connecting-IP is ignored here, so nobody on
+# the tailnet can fake their address to dodge the PIN limit.
+:8080 {
+	import site {remote_host}
+}
+
+# Tunnel listener (published on 127.0.0.1 only, where cloudflared connects).
+# Requests arrive from cloudflared, so the visitor's address is the
+# CF-Connecting-IP header Cloudflare adds.
+:8081 {
+	import site {http.request.header.CF-Connecting-IP}
 }

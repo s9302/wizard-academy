@@ -11,6 +11,7 @@ export type NetHandlers = {
 export class Net {
   private socket: WebSocket;
   private lastError = "";
+  private wasOpen = false;
 
   constructor(handlers: NetHandlers) {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
@@ -27,8 +28,11 @@ export class Net {
       handlers.onMessage(msg);
     });
 
+    this.socket.addEventListener("open", () => (this.wasOpen = true));
     this.socket.addEventListener("close", (event) => {
-      handlers.onClose(this.lastError || event.reason || "Lost connection to the server.");
+      // A refused handshake (e.g. the session cookie expired) never opens.
+      const fallback = this.wasOpen ? "Lost connection to the server." : "Could not connect. Your session may have expired.";
+      handlers.onClose(this.lastError || event.reason || fallback);
     });
   }
 

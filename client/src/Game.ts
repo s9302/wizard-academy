@@ -19,7 +19,11 @@ import { RemotePlayers } from "./RemotePlayers.ts";
 const FIXED_DT = 1 / 60;
 const MAX_FRAME_DT = 0.1; // after a long pause, don't try to catch up seconds of physics
 
+const RESPAWN_RETRY_MS = 1000;
+
 const round = (n: number) => Math.round(n * 1000) / 1000;
+// Yaw keeps growing as you spin; send it as an angle in -PI..PI.
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -38,6 +42,10 @@ export class Game {
   private accumulator = 0;
   private sendTimer = 0;
   private statusTimer = 0;
+  // Server teleports (respawns, snap-backs) are numbered; we echo the latest
+  // number in every move so the server can ignore moves sent before it.
+  private teleportCount = 0;
+  private respawnRequestedAt: number | null = null;
 
   constructor(container: HTMLElement, input: Input, name: string, onDisconnect: (reason: string) => void) {
     this.input = input;
@@ -70,7 +78,10 @@ export class Game {
         onDisconnect(reason);
       },
     });
-    this.net.opened().then(() => this.net.send({ t: "hello", name }));
+    this.net.opened().then(
+      () => this.net.send({ t: "hello", name }),
+      () => {}, // onClose already reports the failure
+    );
   }
 
   private setupScene(): void {
@@ -105,6 +116,7 @@ export class Game {
     switch (msg.t) {
       case "welcome":
         this.remotes.noteServerTime(msg.time);
+        this.teleportCount = 0;
         this.player.teleport(...msg.spawn);
         for (const info of msg.players) this.remotes.add(info, msg.time);
         this.start();
@@ -119,6 +131,11 @@ export class Game {
         break;
       case "leave":
         this.remotes.remove(msg.id);
+        break;
+      case "teleport":
+        this.teleportCount = msg.tp;
+        this.player.teleport(...msg.p);
+        this.respawnRequestedAt = null;
         break;
       case "error":
         console.warn("server:", msg.message);
@@ -140,11 +157,20 @@ export class Game {
     const dt = Math.min((now - this.lastFrame) / 1000, MAX_FRAME_DT);
     this.lastFrame = now;
 
-    // Fixed-step physics.
-    this.accumulator += dt;
-    while (this.accumulator >= FIXED_DT) {
-      this.player.step(FIXED_DT, this.input);
-      this.accumulator -= FIXED_DT;
+    // Fell off the level: freeze and ask the server to respawn us (retrying
+    // in case the request is lost). The reply is a "teleport" message.
+    if (this.player.fellOut) {
+      if (this.respawnRequestedAt === null || now - this.respawnRequestedAt > RESPAWN_RETRY_MS) {
+        this.net.send({ t: "respawn" });
+        this.respawnRequestedAt = now;
+      }
+    } else {
+      // Fixed-step physics.
+      this.accumulator += dt;
+      while (this.accumulator >= FIXED_DT) {
+        this.player.step(FIXED_DT, this.input);
+        this.accumulator -= FIXED_DT;
+      }
     }
 
     // Camera follows the interpolated player position.
@@ -158,7 +184,7 @@ export class Game {
       this.sendTimer %= NET_INTERVAL_MS;
       const p = this.player.position;
       const position: Vec3 = [round(p.x), round(p.y), round(p.z)];
-      this.net.send({ t: "move", p: position, ry: round(this.input.yaw) });
+      this.net.send({ t: "move", p: position, ry: round(wrapAngle(this.input.yaw)), tp: this.teleportCount });
     }
 
     this.remotes.update();
