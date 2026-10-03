@@ -26,6 +26,7 @@ const enterButton = joinForm.querySelector<HTMLButtonElement>("button[type=submi
 const logoutButton = $<HTMLButtonElement>("logout-button");
 const message = $("overlay-message");
 const resumeHint = $("resume-hint");
+const exitButton = $<HTMLButtonElement>("exit-button");
 const hud = $("hud");
 
 let profile: Profile | null = null;
@@ -128,24 +129,48 @@ enterButton.textContent = "Enter";
 
 const input = new Input(container);
 let game: Game | null = null;
-let disconnected = false;
+let rapierReady: Promise<void> | null = null;
 
-// Show the overlay whenever the mouse is released (Esc), hide it when captured.
+// Show the pause panel whenever the mouse is released (Esc), hide it when captured.
 document.addEventListener("pointerlockchange", () => {
-  if (!game || disconnected) return;
+  if (!game) return;
   overlay.hidden = input.locked;
 });
 
 overlay.addEventListener("click", (e) => {
   if ((e.target as HTMLElement).closest("button, select, input")) return;
-  if (game && !disconnected) input.lock();
+  if (game) input.lock();
 });
+
+// Leave the room and go back to the profile and room picker. Used by the Exit
+// button and when the connection drops (then with the reason why).
+async function backToMenu(reason = ""): Promise<void> {
+  game?.dispose();
+  game = null;
+  document.exitPointerLock();
+  hud.hidden = true;
+  exitButton.hidden = true;
+  resumeHint.hidden = true;
+  overlay.hidden = false;
+  try {
+    // Fresh profile: XP and best times may have changed while playing.
+    const { status, data } = await api("/api/me");
+    if (status === 200) showProfile(data as unknown as Profile);
+    else showLoggedOut();
+  } catch {
+    // Server unreachable; keep the old profile so they can try again.
+    if (profile) showProfile(profile);
+  }
+  message.textContent = reason;
+}
+
+exitButton.addEventListener("click", () => backToMenu());
 
 joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const room = findRoom(roomSelect.value);
   const level = room && LEVELS[room.levelId];
-  if (!profile || !room || !level) return;
+  if (!profile || !room || !level || game) return;
 
   // Must be requested right away, while the click still counts as a user action.
   input.lock();
@@ -153,14 +178,11 @@ joinForm.addEventListener("submit", async (event) => {
   profileBox.hidden = true;
   message.textContent = "";
   resumeHint.hidden = false;
+  exitButton.hidden = false;
 
-  await RAPIER.init(); // loads the physics engine (WebAssembly)
+  rapierReady ??= RAPIER.init(); // loads the physics engine (WebAssembly) once
+  await rapierReady;
   hud.hidden = false;
-  game = new Game(container, input, profile.username, profile.xp, room, level, (reason) => {
-    disconnected = true;
-    document.exitPointerLock();
-    overlay.hidden = false;
-    resumeHint.hidden = true;
-    message.textContent = `${reason} Reload the page to rejoin.`;
-  });
+  game = new Game(container, input, profile.username, profile.xp, room, level, (reason) => backToMenu(reason));
+  overlay.hidden = input.locked;
 });

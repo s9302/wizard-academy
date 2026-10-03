@@ -12,6 +12,7 @@ export class Net {
   private socket: WebSocket;
   private lastError = "";
   private wasOpen = false;
+  private closedByUs = false;
 
   constructor(handlers: NetHandlers) {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
@@ -30,6 +31,7 @@ export class Net {
 
     this.socket.addEventListener("open", () => (this.wasOpen = true));
     this.socket.addEventListener("close", (event) => {
+      if (this.closedByUs) return; // leaving on purpose isn't a disconnect
       // A refused handshake (e.g. the session cookie expired) never opens.
       const fallback = this.wasOpen ? "Lost connection to the server." : "Could not connect. Your session may have expired.";
       handlers.onClose(this.lastError || event.reason || fallback);
@@ -42,6 +44,13 @@ export class Net {
       this.socket.addEventListener("open", () => resolve(), { once: true });
       this.socket.addEventListener("close", () => reject(new Error("Could not connect.")), { once: true });
     });
+  }
+
+  // Leave on purpose (Exit). The server sees the socket close and removes us
+  // from the room; onClose is not called.
+  close(): void {
+    this.closedByUs = true;
+    this.socket.close(1000, "Left the room");
   }
 
   send(msg: ClientMsg): void {

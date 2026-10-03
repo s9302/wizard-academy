@@ -57,8 +57,12 @@ export class Game {
   private name: string;
   private xp: number;
   private levelUpTimer: number | undefined;
+  private onResize = () => this.resize();
+  // Elements a mode HUD added to #hud; removed again in dispose().
+  private hudBaseline: Set<Element>;
 
   private running = false;
+  private disposed = false;
   private lastFrame = 0;
   private accumulator = 0;
   private sendTimer = 0;
@@ -83,6 +87,7 @@ export class Game {
     this.room = room;
     this.level = level;
     const hud = document.getElementById("hud")!;
+    this.hudBaseline = new Set(hud.children);
     this.statusEl = document.getElementById("status")!;
     this.feedEl = document.getElementById("feed")!;
     this.crosshairEl = document.getElementById("crosshair")!;
@@ -109,7 +114,7 @@ export class Game {
     }
 
     this.resize();
-    window.addEventListener("resize", () => this.resize());
+    window.addEventListener("resize", this.onResize);
 
     this.net = new Net({
       onMessage: (msg) => this.onServerMessage(msg),
@@ -154,6 +159,7 @@ export class Game {
   }
 
   private onServerMessage(msg: ServerMsg): void {
+    if (this.disposed) return; // still in flight when we left
     switch (msg.t) {
       case "welcome":
         this.myId = msg.id;
@@ -161,6 +167,7 @@ export class Game {
         this.teleportCount = 0;
         this.player.teleport(...msg.spawn);
         this.input.yaw = this.level.spawnYaw ?? 0;
+        this.input.pitch = 0;
         for (const info of msg.players) this.remotes.add(info, msg.time);
         this.start();
         break;
@@ -262,6 +269,39 @@ export class Game {
     this.feedEl.appendChild(line);
     while (this.feedEl.childElementCount > 5) this.feedEl.firstElementChild!.remove();
     window.setTimeout(() => line.remove(), FEED_MESSAGE_MS);
+  }
+
+  // Leave the room (Exit) and free everything this game created: the socket,
+  // the WebGL context, the physics world, and the mode's HUD elements. The
+  // page can then start a new Game in another room.
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.running = false;
+    this.net.close();
+    window.removeEventListener("resize", this.onResize);
+    window.clearTimeout(this.levelUpTimer);
+
+    this.remotes.clear();
+    this.scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) m.dispose();
+      }
+    });
+    this.renderer.dispose();
+    // Browsers cap live WebGL contexts (~16); release ours now, not at GC.
+    this.renderer.forceContextLoss();
+    this.renderer.domElement.remove();
+    this.world.free();
+
+    const hud = document.getElementById("hud")!;
+    for (const child of [...hud.children]) if (!this.hudBaseline.has(child)) child.remove();
+    this.feedEl.replaceChildren();
+    this.crosshairEl.classList.remove("target");
+    document.getElementById("levelup")!.classList.remove("show");
+    document.getElementById("bot-controls")!.hidden = true;
+    document.body.classList.remove("role-it", "role-cursed");
   }
 
   private start(): void {

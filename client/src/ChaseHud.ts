@@ -46,10 +46,11 @@ export class ChaseHud {
     this.botAddEl = document.getElementById("bot-add") as HTMLButtonElement;
     this.botRemoveEl = document.getElementById("bot-remove") as HTMLButtonElement;
     controls.hidden = false;
-    // Clicks here shouldn't fall through to "click to resume".
-    controls.addEventListener("click", (e) => e.stopPropagation());
-    this.botAddEl.addEventListener("click", () => onBots("add"));
-    this.botRemoveEl.addEventListener("click", () => onBots("remove"));
+    // Clicks here shouldn't fall through to "click to resume". Assigned with
+    // onclick (not addEventListener) so the next room's HUD replaces them.
+    controls.onclick = (e) => e.stopPropagation();
+    this.botAddEl.onclick = () => onBots("add");
+    this.botRemoveEl.onclick = () => onBots("remove");
     const panel = el("div", "run", hud); // same look as the parkour panel
     el("div", "run-name", panel).textContent = roomName;
     this.timerEl = el("div", "run-timer", panel);

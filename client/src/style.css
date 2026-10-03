@@ -93,6 +93,8 @@ button:disabled { opacity: 0.6; cursor: wait; }
 #overlay-message:empty { display: none; }
 #overlay-message { color: #ffb4a8; }
 #resume-hint { cursor: pointer; }
+#exit-button { margin-top: 8px; }
+#exit-button[hidden] { display: none; }
 
 #bot-controls {
   display: flex;

@@ -11,7 +11,7 @@
     <div id="hud" hidden>
       <div id="crosshair"></div>
       <div id="status"></div>
-      <div id="help">WASD move &middot; Shift run &middot; Space jump &middot; Click tag &middot; R restart run &middot; Esc release mouse</div>
+      <div id="help">WASD move &middot; Shift run &middot; Space jump &middot; Click tag &middot; R restart run &middot; Esc pause / exit</div>
       <div id="feed"></div>
       <div id="xp-hud">
         <span id="xp-level"></span>
@@ -52,6 +52,8 @@
         </form>
         <p id="overlay-message"></p>
         <p id="resume-hint" hidden>Click to resume</p>
+        <!-- Shown in the pause panel while you're in a room. -->
+        <button type="button" id="exit-button" class="secondary" hidden>Exit to menu</button>
         <!-- Tag / infection only (ChaseHud shows it). -->
         <div id="bot-controls" hidden>
           <span>Bots</span>

@@ -159,6 +159,9 @@ docker compose exec postgres psql -U wizard -d wizard
 On the join screen, pick a trial (or the Playground). Until the hub arrives in
 Phase 6, that menu is how you choose a room.
 
+Press **Esc** to pause; the pause panel has **Exit to menu**, which leaves the
+room so you can pick a different one without reloading the page.
+
 | Trial | What it asks of you |
 |---|---|
 | I: The Floating Steps | The gentle one: wide stones, a couple of 4 m running jumps |
