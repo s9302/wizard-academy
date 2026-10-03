@@ -48,9 +48,16 @@ export class Net {
 
   // Leave on purpose (Exit). The server sees the socket close and removes us
   // from the room; onClose is not called.
-  close(): void {
+  // Resolves when the socket has closed (or after a second, whatever happens).
+  close(): Promise<void> {
     this.closedByUs = true;
+    if (this.socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+    const done = new Promise<void>((resolve) => {
+      this.socket.addEventListener("close", () => resolve(), { once: true });
+      setTimeout(resolve, 1000);
+    });
     this.socket.close(1000, "Left the room");
+    return done;
   }
 
   send(msg: ClientMsg): void {

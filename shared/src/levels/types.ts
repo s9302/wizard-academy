@@ -26,6 +26,20 @@ export type Course = {
   finish: Zone;
 };
 
+// A doorway to another room (hub only). Walking into the opening takes you
+// there; the client detects it, since any room is open to join anyway.
+export type Portal = {
+  room: string; // room id it leads to (shared/src/rooms.ts)
+  pos: Vec3; // center of the opening, at floor level
+  yaw: number; // the way its front faces, radians (same convention as spawnYaw)
+  color: string;
+};
+
+// Opening size, shared by the level geometry, the visuals and inPortal().
+export const PORTAL_WIDTH = 3.6;
+export const PORTAL_HEIGHT = 4.6;
+export const PORTAL_STEP = 0.3; // the stone step in front of and under the opening
+
 export type Level = {
   id: string; // also the room name
   name: string;
@@ -37,7 +51,30 @@ export type Level = {
   sky: string;
   boxes: Box[];
   course?: Course; // parkour levels only
+  portals?: Portal[]; // the hub only
 };
+
+// A point relative to a portal: `side` meters to its right (as seen walking
+// in), `up` above its floor, `out` in front of it. yaw 0 faces -Z, like the
+// camera, so front = (-sin yaw, -cos yaw) and right = (cos yaw, -sin yaw).
+export function portalPoint(portal: Portal, side: number, up: number, out: number): Vec3 {
+  const s = Math.sin(portal.yaw);
+  const c = Math.cos(portal.yaw);
+  return [portal.pos[0] + c * side - s * out, portal.pos[1] + up, portal.pos[2] - s * side - c * out];
+}
+
+// Is a player (capsule center) inside the portal's opening? A thin slab just
+// behind the front face; the back wall stops anyone walking in from behind.
+export function inPortal(p: Vec3, portal: Portal): boolean {
+  const dx = p[0] - portal.pos[0];
+  const dz = p[2] - portal.pos[2];
+  const s = Math.sin(portal.yaw);
+  const c = Math.cos(portal.yaw);
+  const out = -s * dx - c * dz;
+  const side = c * dx - s * dz;
+  const up = p[1] - portal.pos[1];
+  return Math.abs(side) < PORTAL_WIDTH / 2 - 0.2 && out > -0.6 && out < 0.35 && up > 0 && up < PORTAL_HEIGHT;
+}
 
 export function inZone(p: Vec3, zone: Zone): boolean {
   return (

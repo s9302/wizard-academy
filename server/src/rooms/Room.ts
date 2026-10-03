@@ -43,11 +43,23 @@ export abstract class Room {
     return this.players.size;
   }
 
+  get humanCount(): number {
+    let n = 0;
+    for (const player of this.players.values()) if (!player.conn.isBot) n++;
+    return n;
+  }
+
   get isFull(): boolean {
     return this.players.size >= this.maxPlayers;
   }
 
   // ---- Hooks for subclasses ----
+
+  // Where a player arriving from another room (hello.from) appears, and which
+  // way they face. null = the usual spawnPoint().
+  protected arrivalPoint(_from: string): { p: Vec3; yaw: number } | null {
+    return null;
+  }
 
   // Where a new player appears: one of the level's spawn points (or its single
   // spawn), spread out a little so players don't appear inside each other.
@@ -83,15 +95,17 @@ export abstract class Room {
     this.tickTimer = null;
   }
 
-  join(conn: Peer): void {
-    const spawn = this.spawnPoint();
-    const player: Player = { conn, p: spawn, ry: 0, tp: 0, moveCheck: new MoveCheck() };
+  join(conn: Peer, from?: string): void {
+    const arrival = from ? this.arrivalPoint(from) : null;
+    const spawn = arrival?.p ?? this.spawnPoint();
+    const player: Player = { conn, p: spawn, ry: arrival?.yaw ?? 0, tp: 0, moveCheck: new MoveCheck() };
 
     conn.send({
       t: "welcome",
       id: conn.id,
       room: this.name,
       spawn,
+      yaw: arrival?.yaw,
       time: Date.now(),
       players: [...this.players.values()].map((other) => ({
         id: other.conn.id,

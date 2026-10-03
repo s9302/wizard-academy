@@ -7,7 +7,9 @@ export type Vec3 = [number, number, number];
 
 // room = a room id from shared/src/rooms.ts (e.g. "trial1", "tag"). Your
 // name comes from your account (the login cookie), not from this message.
-export type HelloMsg = { t: "hello"; room: string };
+// from = the room you just left, if any: the hub puts you in front of that
+// room's portal.
+export type HelloMsg = { t: "hello"; room: string; from?: string };
 // p = capsule center position, ry = yaw (facing direction) in radians.
 // tp = the number of the last server teleport the client has applied. The
 // server ignores moves sent before the client saw its latest teleport.
@@ -30,7 +32,8 @@ export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | 
 
 export type PlayerInfo = { id: number; name: string; p: Vec3; ry: number };
 
-export type WelcomeMsg = { t: "welcome"; id: number; room: string; spawn: Vec3; time: number; players: PlayerInfo[] };
+// yaw: which way to face, if the room has an opinion (else the level's spawnYaw).
+export type WelcomeMsg = { t: "welcome"; id: number; room: string; spawn: Vec3; yaw?: number; time: number; players: PlayerInfo[] };
 export type JoinMsg = { t: "join"; player: PlayerInfo; time: number };
 export type LeaveMsg = { t: "leave"; id: number };
 // Another player's position, relayed by the server. "time" is the server clock
@@ -62,6 +65,10 @@ export type TaggedMsg = { t: "tagged"; by: number; victim: number };
 export type RoundResultMsg = { t: "roundResult"; title: string; lines: string[] };
 export type BotCountMsg = { t: "botCount"; count: number; max: number };
 
+// ---- Hub (server -> everyone in the hub) ----
+// How many people (not bots) are in each room, for the portal signs.
+export type RoomCountsMsg = { t: "roomCounts"; counts: Record<string, number> };
+
 // ---- Progression (server -> one player) ----
 // total = your XP after this award. The client works out the level from it.
 export type XpMsg = { t: "xp"; amount: number; reason: string; total: number };
@@ -84,4 +91,5 @@ export type ServerMsg =
   | TaggedMsg
   | RoundResultMsg
   | BotCountMsg
+  | RoomCountsMsg
   | XpMsg;

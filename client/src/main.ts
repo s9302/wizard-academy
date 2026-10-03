@@ -3,7 +3,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import { LEVELS } from "../../shared/src/levels/index.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
-import { findRoom, ROOMS } from "../../shared/src/rooms.ts";
+import { findRoom, HUB_ROOM, ROOMS, type RoomInfo } from "../../shared/src/rooms.ts";
 import { Game } from "./Game.ts";
 import { Input } from "./Input.ts";
 import { formatTime } from "./ParkourHud.ts";
@@ -21,23 +21,15 @@ const loginButton = $<HTMLButtonElement>("login-button");
 const registerButton = $<HTMLButtonElement>("register-button");
 const profileBox = $("profile");
 const joinForm = $<HTMLFormElement>("join-form");
-const roomSelect = $<HTMLSelectElement>("room");
 const enterButton = joinForm.querySelector<HTMLButtonElement>("button[type=submit]")!;
 const logoutButton = $<HTMLButtonElement>("logout-button");
 const message = $("overlay-message");
 const resumeHint = $("resume-hint");
 const exitButton = $<HTMLButtonElement>("exit-button");
+const fade = $("fade");
 const hud = $("hud");
 
 let profile: Profile | null = null;
-
-// Until the hub exists (Phase 6), you pick a room here.
-for (const room of ROOMS) {
-  const option = document.createElement("option");
-  option.value = room.id;
-  option.textContent = room.name;
-  roomSelect.appendChild(option);
-}
 
 // ---- Accounts ----
 
@@ -123,13 +115,20 @@ api("/api/me")
 // The Enter button stays disabled until this script has loaded; otherwise a
 // quick click would submit the form as a plain page reload.
 enterButton.disabled = false;
-enterButton.textContent = "Enter";
+enterButton.textContent = "Enter the Academy";
 
 // ---- Playing ----
 
 const input = new Input(container);
 let game: Game | null = null;
+let current: RoomInfo | null = null;
+let switching = false;
 let rapierReady: Promise<void> | null = null;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Dev server only (stripped from production builds): lets browser tests
+// reach the running game, e.g. to put the player next to a portal.
+if (import.meta.env.DEV) Object.assign(window, { wa: { get game() { return game; } } });
 
 // Show the pause panel whenever the mouse is released (Esc), hide it when captured.
 document.addEventListener("pointerlockchange", () => {
@@ -142,12 +141,66 @@ overlay.addEventListener("click", (e) => {
   if (game) input.lock();
 });
 
-// Leave the room and go back to the profile and room picker. Used by the Exit
-// button and when the connection drops (then with the reason why).
-async function backToMenu(reason = ""): Promise<void> {
-  game?.dispose();
+// Latest XP and best times, without touching the menu.
+async function fetchProfile(): Promise<void> {
+  try {
+    const { status, data } = await api("/api/me");
+    if (status === 200) profile = data as unknown as Profile;
+  } catch {
+    // keep what we had
+  }
+}
+
+function startGame(room: RoomInfo, from?: string): Game | null {
+  const level = LEVELS[room.levelId];
+  if (!profile || !level) return null;
+  current = room;
+  hud.hidden = false;
+  exitButton.hidden = false;
+  exitButton.textContent = room.id === HUB_ROOM ? "Exit to menu" : "Back to the Academy";
+  game = new Game(container, input, {
+    name: profile.username,
+    xp: profile.xp,
+    room,
+    level,
+    from,
+    bestTimes: profile.bestTimes,
+    onDisconnect: (reason) => backToMenu(reason),
+    onPortal: (roomId) => switchRoom(roomId),
+  });
+  return game;
+}
+
+// Walk through a portal (or come back to the hub): fade out, leave this room,
+// join the next, fade back in once the server has welcomed us.
+async function switchRoom(roomId: string): Promise<void> {
+  const room = findRoom(roomId);
+  if (!room || !game || !current || switching) return;
+  switching = true;
+  const from = current.id;
+  const portal = LEVELS[current.levelId]?.portals?.find((x) => x.room === roomId);
+  fade.style.background = portal?.color ?? "#b48cff";
+  fade.classList.add("show");
+  await Promise.all([sleep(250), game.dispose()]);
   game = null;
+  if (room.id === HUB_ROOM) await fetchProfile(); // fresh XP and best times for the signs
+  const next = startGame(room, from);
+  if (next) await Promise.race([next.ready, sleep(5000)]);
+  fade.classList.remove("show");
+  // The mouse may have been captured (or released) while no game was running.
+  if (game) overlay.hidden = input.locked;
+  switching = false;
+}
+
+// Leave the game and go back to the profile screen. Used by Exit (in the hub)
+// and when the connection drops (then with the reason why).
+async function backToMenu(reason = ""): Promise<void> {
+  const leaving = game;
+  game = null;
+  current = null;
+  await leaving?.dispose();
   document.exitPointerLock();
+  fade.classList.remove("show");
   hud.hidden = true;
   exitButton.hidden = true;
   resumeHint.hidden = true;
@@ -164,13 +217,21 @@ async function backToMenu(reason = ""): Promise<void> {
   message.textContent = reason;
 }
 
-exitButton.addEventListener("click", () => backToMenu());
+exitButton.addEventListener("click", () => {
+  if (!current || switching) return;
+  if (current.id === HUB_ROOM) {
+    backToMenu();
+  } else {
+    input.lock(); // still inside the click, so the browser allows it
+    switchRoom(HUB_ROOM);
+  }
+});
 
 joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const room = findRoom(roomSelect.value);
-  const level = room && LEVELS[room.levelId];
-  if (!profile || !room || !level || game) return;
+  const hub = findRoom(HUB_ROOM);
+  if (!profile || !hub || game || switching) return;
+  switching = true;
 
   // Must be requested right away, while the click still counts as a user action.
   input.lock();
@@ -178,11 +239,10 @@ joinForm.addEventListener("submit", async (event) => {
   profileBox.hidden = true;
   message.textContent = "";
   resumeHint.hidden = false;
-  exitButton.hidden = false;
 
   rapierReady ??= RAPIER.init(); // loads the physics engine (WebAssembly) once
   await rapierReady;
-  hud.hidden = false;
-  game = new Game(container, input, profile.username, profile.xp, room, level, (reason) => backToMenu(reason));
+  startGame(hub);
   overlay.hidden = input.locked;
+  switching = false;
 });

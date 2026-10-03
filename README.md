@@ -1,8 +1,8 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 5** done (accounts,
-XP and levels, best times in Postgres).
+first person with friends. Built in phases; currently **Phase 6** done (the
+academy hub, with portals to every room).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -82,7 +82,8 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`accounts-check` (run it last: it trips the login rate limit for your IP).
+`hub-check`, `accounts-check` (run it last: it trips the login rate limit
+for your IP).
 
 
 - Open `http://game:8080` on a tailnet device, enter a name, click into the
@@ -154,13 +155,35 @@ docker compose exec postgres psql -U wizard -d wizard
 #   SELECT * FROM xp_events ORDER BY id DESC LIMIT 20;
 ```
 
+## The Academy (hub)
+
+After logging in, **Enter the Academy** puts you in the courtyard in front of
+the academy building. Six portal arches stand in a ring around the plaza:
+the three trials on the west side, Tag, Infection and the Playground on the
+east. Walk into one to go there.
+
+- Each portal has a sign with the room's name, how many people are in it
+  right now (bots not counted; refreshed every 2 s), and for trials your
+  best time.
+- **Esc** opens the pause panel. In a room, **Back to the Academy** returns
+  you to the hub, standing in front of the portal you used and facing the
+  plaza. In the hub, **Exit to menu** goes back to your profile.
+- A dropped connection returns you to the menu with the reason.
+
+How it works: every room switch is a fresh WebSocket that says `hello` to the
+new room, with `from` set to the room you left. The hub uses `from` to place
+you at that room's portal (`server/src/rooms/HubRoom.ts`). The client detects
+walking into a portal, which is fine because any room is open to join anyway;
+there is nothing to cheat. Portals can only be entered from the front (a back
+wall blocks the other side), and one only fires after you've first been
+outside all of them, so arriving next to one can't bounce you straight back.
+
+```sh
+node client/scripts/walk-hub.ts   # physics bot walks into every portal, and tries the backs
+GAME_PIN=... node server/scripts/hub-check.ts http://localhost:3000   # arrival spots, live counts, bad input
+```
+
 ## Parkour
-
-On the join screen, pick a trial (or the Playground). Until the hub arrives in
-Phase 6, that menu is how you choose a room.
-
-Press **Esc** to pause; the pause panel has **Exit to menu**, which leaves the
-room so you can pick a different one without reloading the page.
 
 | Trial | What it asks of you |
 |---|---|
@@ -303,7 +326,7 @@ tailnet, then back to `true`.
   collision geometry (by design), so it checks *speed* but not whether you're
   standing on something. A cheat client could "float" across gaps at running
   speed. It still has to pass through every checkpoint in order, and times
-  are tied to names only until Phase 5 adds accounts.
+  are tied to the account that set them.
 
 ## Cloudflare Tunnel
 
@@ -387,7 +410,6 @@ server/src/      HTTP + WebSocket server, PIN gate, rooms
   api.ts           /api/register, /login, /logout, /me
   db.ts            Postgres pool + migration runner
   xp.ts            XP amounts
-server/migrations/ numbered SQL schema files
   limits.ts        rate limiters
   MoveCheck.ts     movement sanity check
   validate.ts      WebSocket message validation
@@ -396,12 +418,14 @@ server/migrations/ numbered SQL schema files
   rooms/ChaseRoom.ts    shared tag/infection engine (rounds, tag checks)
   rooms/TagRoom.ts, rooms/InfectionRoom.ts  the two rule sets
   rooms/PlaygroundRoom.ts  free movement
-shared/src/levels/  level data (boxes, zones) for client and server
+  rooms/HubRoom.ts      the academy hub: arrival spots, portal player counts
+server/migrations/ numbered SQL schema files
+shared/src/levels/  level data (boxes, zones, portals) for client and server
 shared/src/rooms.ts room list: id, name, level, mode
 shared/src/progression.ts  XP -> level curve
 server/src/bots/   server-side bots: NavGrid (walking map + A*), ChaseBot (brain)
-server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check
-client/scripts/  simulate-course (physics bot)
+server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check
+client/scripts/  simulate-course, walk-hub (physics bots)
 client/src/      game client (Game.ts is the main loop)
 Caddyfile        static files, /ws proxy, security headers
 ```

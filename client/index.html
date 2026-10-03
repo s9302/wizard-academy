@@ -20,6 +20,9 @@
       <div id="levelup"></div>
     </div>
 
+    <!-- Brief fade while walking through a portal. -->
+    <div id="fade"></div>
+
     <div id="overlay">
       <div class="panel">
         <h1>Wizard Academy</h1>
@@ -44,10 +47,9 @@
           <div id="profile-times"></div>
         </div>
         <form id="join-form" hidden>
-          <label for="room">Where to?</label>
-          <select id="room"></select>
           <!-- Enabled by main.ts once the game has loaded (it's a few MB). -->
           <button type="submit" disabled>Loading&hellip;</button>
+          <p class="hint">You arrive in the academy courtyard. Walk through a portal to play.</p>
           <button type="button" id="logout-button" class="link">Log out</button>
         </form>
         <p id="overlay-message"></p>

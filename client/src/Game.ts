@@ -16,6 +16,7 @@ import type { RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
 import type { Input } from "./Input.ts";
 import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
+import { Portals } from "./levels/Portals.ts";
 import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
@@ -29,6 +30,17 @@ const FEED_MESSAGE_MS = 6000;
 // The sun's shadow camera covers this many meters around the player.
 const SHADOW_RANGE = 40;
 const SUN_OFFSET = new THREE.Vector3(20, 35, 10);
+
+export type GameOptions = {
+  name: string;
+  xp: number;
+  room: RoomInfo;
+  level: Level;
+  from?: string; // the room we just came from (the hub puts us at its portal)
+  bestTimes: Record<string, number>; // for the hub's portal signs
+  onDisconnect: (reason: string) => void;
+  onPortal: (roomId: string) => void; // walked into a portal in the hub
+};
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 // Yaw keeps growing as you spin; send it as an angle in -PI..PI.
@@ -46,6 +58,11 @@ export class Game {
   private markers: CheckpointMarkers;
   private parkour: ParkourHud | null = null;
   private chase: ChaseHud | null = null;
+  private portals: Portals | null = null;
+  private onPortal: (roomId: string) => void;
+  private resolveReady!: () => void;
+  // Resolves once the server has welcomed us into the room (or hung up).
+  readonly ready = new Promise<void>((resolve) => (this.resolveReady = resolve));
   private net: Net;
   private input: Input;
   private level: Level;
@@ -72,20 +89,14 @@ export class Game {
   private teleportCount = 0;
   private respawnRequestedAt: number | null = null;
 
-  constructor(
-    container: HTMLElement,
-    input: Input,
-    name: string,
-    xp: number,
-    room: RoomInfo,
-    level: Level,
-    onDisconnect: (reason: string) => void,
-  ) {
+  constructor(container: HTMLElement, input: Input, options: GameOptions) {
+    const { room, level, onDisconnect } = options;
     this.input = input;
-    this.name = name;
-    this.xp = xp;
+    this.name = options.name;
+    this.xp = options.xp;
     this.room = room;
     this.level = level;
+    this.onPortal = options.onPortal;
     const hud = document.getElementById("hud")!;
     this.hudBaseline = new Set(hud.children);
     this.statusEl = document.getElementById("status")!;
@@ -104,6 +115,7 @@ export class Game {
 
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     this.markers = buildLevel(this.scene, this.world, level);
+    if (level.portals) this.portals = new Portals(this.scene, level.portals, options.bestTimes);
     this.world.step(); // builds the collision lookup structures before the first move
     this.player = new PlayerController(this.world, level.killY);
     this.remotes = new RemotePlayers(this.scene, this.clock);
@@ -121,11 +133,12 @@ export class Game {
       onClose: (reason) => {
         this.running = false;
         this.remotes.clear();
+        this.resolveReady(); // nobody is waiting for a welcome that won't come
         onDisconnect(reason);
       },
     });
     this.net.opened().then(
-      () => this.net.send({ t: "hello", room: room.id }),
+      () => this.net.send({ t: "hello", room: room.id, from: options.from }),
       () => {}, // onClose already reports the failure
     );
   }
@@ -166,10 +179,11 @@ export class Game {
         this.clock.note(msg.time);
         this.teleportCount = 0;
         this.player.teleport(...msg.spawn);
-        this.input.yaw = this.level.spawnYaw ?? 0;
+        this.input.yaw = msg.yaw ?? this.level.spawnYaw ?? 0;
         this.input.pitch = 0;
         for (const info of msg.players) this.remotes.add(info, msg.time);
         this.start();
+        this.resolveReady();
         break;
       case "join":
         this.clock.note(msg.time);
@@ -225,6 +239,9 @@ export class Game {
       case "roundResult":
         this.chase?.result(msg.title, msg.lines);
         break;
+      case "roomCounts":
+        this.portals?.setCounts(msg.counts);
+        break;
       case "error":
         console.warn("server:", msg.message);
         break;
@@ -274,11 +291,11 @@ export class Game {
   // Leave the room (Exit) and free everything this game created: the socket,
   // the WebGL context, the physics world, and the mode's HUD elements. The
   // page can then start a new Game in another room.
-  dispose(): void {
+  async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
     this.running = false;
-    this.net.close();
+    const closed = this.net.close();
     window.removeEventListener("resize", this.onResize);
     window.clearTimeout(this.levelUpTimer);
 
@@ -302,6 +319,9 @@ export class Game {
     document.getElementById("levelup")!.classList.remove("show");
     document.getElementById("bot-controls")!.hidden = true;
     document.body.classList.remove("role-it", "role-cursed");
+    // Wait for the server to drop us from this room before anyone joins the
+    // next one (otherwise it looks like a second tab and kicks this one).
+    await closed;
   }
 
   private start(): void {
@@ -359,6 +379,16 @@ export class Game {
 
     this.remotes.update();
     this.markers.update(now / 1000);
+    this.portals?.update(now / 1000);
+    if (this.portals) {
+      const p = this.player.position;
+      const target = this.portals.enteredPortal([p.x, p.y, p.z]);
+      if (target) {
+        this.running = false; // stop sending moves; main.ts switches rooms
+        this.onPortal(target);
+        return;
+      }
+    }
     this.parkour?.update();
     this.chase?.update();
 

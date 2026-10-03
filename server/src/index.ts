@@ -189,7 +189,7 @@ function onConnection(conn: Connection): void {
       if (saidHello) return; // already joined once (e.g. room was full), ignore repeats
       saidHello = true;
       clearTimeout(helloTimer);
-      rooms.join(conn, msg.room);
+      rooms.join(conn, msg.room, msg.from);
       return;
     }
     conn.room.handleMessage(conn, msg);

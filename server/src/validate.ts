@@ -33,7 +33,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
   switch (msg.t) {
     case "hello": {
       if (typeof msg.room !== "string" || !ROOM_PATTERN.test(msg.room)) return null;
-      return { t: "hello", room: msg.room };
+      if (msg.from === undefined) return { t: "hello", room: msg.room };
+      if (typeof msg.from !== "string" || !ROOM_PATTERN.test(msg.from)) return null;
+      return { t: "hello", room: msg.room, from: msg.from };
     }
     case "move": {
       // Clients wrap yaw into -PI..PI before sending.
