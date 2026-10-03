@@ -8,6 +8,7 @@ import { MAX_NAME_LENGTH } from "../../shared/src/constants.ts";
 const MAX_COORD = 1000;
 
 const NAME_PATTERN = new RegExp(`^[A-Za-z0-9 _-]{1,${MAX_NAME_LENGTH}}$`);
+const ROOM_PATTERN = /^[a-z0-9-]{1,32}$/;
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -36,7 +37,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (typeof msg.name !== "string") return null;
       const name = msg.name.trim();
       if (!NAME_PATTERN.test(name)) return null;
-      return { t: "hello", name };
+      if (typeof msg.room !== "string" || !ROOM_PATTERN.test(msg.room)) return null;
+      return { t: "hello", name, room: msg.room };
     }
     case "move": {
       // Clients wrap yaw into -PI..PI before sending.
@@ -46,6 +48,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "respawn":
       return { t: "respawn" };
+    case "restart":
+      return { t: "restart" };
     default:
       return null;
   }

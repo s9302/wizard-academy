@@ -1,0 +1,90 @@
+// Checks that a parkour course is actually beatable with the game's real
+// physics: builds the level's colliders in Rapier (no rendering), then drives
+// the real PlayerController with a simple bot that runs at each platform in
+// order and jumps when the ground ahead runs out.
+//
+//   node client/scripts/simulate-course.ts [levelId]
+//
+// Prints each platform reached, or where the bot fell. If the bot falls, the
+// jump may still be possible for a human, but it's a sign the gap is tight.
+
+import RAPIER from "@dimforge/rapier3d-compat";
+import { LEVELS } from "../../shared/src/levels/index.ts";
+import { PlayerController } from "../src/PlayerController.ts";
+import type { Input } from "../src/Input.ts";
+
+const levelId = process.argv[2] ?? "trial1";
+const level = LEVELS[levelId];
+if (!level?.course) throw new Error(`${levelId} is not a parkour level`);
+
+await RAPIER.init();
+const world = new RAPIER.World({ x: 0, y: -20, z: 0 });
+for (const box of level.boxes) {
+  world.createCollider(RAPIER.ColliderDesc.cuboid(box.size[0] / 2, box.size[1] / 2, box.size[2] / 2).setTranslation(...box.pos));
+}
+world.step();
+
+// Platforms in course order: 1 m thick boxes (the finish arch is excluded).
+const platforms = level.boxes
+  .filter((b) => b.size[1] === 1)
+  .map((b) => ({ x: b.pos[0], top: b.pos[1] + 0.5, z: b.pos[2], w: b.size[0], d: b.size[2] }));
+
+// A stand-in for keyboard + mouse.
+const input = {
+  yaw: 0,
+  pitch: 0,
+  forward: 1,
+  strafe: 0,
+  running: true,
+  jump: false,
+  consumeJump() {
+    const j = this.jump;
+    this.jump = false;
+    return j;
+  },
+  consumeRestart: () => false,
+};
+
+const player = new PlayerController(world, level.killY);
+player.teleport(...level.spawn);
+
+const DT = 1 / 60;
+const onPlatform = (p: (typeof platforms)[number], x: number, y: number, z: number) =>
+  Math.abs(x - p.x) <= p.w / 2 && Math.abs(z - p.z) <= p.d / 2 && Math.abs(y - (p.top + 0.9)) < 0.3;
+
+let target = 1; // platform 0 is the start
+let time = 0;
+while (target < platforms.length && time < 300) {
+  const pos = player.position;
+  const goal = platforms[target];
+
+  // Face the target platform's center.
+  input.yaw = Math.atan2(-(goal.x - pos.x), -(goal.z - pos.z));
+
+  // Run only for long gaps: the shortest edge-to-edge distance between the
+  // two platforms (diagonal when they're offset on both axes).
+  const prev = platforms[target - 1];
+  const gapX = Math.max(0, Math.abs(goal.x - prev.x) - (goal.w + prev.w) / 2);
+  const gapZ = Math.max(0, Math.abs(goal.z - prev.z) - (goal.d + prev.d) / 2);
+  input.running = Math.hypot(gapX, gapZ) > 2.5;
+
+  // Jump when standing and there's no ground 0.6 m ahead (the edge).
+  const ahead = { x: pos.x - Math.sin(input.yaw) * 0.6, y: pos.y, z: pos.z - Math.cos(input.yaw) * 0.6 };
+  const groundAhead = world.castRay(new RAPIER.Ray(ahead, { x: 0, y: -1, z: 0 }), 1.5, true, undefined, undefined, undefined, undefined);
+  if (player.isGrounded && !groundAhead) input.jump = true;
+
+  player.step(DT, input as unknown as Input);
+  time += DT;
+
+  if (onPlatform(goal, player.position.x, player.position.y, player.position.z)) {
+    console.log(`reached platform ${target} at (${goal.x}, ${goal.top}, ${goal.z})  t=${time.toFixed(2)} s`);
+    target++;
+  }
+  if (player.fellOut) {
+    const from = platforms[target - 1];
+    console.log(`FELL going from platform ${target - 1} (${from.x}, ${from.top}, ${from.z}) to ${target} (${goal.x}, ${goal.top}, ${goal.z})`);
+    process.exit(1);
+  }
+}
+console.log(target >= platforms.length ? `\ncourse complete in ${time.toFixed(2)} s (bot, no mistakes)` : "\ntimed out");
+process.exit(target >= platforms.length ? 0 : 1);

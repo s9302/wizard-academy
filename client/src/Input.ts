@@ -9,12 +9,14 @@ export class Input {
   pitch = 0; // up/down look, radians
   private keys = new Set<string>();
   private jumpQueued = false;
+  private restartQueued = false;
   private element: HTMLElement;
 
   constructor(element: HTMLElement) {
     this.element = element;
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space" && !e.repeat) this.jumpQueued = true;
+      if (e.code === "KeyR" && !e.repeat && this.locked) this.restartQueued = true;
       this.keys.add(e.code);
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
@@ -53,6 +55,13 @@ export class Input {
 
   get running(): boolean {
     return this.down("ShiftLeft", "ShiftRight");
+  }
+
+  // Returns true once per R press (parkour: restart the run).
+  consumeRestart(): boolean {
+    const queued = this.restartQueued;
+    this.restartQueued = false;
+    return queued;
   }
 
   // Returns true once per Space press.

@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import type { PlayerInfo, Vec3 } from "../../shared/src/protocol.ts";
 import { createAvatar, disposeAvatar } from "./Avatar.ts";
+import type { ServerClock } from "./ServerClock.ts";
 
 const INTERP_DELAY_MS = 120;
 const BUFFER_KEEP_MS = 1000;
@@ -32,28 +33,15 @@ function lerpAngle(a: number, b: number, t: number): number {
 export class RemotePlayers {
   private scene: THREE.Scene;
   private remotes = new Map<number, Remote>();
-  // Estimate of (server clock - our clock), so we can compare server timestamps
-  // against "now". See noteServerTime().
-  private clockOffset: number | null = null;
+  private clock: ServerClock;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, clock: ServerClock) {
     this.scene = scene;
+    this.clock = clock;
   }
 
   get count(): number {
     return this.remotes.size;
-  }
-
-  // Every server timestamp nudges our clock estimate. A message that arrives
-  // quickly gives a higher (better) estimate, so jump up to those right away,
-  // and only drift down slowly if the network gets slower.
-  noteServerTime(serverTime: number): void {
-    const sample = serverTime - performance.now();
-    if (this.clockOffset === null || sample > this.clockOffset) {
-      this.clockOffset = sample;
-    } else {
-      this.clockOffset += (sample - this.clockOffset) * 0.02;
-    }
   }
 
   add(info: PlayerInfo, serverTime: number): void {
@@ -88,8 +76,8 @@ export class RemotePlayers {
   }
 
   update(): void {
-    if (this.clockOffset === null) return;
-    const renderTime = performance.now() + this.clockOffset - INTERP_DELAY_MS;
+    if (!this.clock.ready) return;
+    const renderTime = this.clock.now() - INTERP_DELAY_MS;
 
     for (const remote of this.remotes.values()) {
       const snaps = remote.snapshots;

@@ -3,7 +3,8 @@
 // royale...) will be a subclass that overrides the hooks below.
 
 import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
-import { FALL_RESPAWN_Y, MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
+import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
+import type { Level } from "../../../shared/src/levels/types.ts";
 import type { Connection } from "../Connection.ts";
 import { SlidingWindowLimiter } from "../limits.ts";
 import { MoveCheck } from "../MoveCheck.ts";
@@ -23,13 +24,15 @@ export type Player = {
 
 export abstract class Room {
   readonly name: string;
+  readonly level: Level;
   readonly maxPlayers: number = MAX_PLAYERS_PER_ROOM;
   protected players = new Map<number, Player>();
   private tickTimer: NodeJS.Timeout | null = null;
   private strikes = new SlidingWindowLimiter(MAX_STRIKES, STRIKE_WINDOW_MS);
 
-  constructor(name: string) {
-    this.name = name;
+  constructor(level: Level) {
+    this.name = level.id;
+    this.level = level;
   }
 
   get playerCount(): number {
@@ -42,14 +45,23 @@ export abstract class Room {
 
   // ---- Hooks for subclasses ----
 
-  // Where a new player appears.
-  protected abstract spawnPoint(): Vec3;
+  // Where a new player appears: the level's spawn, spread out a little so
+  // players don't appear inside each other.
+  protected spawnPoint(): Vec3 {
+    const [x, y, z] = this.level.spawn;
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.random() * this.level.spawnSpread;
+    return [x + Math.cos(angle) * r, y, z + Math.sin(angle) * r];
+  }
   // Where a player goes after falling off the level (parkour: last checkpoint).
   protected respawnPoint(_player: Player): Vec3 {
     return this.spawnPoint();
   }
   protected onPlayerJoined(_player: Player): void {}
   protected onPlayerLeft(_player: Player): void {}
+  // After a move passed the sanity check: game rules that depend on where
+  // players are (checkpoints, tag range, the zone) hook in here.
+  protected onPlayerMoved(_player: Player, _from: Vec3, _to: Vec3, _now: number): void {}
   // Mode-specific messages go here later.
   protected onMessage(_player: Player, _msg: ClientMsg): void {}
   // Called NET_RATE_HZ times per second.
@@ -111,7 +123,7 @@ export abstract class Room {
       this.handleMove(player, msg);
     } else if (msg.t === "respawn") {
       // Only honored if the player really is falling out of the world.
-      if (player.p[1] < FALL_RESPAWN_Y + 10) this.teleport(player, this.respawnPoint(player));
+      if (player.p[1] < this.level.killY + 5) this.teleport(player, this.respawnPoint(player));
     } else {
       this.onMessage(player, msg);
     }
@@ -144,9 +156,12 @@ export abstract class Room {
       return;
     }
 
+    const from = player.p;
+    const now = Date.now();
     player.p = msg.p;
     player.ry = msg.ry;
-    this.broadcast({ t: "moved", id: player.conn.id, p: msg.p, ry: msg.ry, time: Date.now() }, player.conn.id);
+    this.broadcast({ t: "moved", id: player.conn.id, p: msg.p, ry: msg.ry, time: now }, player.conn.id);
+    this.onPlayerMoved(player, from, msg.p, now);
   }
 
   protected broadcast(msg: ServerMsg, exceptId?: number): void {

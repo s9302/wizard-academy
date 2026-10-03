@@ -71,15 +71,79 @@ html, body {
 #join-form { display: grid; gap: 8px; }
 #join-form[hidden] { display: none; }
 
-input, button {
+input, button, select {
   font: inherit;
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid #5a4b86;
 }
-input { background: #120d22; color: var(--ink); }
+input, select { background: #120d22; color: var(--ink); }
+#join-form label { text-align: left; font-size: 14px; opacity: 0.85; }
 button { background: var(--accent); color: #1c1630; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: 0.6; cursor: wait; }
 
 #overlay-message:empty { display: none; }
 #overlay-message { color: #ffb4a8; }
 #resume-hint { cursor: pointer; }
+
+/* ---- Parkour HUD ---- */
+
+#run {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+#run-name { font-size: 13px; opacity: 0.8; }
+#run-timer { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#run-progress { font-size: 14px; }
+
+#banner {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 22px;
+  border-radius: 10px;
+  background: rgba(28, 22, 48, 0.85);
+  color: var(--accent);
+  font-size: 26px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#banner.show { opacity: 1; }
+
+#leaderboard {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 180px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.board-title { font-weight: 700; margin-bottom: 4px; color: var(--accent); }
+.board-row.me { color: #7dffb0; }
+
+#feed {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  font-size: 14px;
+}
+#feed > div { padding: 4px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.45); }
+
+@media (max-width: 700px) {
+  #leaderboard, #help { display: none; }
+}

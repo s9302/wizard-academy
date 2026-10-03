@@ -1,8 +1,8 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 2** done (PIN gate,
-input validation, anti-cheat basics, public via Cloudflare Tunnel).
+first person with friends. Built in phases; currently **Phase 3** done (parkour
+trial with checkpoints, a server-judged timer, and respawn on falling).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -73,11 +73,11 @@ characters or a secret shorter than 32.
 - Open a second browser window (or have someone else on the tailnet join) to
   see another wizard move.
 - No second person handy? Run test bots that log in with the PIN and walk in
-  circles near spawn (at most 4 per IP, the per-IP connection limit):
+  circles near spawn (optionally in another room, e.g. `trial1`):
 
   ```sh
   npm install                 # once, on a machine with Node 24
-  GAME_PIN=... node server/scripts/bot.ts http://game:8080 3
+  GAME_PIN=... node server/scripts/bot.ts http://game:8080 3 [room]
   ```
 
 - Check the in-game protections (speed/teleport/fly rejection, respawn rules,
@@ -86,6 +86,35 @@ characters or a secret shorter than 32.
   ```sh
   GAME_PIN=... node server/scripts/security-check.ts http://game:8080
   ```
+
+## Parkour
+
+On the join screen, pick **Trial I: The Floating Steps** (or the Playground).
+Until the hub arrives in Phase 6, that menu is how you choose a room.
+
+- The timer starts when you step off the start platform. Reach the three
+  checkpoints (teal platforms, crystals light up green) in order, then the
+  golden arch.
+- Fall off and you reappear at your last checkpoint; the clock keeps running.
+  **R** restarts the run; walking back onto the start platform also resets it.
+- The leaderboard (top right) shows the best time per name. It lives in server
+  memory, so it resets when the server restarts; Phase 5 moves it to Postgres
+  under real accounts.
+
+The **server judges every run**: it starts the clock, checks checkpoints in
+order against the positions it accepted, and stops the clock at the finish.
+The client only displays what it's told, so a modified client can't submit a
+fake time.
+
+Levels are plain data in `shared/src/levels/` (boxes, spawn, kill height, and
+for parkour the start/checkpoint/finish zones), used by both client and
+server. To add a course, copy `trial1.ts`, register it in `levels/index.ts`,
+and check it's beatable with real physics:
+
+```sh
+node client/scripts/simulate-course.ts trial1   # bot runs the course in Rapier
+GAME_PIN=... node server/scripts/parkour-check.ts http://game:8080   # rules, via the server
+```
 
 ## Access PIN
 
@@ -132,7 +161,8 @@ tailnet, then back to `true`.
   valid JSON of a known type, with finite numbers in range and a name matching
   `[A-Za-z0-9 _-]{1,16}`. Anything else disconnects the client.
 - Each connection may send 30 messages/second (bursts up to 60). There are at
-  most 4 connections per IP and 64 in total.
+  most 16 connections per IP (friends in one house share a public IP) and 64
+  in total.
 - **Movement sanity check** (`server/src/MoveCheck.ts`): each player has a
   per-axis "distance budget" that refills at the fastest legal speed. Moves
   that overspend it (speed hacks, teleporting, flying) are rejected, and the
@@ -140,6 +170,11 @@ tailnet, then back to `true`.
   seconds is a kick. The budget absorbs normal lag bursts.
 - **Respawning** after falling off the level is done by the server, and only
   when the player really is below the level.
+- **Known limit:** movement is client-authoritative and the server has no
+  collision geometry (by design), so it checks *speed* but not whether you're
+  standing on something. A cheat client could "float" across gaps at running
+  speed. It still has to pass through every checkpoint in order, and times
+  are tied to names only until Phase 5 adds accounts.
 
 ## Cloudflare Tunnel
 
@@ -223,8 +258,11 @@ server/src/      HTTP + WebSocket server, PIN gate, rooms
   MoveCheck.ts     movement sanity check
   validate.ts      WebSocket message validation
   rooms/Room.ts    base class every game mode extends
-  rooms/TestRoom.ts  Phase 1 room
-server/scripts/  test bot
+  rooms/ParkourRoom.ts  checkpoints, timer, leaderboard
+  rooms/PlaygroundRoom.ts  free movement
+shared/src/levels/  level data (boxes, zones) for client and server
+server/scripts/  test bot, security-check, parkour-check
+client/scripts/  simulate-course (physics bot)
 client/src/      game client (Game.ts is the main loop)
 Caddyfile        static files, /ws proxy, security headers
 ```

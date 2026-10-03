@@ -13,7 +13,6 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import {
-  FALL_RESPAWN_Y,
   GRAVITY,
   JUMP_SPEED,
   PLAYER_HALF_HEIGHT,
@@ -39,11 +38,13 @@ export class PlayerController {
   private grounded = false;
   private timeSinceGrounded = 0;
   private timeSinceJumpPressed = Infinity;
+  private killY: number;
   private previous = new THREE.Vector3();
   private current = new THREE.Vector3();
 
-  constructor(world: RAPIER.World) {
+  constructor(world: RAPIER.World, killY: number) {
     this.world = world;
+    this.killY = killY;
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
     this.collider = world.createCollider(
       RAPIER.ColliderDesc.capsule(PLAYER_HALF_HEIGHT, PLAYER_RADIUS),
@@ -62,9 +63,13 @@ export class PlayerController {
     return this.current;
   }
 
+  get isGrounded(): boolean {
+    return this.grounded;
+  }
+
   // Fell off the level; Game asks the server where to respawn.
   get fellOut(): boolean {
-    return this.current.y < FALL_RESPAWN_Y;
+    return this.current.y < this.killY;
   }
 
   teleport(x: number, y: number, z: number): void {

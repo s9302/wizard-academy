@@ -16,7 +16,9 @@ import { parseClientMsg } from "./validate.ts";
 const HELLO_TIMEOUT_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
 const MAX_CONNECTIONS = 64;
-const MAX_CONNECTIONS_PER_IP = 4;
+// Friends playing from the same house share one public IP, so this is
+// generous: a whole room's worth.
+const MAX_CONNECTIONS_PER_IP = 16;
 const MAX_FORM_BYTES = 1024;
 
 // Failed PIN attempts: 5 per IP (or IPv6 /64) per 15 minutes. The global cap
@@ -158,7 +160,7 @@ function onConnection(conn: Connection): void {
       if (conn.name) return; // already joined once, ignore repeats
       clearTimeout(helloTimer);
       conn.name = msg.name;
-      rooms.joinDefault(conn);
+      rooms.join(conn, msg.room);
       return;
     }
     conn.room.handleMessage(conn, msg);

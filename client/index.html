@@ -11,7 +11,8 @@
     <div id="hud" hidden>
       <div id="crosshair"></div>
       <div id="status"></div>
-      <div id="help">WASD move &middot; Shift run &middot; Space jump &middot; Esc release mouse</div>
+      <div id="help">WASD move &middot; Shift run &middot; Space jump &middot; R restart run &middot; Esc release mouse</div>
+      <div id="feed"></div>
     </div>
 
     <div id="overlay">
@@ -20,7 +21,10 @@
         <form id="join-form">
           <label for="name">Wizard name</label>
           <input id="name" maxlength="16" pattern="[A-Za-z0-9 _\-]{1,16}" required autocomplete="off" />
-          <button type="submit">Enter</button>
+          <label for="room">Where to?</label>
+          <select id="room"></select>
+          <!-- Enabled by main.ts once the game has loaded (it's a few MB). -->
+          <button type="submit" disabled>Loading&hellip;</button>
         </form>
         <p id="overlay-message"></p>
         <p id="resume-hint" hidden>Click to resume</p>

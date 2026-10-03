@@ -4,7 +4,7 @@
 //
 //   GAME_PIN=... node server/scripts/security-check.ts http://game:8080
 //
-// Uses 4 connections (the per-IP limit), one after another.
+// Uses 4 connections, one after another, in the playground room.
 
 import WebSocket from "ws";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
@@ -39,7 +39,7 @@ class TestClient {
 
   constructor(name: string) {
     this.ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie: cookie! } });
-    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", name })));
+    this.ws.on("open", () => this.ws.send(JSON.stringify({ t: "hello", name, room: "playground" })));
     this.ws.on("message", (data) => {
       const msg = JSON.parse(data.toString()) as ServerMsg;
       this.msgs.push(msg);

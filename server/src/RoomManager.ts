@@ -1,24 +1,29 @@
-// Decides which room a player goes into. In Phase 1 there is a single test
-// room; later the hub sends players to mode rooms through portals.
+// Creates one room per level and puts players into the room they asked for.
+// Until the hub exists (Phase 6), players pick a room on the join screen.
 
+import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { Connection } from "./Connection.ts";
+import { ParkourRoom } from "./rooms/ParkourRoom.ts";
+import { PlaygroundRoom } from "./rooms/PlaygroundRoom.ts";
 import type { Room } from "./rooms/Room.ts";
-import { TestRoom } from "./rooms/TestRoom.ts";
 
 export class RoomManager {
   private rooms = new Map<string, Room>();
 
   constructor() {
-    this.add(new TestRoom("test"));
+    for (const level of Object.values(LEVELS)) {
+      const room = level.course ? new ParkourRoom(level) : new PlaygroundRoom(level);
+      this.rooms.set(room.name, room);
+      room.start();
+    }
   }
 
-  private add(room: Room): void {
-    this.rooms.set(room.name, room);
-    room.start();
-  }
-
-  joinDefault(conn: Connection): void {
-    const room = this.rooms.get("test")!;
+  join(conn: Connection, roomName: string): void {
+    const room = this.rooms.get(roomName);
+    if (!room) {
+      conn.kick("That room doesn't exist.");
+      return;
+    }
     if (room.isFull) {
       conn.kick("The room is full.");
       return;
@@ -28,11 +33,5 @@ export class RoomManager {
 
   disconnect(conn: Connection): void {
     conn.room?.leave(conn);
-  }
-
-  totalPlayers(): number {
-    let total = 0;
-    for (const room of this.rooms.values()) total += room.playerCount;
-    return total;
   }
 }

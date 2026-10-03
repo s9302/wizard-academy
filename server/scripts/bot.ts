@@ -2,7 +2,7 @@
 // players show up and move smoothly without needing a second person.
 // It logs in with the PIN like a browser would.
 //
-//   GAME_PIN=... node server/scripts/bot.ts http://game:8080 [count]
+//   GAME_PIN=... node server/scripts/bot.ts http://game:8080 [count] [room]
 
 import WebSocket from "ws";
 import { NET_INTERVAL_MS, WALK_SPEED } from "../../shared/src/constants.ts";
@@ -10,6 +10,7 @@ import type { ClientMsg, ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 
 const base = (process.argv[2] ?? "http://localhost:8080").replace(/\/$/, "");
 const count = Number(process.argv[3] ?? 1);
+const room = process.argv[4] ?? "playground";
 const pin = process.env.GAME_PIN;
 if (!pin) {
   console.error("Set GAME_PIN in the environment.");
@@ -44,7 +45,7 @@ function runBot(index: number, cookie: string): void {
     y = 0.9; // standing on the ground
   };
 
-  socket.on("open", () => send({ t: "hello", name: `Bot ${index + 1}` }));
+  socket.on("open", () => send({ t: "hello", name: `Bot ${index + 1}`, room }));
 
   socket.on("message", (data) => {
     const msg = JSON.parse(data.toString()) as ServerMsg;
