@@ -1,0 +1,48 @@
+// Turns raw WebSocket text into a typed message, or null if it is malformed.
+// Nothing from a client is trusted until it has passed through here.
+
+import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { MAX_NAME_LENGTH } from "../../shared/src/constants.ts";
+
+// The world is small; anything outside this box is garbage or an attack.
+const MAX_COORD = 1000;
+
+const NAME_PATTERN = new RegExp(`^[A-Za-z0-9 _-]{1,${MAX_NAME_LENGTH}}$`);
+
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+function isVec3(v: unknown): v is Vec3 {
+  return (
+    Array.isArray(v) &&
+    v.length === 3 &&
+    v.every((n) => isFiniteNumber(n) && Math.abs(n) <= MAX_COORD)
+  );
+}
+
+export function parseClientMsg(raw: string): ClientMsg | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
+  const msg = data as Record<string, unknown>;
+
+  switch (msg.t) {
+    case "hello": {
+      if (typeof msg.name !== "string") return null;
+      const name = msg.name.trim();
+      if (!NAME_PATTERN.test(name)) return null;
+      return { t: "hello", name };
+    }
+    case "move": {
+      if (!isVec3(msg.p) || !isFiniteNumber(msg.ry)) return null;
+      return { t: "move", p: [msg.p[0], msg.p[1], msg.p[2]], ry: msg.ry };
+    }
+    default:
+      return null;
+  }
+}

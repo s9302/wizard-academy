@@ -1,0 +1,45 @@
+# Phase 1: the game server and Caddy. Postgres joins in Phase 5.
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+    # Not published: only Caddy (on the internal compose network) can reach it.
+    expose:
+      - "3000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  caddy:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - server
+    user: "65534:65534" # nobody: Caddy only needs to read /srv and bind port 8080
+    # Published on loopback (for cloudflared later) and the Tailscale IP only.
+    # Never 0.0.0.0: that would expose the game to the whole apartment LAN.
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
+      - "${TAILNET_IP:?set TAILNET_IP in .env}:${HTTP_PORT:-8080}:8080"
+    read_only: true
+    tmpfs:
+      - /data:uid=65534,gid=65534
+      - /config:uid=65534,gid=65534
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 128
