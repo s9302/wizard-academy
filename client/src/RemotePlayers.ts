@@ -8,7 +8,7 @@
 
 import * as THREE from "three";
 import type { PlayerInfo, Vec3 } from "../../shared/src/protocol.ts";
-import { createAvatar, disposeAvatar } from "./Avatar.ts";
+import { type AvatarStatus, createAvatar, disposeAvatar, setAvatarStatus } from "./Avatar.ts";
 import type { ServerClock } from "./ServerClock.ts";
 
 const INTERP_DELAY_MS = 120;
@@ -34,6 +34,8 @@ export class RemotePlayers {
   private scene: THREE.Scene;
   private remotes = new Map<number, Remote>();
   private clock: ServerClock;
+  // Tag / infection roles, kept even for players we haven't seen yet.
+  private statuses = new Map<number, AvatarStatus>();
 
   constructor(scene: THREE.Scene, clock: ServerClock) {
     this.scene = scene;
@@ -50,6 +52,7 @@ export class RemotePlayers {
     this.scene.add(avatar);
     const remote: Remote = { name: info.name, avatar, snapshots: [] };
     this.remotes.set(info.id, remote);
+    setAvatarStatus(avatar, this.statuses.get(info.id) ?? "runner");
     this.push(info.id, info.p, info.ry, serverTime);
   }
 
@@ -59,6 +62,37 @@ export class RemotePlayers {
     this.scene.remove(remote.avatar);
     disposeAvatar(remote.avatar);
     this.remotes.delete(id);
+  }
+
+  // Set everyone's role at once: chasers get `chaserStatus`, others are runners.
+  setChasers(ids: number[], chaserStatus: AvatarStatus): void {
+    this.statuses.clear();
+    for (const id of ids) this.statuses.set(id, chaserStatus);
+    for (const [id, remote] of this.remotes) setAvatarStatus(remote.avatar, this.statuses.get(id) ?? "runner");
+  }
+
+  // Tagging: the nearest player within `range` that you're roughly facing
+  // (within 45 degrees), using where you see them (interpolated). Skips
+  // players with the given status (you can't tag a fellow chaser).
+  findTarget(from: THREE.Vector3, yaw: number, range: number, skip: AvatarStatus): number | null {
+    const facingX = -Math.sin(yaw);
+    const facingZ = -Math.cos(yaw);
+    let best: number | null = null;
+    let bestDist = Infinity;
+    for (const [id, remote] of this.remotes) {
+      if ((this.statuses.get(id) ?? "runner") === skip) continue;
+      const p = remote.avatar.position;
+      const dist = p.distanceTo(from);
+      if (dist > range || dist >= bestDist) continue;
+      const dx = p.x - from.x;
+      const dz = p.z - from.z;
+      const flat = Math.hypot(dx, dz);
+      // Very close counts regardless of angle: you're bumping into them.
+      if (flat > 0.9 && (dx * facingX + dz * facingZ) / flat < Math.cos(Math.PI / 4)) continue;
+      best = id;
+      bestDist = dist;
+    }
+    return best;
   }
 
   clear(): void {

@@ -5,6 +5,7 @@
 import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
+import type { RoomInfo } from "../../../shared/src/rooms.ts";
 import type { Connection } from "../Connection.ts";
 import { SlidingWindowLimiter } from "../limits.ts";
 import { MoveCheck } from "../MoveCheck.ts";
@@ -23,15 +24,17 @@ export type Player = {
 };
 
 export abstract class Room {
-  readonly name: string;
+  readonly name: string; // room id, e.g. "tag"
+  readonly info: RoomInfo;
   readonly level: Level;
   readonly maxPlayers: number = MAX_PLAYERS_PER_ROOM;
   protected players = new Map<number, Player>();
   private tickTimer: NodeJS.Timeout | null = null;
   private strikes = new SlidingWindowLimiter(MAX_STRIKES, STRIKE_WINDOW_MS);
 
-  constructor(level: Level) {
-    this.name = level.id;
+  constructor(info: RoomInfo, level: Level) {
+    this.name = info.id;
+    this.info = info;
     this.level = level;
   }
 
@@ -45,10 +48,11 @@ export abstract class Room {
 
   // ---- Hooks for subclasses ----
 
-  // Where a new player appears: the level's spawn, spread out a little so
-  // players don't appear inside each other.
+  // Where a new player appears: one of the level's spawn points (or its single
+  // spawn), spread out a little so players don't appear inside each other.
   protected spawnPoint(): Vec3 {
-    const [x, y, z] = this.level.spawn;
+    const points = this.level.spawnPoints;
+    const [x, y, z] = points?.length ? points[Math.floor(Math.random() * points.length)] : this.level.spawn;
     const angle = Math.random() * Math.PI * 2;
     const r = Math.random() * this.level.spawnSpread;
     return [x + Math.cos(angle) * r, y, z + Math.sin(angle) * r];

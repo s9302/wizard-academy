@@ -1,8 +1,8 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 3** done (parkour
-trial with checkpoints, a server-judged timer, and respawn on falling).
+first person with friends. Built in phases; currently **Phase 4** done (tag and
+infection, with round start/end logic).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -123,6 +123,44 @@ shows how forgiving it is:
 node client/scripts/simulate-course.ts trial1   # bot runs the course in Rapier
 node client/scripts/simulate-course.ts trial3 0.6 4   # ...jumping 0.6 m early with 4 deg aim error
 GAME_PIN=... node server/scripts/parkour-check.ts http://game:8080   # rules, via the server
+```
+
+## Tag and infection
+
+Both are played in **the Courtyard**, an arena with a fountain, pillars,
+raised walkways with ramps, low walls you can vault and tall ones you can't.
+
+- **Tag:** one player is **It** (red aura, red hat, red glow around your
+  screen). Look at someone within reach (the crosshair turns into a red ring)
+  and **click** to tag them; they become It. No instant tag-backs: the new It
+  waits 2 s. Least total time as It wins.
+- **Infection, the spreading curse:** one wizard starts cursed (two if 6+ are
+  playing). Anyone the cursed touch is cursed too, for the rest of the round.
+  Survivors win if anyone is uncursed when time runs out; the curse wins if
+  it takes everyone. Late joiners arrive cursed.
+
+**Rounds:** a round starts once 2+ players are in the room: 5 s countdown
+(everyone is moved to a different spawn point), 3 minutes of play (chasers
+can't tag for the first 3 s, so runners can scatter), then 8 s of results,
+then the next countdown. If players leave and fewer than 2 remain, the round
+is cancelled rather than declaring a winner.
+
+**Shared code:** both modes are the same rules engine,
+`server/src/rooms/ChaseRoom.ts` (round cycle, tag checks, who's chasing).
+`TagRoom.ts` and `InfectionRoom.ts` only define what a tag *does*, when a
+round ends early, and the results.
+
+**Tags are checked by the server:** the round must be live, you must be a
+chaser and off cooldown, and the target must have been within 2.2 m of you
+at some point in the last 0.4 s. That window is *lag compensation*: you see
+other players ~120 ms in the past and your click takes time to arrive, so
+checking only the target's newest position would reject fair tags.
+
+```sh
+# Plays tag and infection rounds with fake players and checks the rules.
+# Needs shortened rounds (testing only):
+ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
+GAME_PIN=... node server/scripts/chase-check.ts http://localhost:3000
 ```
 
 ## Access PIN
@@ -268,9 +306,12 @@ server/src/      HTTP + WebSocket server, PIN gate, rooms
   validate.ts      WebSocket message validation
   rooms/Room.ts    base class every game mode extends
   rooms/ParkourRoom.ts  checkpoints, timer, leaderboard
+  rooms/ChaseRoom.ts    shared tag/infection engine (rounds, tag checks)
+  rooms/TagRoom.ts, rooms/InfectionRoom.ts  the two rule sets
   rooms/PlaygroundRoom.ts  free movement
 shared/src/levels/  level data (boxes, zones) for client and server
-server/scripts/  test bot, security-check, parkour-check
+shared/src/rooms.ts room list: id, name, level, mode
+server/scripts/  test bot, security-check, parkour-check, chase-check
 client/scripts/  simulate-course (physics bot)
 client/src/      game client (Game.ts is the main loop)
 Caddyfile        static files, /ws proxy, security headers

@@ -5,7 +5,7 @@ export type Vec3 = [number, number, number];
 
 // ---- Client -> Server ----
 
-// room = a level id from shared/src/levels (e.g. "trial1").
+// room = a room id from shared/src/rooms.ts (e.g. "trial1", "tag").
 export type HelloMsg = { t: "hello"; name: string; room: string };
 // p = capsule center position, ry = yaw (facing direction) in radians.
 // tp = the number of the last server teleport the client has applied. The
@@ -17,7 +17,10 @@ export type RespawnMsg = { t: "respawn" };
 // Parkour: go back to the start and reset the run.
 export type RestartMsg = { t: "restart" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg;
+// Tag / infection: "I'm touching this player." The server checks it.
+export type TagMsg = { t: "tag"; target: number };
+
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg;
 
 // ---- Server -> Client ----
 
@@ -44,6 +47,16 @@ export type RunResetMsg = { t: "runReset" };
 // Best times in this room (to everyone).
 export type LeaderboardMsg = { t: "leaderboard"; entries: { name: string; time: number }[] };
 
+// ---- Tag and infection (server -> everyone in the room) ----
+export type RoundState = "waiting" | "countdown" | "playing" | "ended";
+// endsAt: server clock when this state ends (null while waiting for players).
+export type RoundMsg = { t: "round"; state: RoundState; endsAt: number | null };
+// Who is currently chasing: "It" in tag, the cursed in infection. Sent in full
+// whenever it changes (it's a short list).
+export type ChasersMsg = { t: "chasers"; ids: number[] };
+export type TaggedMsg = { t: "tagged"; by: number; victim: number };
+export type RoundResultMsg = { t: "roundResult"; title: string; lines: string[] };
+
 export type ServerMsg =
   | WelcomeMsg
   | JoinMsg
@@ -56,4 +69,8 @@ export type ServerMsg =
   | CheckpointMsg
   | FinishMsg
   | RunResetMsg
-  | LeaderboardMsg;
+  | LeaderboardMsg
+  | RoundMsg
+  | ChasersMsg
+  | TaggedMsg
+  | RoundResultMsg;

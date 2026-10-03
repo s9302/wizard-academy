@@ -26,3 +26,7 @@ export const FALL_RESPAWN_Y = -30;
 export const MAX_NAME_LENGTH = 16;
 export const MAX_MESSAGE_BYTES = 512;
 export const MAX_PLAYERS_PER_ROOM = 16;
+
+// Tag and infection. Distances are between capsule centers; two players
+// touching are 2 * PLAYER_RADIUS = 0.7 m apart.
+export const TAG_RANGE = 2.2;

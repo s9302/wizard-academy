@@ -8,6 +8,7 @@
 // start platform, or pressing R, resets it.
 
 import type { Course, Level } from "../../../shared/src/levels/types.ts";
+import type { RoomInfo } from "../../../shared/src/rooms.ts";
 import { inZone, segmentTouchesZone } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { Player } from "./Room.ts";
@@ -33,8 +34,8 @@ export class ParkourRoom extends Room {
   // times into the database, tied to real accounts.)
   private bestTimes = new Map<string, { name: string; time: number }>();
 
-  constructor(level: Level) {
-    super(level);
+  constructor(info: RoomInfo, level: Level) {
+    super(info, level);
     if (!level.course) throw new Error(`${level.id} has no course`);
     this.course = level.course;
   }

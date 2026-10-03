@@ -2,6 +2,7 @@
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import { LEVELS } from "../../shared/src/levels/index.ts";
+import { findRoom, ROOMS } from "../../shared/src/rooms.ts";
 import { Game } from "./Game.ts";
 import { Input } from "./Input.ts";
 import "./style.css";
@@ -17,11 +18,11 @@ const hud = document.getElementById("hud")!;
 
 const NAME_KEY = "wizard-name";
 
-// Until the hub exists (Phase 6), you pick a level here.
-for (const level of Object.values(LEVELS)) {
+// Until the hub exists (Phase 6), you pick a room here.
+for (const room of ROOMS) {
   const option = document.createElement("option");
-  option.value = level.id;
-  option.textContent = level.name;
+  option.value = room.id;
+  option.textContent = room.name;
   roomSelect.appendChild(option);
 }
 try {
@@ -55,8 +56,9 @@ overlay.addEventListener("click", () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = nameInput.value.trim();
-  const level = LEVELS[roomSelect.value];
-  if (!name || !level) return;
+  const room = findRoom(roomSelect.value);
+  const level = room && LEVELS[room.levelId];
+  if (!name || !room || !level) return;
   try {
     localStorage.setItem(NAME_KEY, name);
   } catch {
@@ -71,7 +73,7 @@ form.addEventListener("submit", async (event) => {
 
   await RAPIER.init(); // loads the physics engine (WebAssembly)
   hud.hidden = false;
-  game = new Game(container, input, name, level, (reason) => {
+  game = new Game(container, input, name, room, level, (reason) => {
     disconnected = true;
     document.exitPointerLock();
     overlay.hidden = false;

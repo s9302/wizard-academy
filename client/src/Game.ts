@@ -8,9 +8,11 @@
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
-import { EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS } from "../../shared/src/constants.ts";
+import { EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS, TAG_RANGE } from "../../shared/src/constants.ts";
 import type { Level } from "../../shared/src/levels/types.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import type { RoomInfo } from "../../shared/src/rooms.ts";
+import { ChaseHud } from "./ChaseHud.ts";
 import type { Input } from "./Input.ts";
 import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
 import { Net } from "./Net.ts";
@@ -42,10 +44,14 @@ export class Game {
   private remotes: RemotePlayers;
   private markers: CheckpointMarkers;
   private parkour: ParkourHud | null = null;
+  private chase: ChaseHud | null = null;
   private net: Net;
   private input: Input;
   private level: Level;
+  private room: RoomInfo;
+  private myId = -1;
   private statusEl: HTMLElement;
+  private crosshairEl: HTMLElement;
   private feedEl: HTMLElement;
   private name: string;
 
@@ -59,13 +65,22 @@ export class Game {
   private teleportCount = 0;
   private respawnRequestedAt: number | null = null;
 
-  constructor(container: HTMLElement, input: Input, name: string, level: Level, onDisconnect: (reason: string) => void) {
+  constructor(
+    container: HTMLElement,
+    input: Input,
+    name: string,
+    room: RoomInfo,
+    level: Level,
+    onDisconnect: (reason: string) => void,
+  ) {
     this.input = input;
     this.name = name;
+    this.room = room;
     this.level = level;
     const hud = document.getElementById("hud")!;
     this.statusEl = document.getElementById("status")!;
     this.feedEl = document.getElementById("feed")!;
+    this.crosshairEl = document.getElementById("crosshair")!;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -81,8 +96,10 @@ export class Game {
     this.world.step(); // builds the collision lookup structures before the first move
     this.player = new PlayerController(this.world, level.killY);
     this.remotes = new RemotePlayers(this.scene, this.clock);
-    if (level.course) {
-      this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, level.name);
+    if (room.mode === "parkour" && level.course) {
+      this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, room.name);
+    } else if (room.mode === "tag" || room.mode === "infection") {
+      this.chase = new ChaseHud(hud, this.clock, room.mode, room.name);
     }
 
     this.resize();
@@ -97,7 +114,7 @@ export class Game {
       },
     });
     this.net.opened().then(
-      () => this.net.send({ t: "hello", name, room: level.id }),
+      () => this.net.send({ t: "hello", name, room: room.id }),
       () => {}, // onClose already reports the failure
     );
   }
@@ -133,6 +150,7 @@ export class Game {
   private onServerMessage(msg: ServerMsg): void {
     switch (msg.t) {
       case "welcome":
+        this.myId = msg.id;
         this.clock.note(msg.time);
         this.teleportCount = 0;
         this.player.teleport(...msg.spawn);
@@ -176,10 +194,30 @@ export class Game {
       case "leaderboard":
         this.parkour?.leaderboard(msg.entries, this.name);
         break;
+      case "round":
+        this.chase?.round(msg.state, msg.endsAt);
+        break;
+      case "chasers":
+        this.remotes.setChasers(msg.ids, this.room.mode === "tag" ? "it" : "cursed");
+        this.chase?.chasers(msg.ids, this.myId, this.remotes.count + 1);
+        break;
+      case "tagged":
+        break; // the "chasers" and "announce" messages that follow carry the news
+      case "roundResult":
+        this.chase?.result(msg.title, msg.lines);
+        break;
       case "error":
         console.warn("server:", msg.message);
         break;
     }
+  }
+
+  // Tag / infection: who would a click tag right now? (null if nobody, or if
+  // you're not a chaser in a live round.)
+  private tagTarget(): number | null {
+    if (!this.chase?.playing || !this.chase.isChaser) return null;
+    const skip = this.room.mode === "tag" ? "it" : "cursed";
+    return this.remotes.findTarget(this.player.position, this.input.yaw, TAG_RANGE, skip);
   }
 
   // Room-wide messages, bottom right, fading after a few seconds.
@@ -206,6 +244,11 @@ export class Game {
     this.lastFrame = now;
 
     if (this.input.consumeRestart() && this.parkour) this.net.send({ t: "restart" });
+
+    // Tagging: the crosshair turns red when someone is in reach; click to tag.
+    const target = this.tagTarget();
+    this.crosshairEl.classList.toggle("target", target !== null);
+    if (this.input.consumeClick() && target !== null) this.net.send({ t: "tag", target });
 
     // Fell off the level: freeze and ask the server to respawn us (retrying
     // in case the request is lost). The reply is a "teleport" message.
@@ -242,12 +285,15 @@ export class Game {
     this.remotes.update();
     this.markers.update(now / 1000);
     this.parkour?.update();
+    this.chase?.update();
 
     this.statusTimer -= dt;
     if (this.statusTimer <= 0) {
       this.statusTimer = 0.5;
       const total = this.remotes.count + 1;
-      this.statusEl.textContent = `${this.name} · ${this.level.name} · ${total} wizard${total === 1 ? "" : "s"} here`;
+      // Modes with a center panel already show the room name there.
+      const where = this.parkour || this.chase ? "" : ` \u00b7 ${this.room.name}`;
+      this.statusEl.textContent = `${this.name}${where} \u00b7 ${total} wizard${total === 1 ? "" : "s"} here`;
     }
 
     this.renderer.render(this.scene, this.camera);

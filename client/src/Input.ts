@@ -10,6 +10,7 @@ export class Input {
   private keys = new Set<string>();
   private jumpQueued = false;
   private restartQueued = false;
+  private clickQueued = false;
   private element: HTMLElement;
 
   constructor(element: HTMLElement) {
@@ -22,6 +23,10 @@ export class Input {
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
     // Forget held keys when the window loses focus, or the player keeps walking.
     window.addEventListener("blur", () => this.keys.clear());
+
+    document.addEventListener("mousedown", (e) => {
+      if (e.button === 0 && this.locked) this.clickQueued = true;
+    });
 
     document.addEventListener("mousemove", (e) => {
       if (!this.locked) return;
@@ -55,6 +60,13 @@ export class Input {
 
   get running(): boolean {
     return this.down("ShiftLeft", "ShiftRight");
+  }
+
+  // Returns true once per left click while playing (tag someone).
+  consumeClick(): boolean {
+    const queued = this.clickQueued;
+    this.clickQueued = false;
+    return queued;
   }
 
   // Returns true once per R press (parkour: restart the run).

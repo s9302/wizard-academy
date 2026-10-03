@@ -38,6 +38,14 @@ html, body {
   background: rgba(255, 255, 255, 0.85);
 }
 
+#crosshair.target {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  background: transparent;
+  border: 3px solid #ff4a3d;
+}
+
 #status, #help {
   position: absolute;
   left: 12px;
@@ -147,3 +155,32 @@ button:disabled { opacity: 0.6; cursor: wait; }
 @media (max-width: 700px) {
   #leaderboard, #help { display: none; }
 }
+
+/* ---- Tag / infection ---- */
+
+/* A colored glow around the screen edge while you're a chaser. */
+body.role-it #hud::before,
+body.role-cursed #hud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+body.role-it #hud::before { box-shadow: inset 0 0 90px 10px rgba(255, 60, 40, 0.55); }
+body.role-cursed #hud::before { box-shadow: inset 0 0 110px 20px rgba(120, 255, 80, 0.45); }
+
+#results {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 280px;
+  max-width: calc(100vw - 32px);
+  padding: 16px 22px;
+  border-radius: 12px;
+  background: rgba(28, 22, 48, 0.9);
+  text-align: center;
+  line-height: 1.6;
+}
+#results[hidden] { display: none; }
+#results h2 { margin: 0 0 8px; color: var(--accent); }

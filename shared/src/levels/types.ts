@@ -32,6 +32,7 @@ export type Level = {
   spawn: Vec3; // capsule center; players spread out around it
   spawnSpread: number; // random offset radius, meters
   spawnYaw?: number; // direction you face on joining, radians (0 = north, -Z)
+  spawnPoints?: Vec3[]; // if set, players spawn at a random one of these instead
   killY: number; // falling below this height means you fell off
   sky: string;
   boxes: Box[];

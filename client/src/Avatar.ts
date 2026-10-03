@@ -43,13 +43,46 @@ function makeNameTag(name: string): THREE.Sprite {
   return sprite;
 }
 
+// Tag / infection roles change how an avatar looks.
+export type AvatarStatus = "runner" | "it" | "cursed";
+
+const HAT_COLOR = new THREE.Color("#3b2a6b");
+const STATUS_LOOK = {
+  it: { aura: new THREE.Color("#ff4a3d"), hat: new THREE.Color("#d8332a") },
+  cursed: { aura: new THREE.Color("#8cff5a"), hat: new THREE.Color("#24361c") },
+};
+const CURSED_BODY = new THREE.Color("#3c5a2e");
+
+// The parts setAvatarStatus changes, kept on the group's userData.
+type AvatarParts = {
+  bodyMat: THREE.MeshLambertMaterial;
+  hatMats: THREE.MeshLambertMaterial[];
+  aura: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  baseColor: THREE.Color;
+};
+
+export function setAvatarStatus(group: THREE.Group, status: AvatarStatus): void {
+  const parts = group.userData.parts as AvatarParts;
+  if (status === "runner") {
+    parts.aura.visible = false;
+    parts.bodyMat.color.copy(parts.baseColor);
+    for (const m of parts.hatMats) m.color.copy(HAT_COLOR);
+    return;
+  }
+  const look = STATUS_LOOK[status];
+  parts.aura.visible = true;
+  parts.aura.material.color.copy(look.aura);
+  for (const m of parts.hatMats) m.color.copy(look.hat);
+  if (status === "cursed") parts.bodyMat.color.copy(parts.baseColor).lerp(CURSED_BODY, 0.65);
+  else parts.bodyMat.color.copy(parts.baseColor);
+}
+
 export function createAvatar(id: number, name: string): THREE.Group {
   const group = new THREE.Group();
 
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(PLAYER_RADIUS, PLAYER_HALF_HEIGHT * 2, 3, 10),
-    flat(playerColor(id)),
-  );
+  const baseColor = playerColor(id);
+  const bodyMat = flat(baseColor);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER_RADIUS, PLAYER_HALF_HEIGHT * 2, 3, 10), bodyMat);
   body.castShadow = true;
   group.add(body);
 
@@ -58,13 +91,14 @@ export function createAvatar(id: number, name: string): THREE.Group {
   face.position.set(0, TOP - 0.38, -PLAYER_RADIUS + 0.02);
   group.add(face);
 
-  const hatColor = "#3b2a6b";
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 12), flat(hatColor));
+  const brimMat = flat(HAT_COLOR);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 12), brimMat);
   brim.position.y = TOP - 0.05;
   brim.castShadow = true;
   group.add(brim);
 
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 8), flat(hatColor));
+  const coneMat = flat(HAT_COLOR);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 8), coneMat);
   cone.position.y = TOP + 0.33;
   cone.rotation.x = -0.15; // a little floppy tilt
   cone.castShadow = true;
@@ -74,7 +108,18 @@ export function createAvatar(id: number, name: string): THREE.Group {
   band.position.y = TOP + 0.02;
   group.add(band);
 
+  // A glowing shell around the body, shown for "It" and the cursed.
+  const aura = new THREE.Mesh(
+    new THREE.SphereGeometry(0.75, 12, 8),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.28, depthWrite: false }),
+  );
+  aura.scale.y = 1.55;
+  aura.visible = false;
+  group.add(aura);
+
   group.add(makeNameTag(name));
+  const parts: AvatarParts = { bodyMat, hatMats: [brimMat, coneMat], aura, baseColor };
+  group.userData.parts = parts;
   return group;
 }
 
