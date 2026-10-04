@@ -5,13 +5,14 @@ import { LEVELS } from "../../shared/src/levels/index.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
 import { findRoom, HUB_ROOM, ROOMS, type RoomInfo } from "../../shared/src/rooms.ts";
 import { CHAPTERS, chaptersDone } from "../../shared/src/story.ts";
-import { type Loadout, UNLOCKS, unlockedSet } from "../../shared/src/unlocks.ts";
+import { type Loadout, UNLOCKS, unlocksFor } from "../../shared/src/unlocks.ts";
 import { Game } from "./Game.ts";
+import { quality, setQuality } from "./quality.ts";
 import { Input } from "./Input.ts";
 import { formatTime } from "./ParkourHud.ts";
 import "./style.css";
 
-type Profile = { username: string; xp: number; bestTimes: Record<string, number>; loadout: Loadout };
+type Profile = { username: string; xp: number; bestTimes: Record<string, number>; loadout: Loadout; isAdmin: boolean };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const container = $("game");
@@ -68,13 +69,13 @@ function showProfile(p: Profile): void {
   joinForm.hidden = false;
 
   const info = levelInfo(p.xp);
-  $("profile-name").textContent = `${p.username} · Level ${info.level}`;
+  $("profile-name").textContent = p.isAdmin ? `${p.username} \u00b7 Admin` : `${p.username} · Level ${info.level}`;
   $("profile-xp-fill").style.width = `${(100 * info.intoLevel) / info.forNext}%`;
   $("profile-xp-text").textContent = `${info.intoLevel} / ${info.forNext} XP to level ${info.level + 1}`;
 
   // Story progress and the next thing to unlock.
   const done = chaptersDone(p.bestTimes).length;
-  const unlocked = unlockedSet(p.xp, p.bestTimes);
+  const unlocked = unlocksFor(p);
   const next = UNLOCKS.filter((u) => "level" in u.requires && !unlocked.has(u.id))[0];
   $("profile-story").textContent =
     `Chapters: ${done} of ${CHAPTERS.length}` + (next && "level" in next.requires ? ` \u00b7 Next: ${next.name} at level ${next.requires.level}` : "");
@@ -177,7 +178,7 @@ function startGame(room: RoomInfo, from?: string): Game | null {
   exitButton.textContent = room.id === HUB_ROOM ? "Exit to menu" : "Back to the Academy";
   game = new Game(container, input, {
     name: profile.username,
-    profile: { xp: profile.xp, bestTimes: profile.bestTimes, loadout: profile.loadout },
+    profile: { xp: profile.xp, bestTimes: profile.bestTimes, loadout: profile.loadout, isAdmin: profile.isAdmin },
     room,
     level,
     from,
@@ -235,6 +236,16 @@ async function backToMenu(reason = ""): Promise<void> {
   }
   message.textContent = reason;
 }
+
+// Graphics quality: remembered in this browser, used from the next room on.
+const qualityButton = $<HTMLButtonElement>("quality-button");
+const showQuality = (note = "") => (qualityButton.textContent = `Graphics: ${quality() === "high" ? "High" : "Low"}${note}`);
+showQuality();
+qualityButton.addEventListener("click", (e) => {
+  e.stopPropagation();
+  setQuality(quality() === "high" ? "low" : "high");
+  showQuality(game ? " (from the next room)" : "");
+});
 
 exitButton.addEventListener("click", () => {
   if (!current || switching) return;

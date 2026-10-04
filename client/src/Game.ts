@@ -18,10 +18,13 @@ import type { Input } from "./Input.ts";
 import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
 import { SPELLS } from "../../shared/src/combat.ts";
 import { chapterForTrial } from "../../shared/src/story.ts";
-import { unlockedSet, unlocksAtLevel } from "../../shared/src/unlocks.ts";
+import { unlocksAtLevel, unlocksFor } from "../../shared/src/unlocks.ts";
 import { HubPanel, type PanelProfile } from "./hub/HubPanel.ts";
 import { Portals } from "./levels/Portals.ts";
 import { StoryCard } from "./StoryCard.ts";
+import { addDecor } from "./levels/Decor.ts";
+import { quality } from "./quality.ts";
+import { Sky } from "./Sky.ts";
 import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
@@ -35,7 +38,7 @@ const RESPAWN_RETRY_MS = 1000;
 const FEED_MESSAGE_MS = 6000;
 // The sun's shadow camera covers this many meters around the player.
 const SHADOW_RANGE = 40;
-const SUN_OFFSET = new THREE.Vector3(20, 35, 10);
+const SUN_DISTANCE = 45; // the shadow-casting light sits this far toward the sun
 
 // The controls line at the bottom left, per mode.
 const MOVE_HELP = "WASD move \u00b7 Shift run \u00b7 Space jump";
@@ -68,6 +71,8 @@ export class Game {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
   private sun = new THREE.DirectionalLight("#fff4d6", 2.2);
+  private sky!: Sky;
+  private sunOffset = new THREE.Vector3();
   private world: RAPIER.World;
   private player: PlayerController;
   private clock = new ServerClock();
@@ -131,7 +136,8 @@ export class Game {
     this.showXp();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Low quality draws at 1 pixel per CSS pixel (much less work on high-DPI screens).
+    this.renderer.setPixelRatio(quality() === "high" ? Math.min(window.devicePixelRatio, 2) : 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -141,7 +147,8 @@ export class Game {
 
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     // The player's own world: barriers they've opened are left out.
-    this.markers = buildLevel(this.scene, this.world, level, unlockedSet(this.profile.xp, this.profile.bestTimes));
+    this.markers = buildLevel(this.scene, this.world, level, unlocksFor(this.profile));
+    if (quality() === "high") addDecor(this.scene, level);
     if (level.portals) this.portals = new Portals(this.scene, level.portals, this.profile.bestTimes);
     this.world.step(); // builds the collision lookup structures before the first move
     this.player = new PlayerController(this.world, level.killY);
@@ -192,16 +199,19 @@ export class Game {
   }
 
   private setupScene(): void {
-    const sky = new THREE.Color(this.level.sky);
-    this.scene.background = sky;
-    this.scene.fog = new THREE.Fog(sky, 40, 140);
-
-    this.scene.add(new THREE.HemisphereLight("#dfe9ff", "#4d6b3c", 1.6));
+    const style = this.level.skyStyle ?? "day";
+    this.sky = new Sky(this.scene, style, quality() === "high");
+    this.sun.color.copy(this.sky.sunColor);
+    this.sunOffset.copy(this.sky.sunDirection).multiplyScalar(SUN_DISTANCE);
+    // Light from the whole sky (blue-ish from above, earthy from below).
+    const skyLight = style === "dusk" ? new THREE.Color("#c9b6e8") : new THREE.Color("#dfe9ff");
+    this.scene.add(new THREE.HemisphereLight(skyLight, "#4d6b3c", style === "dusk" ? 1.3 : 1.6));
 
     // The sun follows the player (see frame()), so shadows work anywhere on
     // a long course without needing a huge, blurry shadow map.
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    const size = quality() === "high" ? 2048 : 1024;
+    this.sun.shadow.mapSize.set(size, size);
     const s = this.sun.shadow.camera;
     s.left = -SHADOW_RANGE;
     s.right = SHADOW_RANGE;
@@ -356,10 +366,10 @@ export class Game {
 
   // Movement perks from unlocks. Not in the trials, so times stay comparable.
   private applyPerks(): void {
-    const unlocked = unlockedSet(this.profile.xp, this.profile.bestTimes);
+    const unlocked = unlocksFor(this.profile);
     const allowed = this.room.mode !== "parkour";
     this.player.perks = { doubleJump: allowed && unlocked.has("perk:doubleJump"), dash: allowed && unlocked.has("perk:dash") };
-    const extra = [HELP[this.room.mode], this.player.perks.dash ? "Q dash" : ""].filter(Boolean);
+    const extra = [HELP[this.room.mode], this.player.perks.dash ? "Q dash" : "", this.profile.isAdmin ? "F fly" : ""].filter(Boolean);
     document.getElementById("help")!.textContent = [MOVE_HELP, ...extra, "Esc pause"].join(" \u00b7 ");
     if (this.perkEl) {
       const names = [this.player.perks.doubleJump ? "Double Jump" : "", this.player.perks.dash ? "Q Blink Dash" : ""].filter(Boolean);
@@ -454,6 +464,11 @@ export class Game {
     this.lastFrame = now;
 
     if (this.input.consumeRestart() && this.parkour) this.net.send({ t: "restart" });
+    // Admins: F toggles flying (Space up, C down, passes through walls).
+    if (this.input.consumeFly() && this.profile.isAdmin) {
+      this.player.flying = !this.player.flying;
+      this.addFeed(this.player.flying ? "Flying (F to land)" : "Flying off");
+    }
 
     // Tagging: the crosshair turns red when someone is in reach; click to tag.
     const target = this.tagTarget();
@@ -489,7 +504,8 @@ export class Game {
     this.camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
     this.camera.rotation.set(this.input.pitch, this.input.yaw, 0);
     this.sun.target.position.copy(pos);
-    this.sun.position.copy(pos).add(SUN_OFFSET);
+    this.sun.position.copy(pos).add(this.sunOffset);
+    this.sky.update(this.camera, dt);
 
     // Send our position ~20 times a second.
     this.sendTimer += dt * 1000;

@@ -14,6 +14,7 @@ export class Input {
   private rightClickQueued = false;
   private dashQueued = false;
   private interactQueued = false;
+  private flyQueued = false;
   private element: HTMLElement;
 
   constructor(element: HTMLElement) {
@@ -23,6 +24,7 @@ export class Input {
       if (e.code === "KeyR" && !e.repeat && this.locked) this.restartQueued = true;
       if (e.code === "KeyQ" && !e.repeat && this.locked) this.dashQueued = true;
       if (e.code === "KeyE" && !e.repeat && this.locked) this.interactQueued = true;
+      if (e.code === "KeyF" && !e.repeat && this.locked) this.flyQueued = true;
       this.keys.add(e.code);
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
@@ -90,6 +92,22 @@ export class Input {
   consumeDash(): boolean {
     const queued = this.dashQueued;
     this.dashQueued = false;
+    return queued;
+  }
+
+  // Admin flying: up and down while held.
+  get ascend(): boolean {
+    return this.down("Space");
+  }
+
+  get descend(): boolean {
+    return this.down("KeyC");
+  }
+
+  // Returns true once per F press (admins: toggle flying).
+  consumeFly(): boolean {
+    const queued = this.flyQueued;
+    this.flyQueued = false;
     return queued;
   }
 

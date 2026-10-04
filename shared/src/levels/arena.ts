@@ -150,6 +150,7 @@ export const arena: Level = {
   spawnPoints,
   killY: FALL_RESPAWN_Y,
   sky: "#e3b7c8",
+  skyStyle: "dusk",
   boxes,
   pickupSpots,
 };

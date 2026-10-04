@@ -15,6 +15,7 @@ export interface Peer {
   readonly account: Account | null; // null for bots
   name: string;
   look: Look; // hat and robe, shown to everyone
+  readonly isAdmin: boolean;
   room: Room | null;
   send(msg: ServerMsg): void;
   sendRaw(text: string): void; // an already-serialized message (broadcasts)
@@ -37,6 +38,7 @@ export class Connection implements Peer {
   readonly messageBudget = new TokenBucket(MESSAGE_BURST, MESSAGES_PER_SECOND);
   name = "";
   look: Look;
+  readonly isAdmin: boolean;
   room: Room | null = null;
   alive = true; // flipped by the heartbeat in index.ts
 
@@ -47,6 +49,7 @@ export class Connection implements Peer {
     this.account = account;
     this.name = account.username;
     this.look = { hat: account.loadout.hat, robe: account.loadout.robe };
+    this.isAdmin = account.isAdmin;
   }
 
   send(msg: ServerMsg): void {
@@ -73,6 +76,7 @@ export class BotPeer implements Peer {
   readonly account = null;
   name: string;
   look: Look = { hat: "classic", robe: "auto" };
+  readonly isAdmin = false;
   room: Room | null = null;
 
   constructor(name: string) {

@@ -18,7 +18,9 @@ function flat(color: THREE.ColorRepresentation): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({ color, flatShading: true });
 }
 
-function makeNameTag(name: string): THREE.Sprite {
+// Admins get a gold tag with a star, so everyone knows who they are.
+function makeNameTag(rawName: string, admin = false): THREE.Sprite {
+  const name = admin ? `\u2605 ${rawName}` : rawName;
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
   const font = "bold 40px system-ui, sans-serif";
@@ -27,11 +29,11 @@ function makeNameTag(name: string): THREE.Sprite {
   canvas.width = width;
   canvas.height = 64;
   ctx.font = font; // resizing the canvas resets the context
-  ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.fillStyle = admin ? "rgba(120, 90, 10, 0.85)" : "rgba(0, 0, 0, 0.45)";
   ctx.beginPath();
   ctx.roundRect(0, 0, width, 64, 16);
   ctx.fill();
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = admin ? "#ffe58a" : "#ffffff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   // fillText draws plain text, so a name can never inject HTML.
@@ -147,7 +149,7 @@ function robeColor(id: number, look: Look): THREE.Color {
   return look.robe === "auto" ? playerColor(id) : new THREE.Color(ROBE_COLORS[look.robe]);
 }
 
-export function createAvatar(id: number, name: string, look: Look): THREE.Group {
+export function createAvatar(id: number, name: string, look: Look, admin = false): THREE.Group {
   const group = new THREE.Group();
 
   const baseColor = robeColor(id, look);
@@ -170,7 +172,7 @@ export function createAvatar(id: number, name: string, look: Look): THREE.Group 
   aura.visible = false;
   group.add(aura);
 
-  group.add(makeNameTag(name));
+  group.add(makeNameTag(name, admin));
   const hat = new THREE.Group();
   group.add(hat);
   const parts: AvatarParts = { bodyMat, hatMats: [], hatColor: new THREE.Color(), hat, aura, baseColor, status: "runner" };

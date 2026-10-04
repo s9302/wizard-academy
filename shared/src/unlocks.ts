@@ -48,6 +48,16 @@ export function requirementText(r: Requirement): string {
   return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III"][r.chapter - 1]}`;
 }
 
+// Admins have everything.
+export function allUnlocks(): Set<string> {
+  return new Set([...DEFAULTS, ...UNLOCKS.map((u) => u.id)]);
+}
+
+// What a profile has unlocked (the client's view; the server checks again).
+export function unlocksFor(p: { xp: number; bestTimes: Record<string, number>; isAdmin?: boolean }): Set<string> {
+  return p.isAdmin ? allUnlocks() : unlockedSet(p.xp, p.bestTimes);
+}
+
 export function unlockedSet(xp: number, bestTimes: Record<string, number>): Set<string> {
   const level = levelInfo(xp).level;
   const chapters = chaptersDone(bestTimes);

@@ -1,8 +1,9 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; all eight are done. **Phase 8**
-added the story chapters, more spells, and unlocks.
+first person with friends. Built in phases. **Phase 9** added an admin account, a real
+sky, and more graphics detail; next up are classes, more arenas, and wizard
+spells that reshape the arena.
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -82,7 +83,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `royale-check`, `unlocks-check`, `accounts-check` (run it last:
+`hub-check`, `royale-check`, `unlocks-check`, `admin-check`, `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
 back can trip the limit too: restart the test server between batches.
@@ -397,6 +398,49 @@ within it.
 GAME_PIN=... node server/scripts/unlocks-check.ts http://localhost:3000   # clears Trial I for real, checks what unlocks
 node client/scripts/walk-hub.ts   # also: areas blocked when locked, reachable when open
 ```
+
+## Admin accounts
+
+An admin **can't be hurt** (spells, the storm), **can fly** (F toggles it;
+Space up, C down, Shift faster; flying passes through walls), and has
+**everything unlocked**. Everyone sees an admin's gold name tag with a star.
+Admins earn no XP and their trial times aren't recorded (they can fly, after
+all). In a battle royale an admin is in the round but can't be eliminated,
+so with an admin playing, a round ends when everyone else is out or time
+runs out.
+
+The flag is `accounts.is_admin` (migration `003_admin.sql`). Nothing in the
+API or the game can set it; only the server's command line can:
+
+```sh
+# On game: make an account an admin, creating it with a random password if it
+# doesn't exist. The new username and password go only into the file.
+cd ~/wizard-academy
+umask 077; docker compose exec -T server node server/src/tools/make-admin.ts Admin > ~/admin-credentials.txt
+cat ~/admin-credentials.txt   # then store it somewhere safe and delete the file
+
+# Take admin away again:
+docker compose exec postgres psql -U wizard -d wizard -c "UPDATE accounts SET is_admin = false WHERE username_lower = 'admin'"
+```
+
+On the server, admins skip the movement speed check (that's what flying
+is); everything else about them is checked as usual.
+
+## Graphics
+
+- **The sky** (`client/src/Sky.ts`) is a dome with a color gradient, a sun
+  and its glow, and drifting low-poly clouds; the fog uses the horizon color.
+  Two looks: day (most places) and dusk (the battle royale arena), set per
+  level with `skyStyle`.
+- **Every block** is shaded a little darker toward the bottom, with a slight
+  random tint. All the solid blocks of a level are merged into one mesh, so
+  the whole level is one draw call (it was ~390).
+- **Quality** (the pause panel's "Graphics: High/Low" button, remembered per
+  browser; phones start on Low). High adds grass tufts, pebbles on sand
+  (`client/src/levels/Decor.ts`, instanced: one draw call each), clouds,
+  sharper shadows, and full resolution on high-DPI screens. Measured in the
+  hub: Low 72 draw calls / 7k triangles, High 78 / 79k. Both are light for
+  any laptop's graphics chip.
 
 ## Access PIN
 

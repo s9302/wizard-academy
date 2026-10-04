@@ -49,7 +49,7 @@ export class RemotePlayers {
 
   add(info: PlayerInfo, serverTime: number): void {
     this.remove(info.id);
-    const avatar = createAvatar(info.id, info.name, info.look);
+    const avatar = createAvatar(info.id, info.name, info.look, info.admin);
     this.scene.add(avatar);
     const remote: Remote = { name: info.name, avatar, snapshots: [] };
     this.remotes.set(info.id, remote);

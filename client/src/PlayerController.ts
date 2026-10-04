@@ -34,6 +34,7 @@ const DASH_TIME = 0.16;
 export const DASH_COOLDOWN = 2; // seconds
 
 export type Perks = { doubleJump: boolean; dash: boolean };
+const FLY_SPEED = 10; // m/s (Shift doubles it)
 
 export class PlayerController {
   // Interpolated position for rendering (see Game.ts for why).
@@ -49,6 +50,7 @@ export class PlayerController {
   private timeSinceJumpPressed = Infinity;
   private killY: number;
   perks: Perks = { doubleJump: false, dash: false };
+  flying = false; // admins only: no gravity, no walls
   private airJumpUsed = false;
   private dashLeft = 0; // seconds of dash remaining
   private dashDir = { x: 0, z: 0 };
@@ -85,7 +87,7 @@ export class PlayerController {
 
   // Fell off the level; Game asks the server where to respawn.
   get fellOut(): boolean {
-    return this.current.y < this.killY;
+    return !this.flying && this.current.y < this.killY;
   }
 
   teleport(x: number, y: number, z: number): void {
@@ -102,9 +104,27 @@ export class PlayerController {
     this.slowFactor = factor;
   }
 
+  // Admin flight: move freely in the look direction's plane, Space up, C down.
+  private fly(dt: number, input: Input): void {
+    const speed = FLY_SPEED * (input.running ? 2 : 1);
+    const sin = Math.sin(input.yaw);
+    const cos = Math.cos(input.yaw);
+    const dx = -sin * input.forward + cos * input.strafe;
+    const dz = -cos * input.forward - sin * input.strafe;
+    const len = Math.max(1, Math.hypot(dx, dz));
+    const dy = (input.ascend ? 1 : 0) - (input.descend ? 1 : 0);
+    input.consumeJump();
+    this.velocityY = 0;
+    this.current.set(this.current.x + (dx / len) * speed * dt, this.current.y + dy * speed * dt, this.current.z + (dz / len) * speed * dt);
+    this.body.setNextKinematicTranslation(this.current);
+    this.body.setTranslation(this.current, true);
+    this.world.step();
+  }
+
   // Advance one fixed physics step of length dt seconds.
   step(dt: number, input: Input): void {
     this.previous.copy(this.current);
+    if (this.flying) return this.fly(dt, input);
     this.slowLeft = Math.max(0, this.slowLeft - dt);
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 

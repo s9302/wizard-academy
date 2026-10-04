@@ -68,7 +68,8 @@ export type Level = {
   spawnYaw?: number; // direction you face on joining, radians (0 = north, -Z)
   spawnPoints?: Vec3[]; // if set, players spawn at a random one of these instead
   killY: number; // falling below this height means you fell off
-  sky: string;
+  sky: string; // fallback color
+  skyStyle?: "day" | "dusk"; // the sky dome preset (client/src/Sky.ts); default day
   boxes: Box[];
   course?: Course; // parkour levels only
   portals?: Portal[]; // the hub only

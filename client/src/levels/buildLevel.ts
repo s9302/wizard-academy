@@ -5,29 +5,60 @@
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
 import { requirementText, UNLOCKS } from "../../../shared/src/unlocks.ts";
 import { Sign } from "./Sign.ts";
 
-function addBox(scene: THREE.Scene, world: RAPIER.World, box: Box): void {
-  const [w, h, d] = box.size;
-  const material = box.gate
-    ? new THREE.MeshBasicMaterial({ color: box.color, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide })
-    : new THREE.MeshLambertMaterial({ color: box.color, flatShading: true });
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-  if (box.gate) mesh.userData.barrier = true;
-  mesh.position.set(...box.pos);
-  if (box.rot) mesh.rotation.set(...box.rot);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
+// A stable pseudo-random number for a box (so colors don't change between visits).
+function hash(box: Box): number {
+  const v = Math.sin(box.pos[0] * 12.9898 + box.pos[1] * 78.233 + box.pos[2] * 37.719) * 43758.5453;
+  return v - Math.floor(v);
+}
 
-  const q = mesh.quaternion;
+// Cheap shading per box: a touch darker toward the bottom (like the shadow
+// where things meet the ground) and a slight random tint, so big walls of the
+// same color don't look flat. The box's color is baked into its vertex
+// colors, and the box is moved into place, so that every solid box in the
+// level can be merged into ONE mesh (see buildLevel).
+function shadedBox(box: Box, matrix: THREE.Matrix4): THREE.BufferGeometry {
+  const [w, h, d] = box.size;
+  const geometry = new THREE.BoxGeometry(w, h, d);
+  const base = new THREE.Color(box.color).multiplyScalar(0.95 + hash(box) * 0.1);
+  const pos = geometry.getAttribute("position");
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const k = pos.getY(i) > 0 ? 1 : h > 0.6 ? 0.74 : 0.9;
+    colors.set([base.r * k, base.g * k, base.b * k], i * 3);
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.applyMatrix4(matrix);
+  return geometry;
+}
+
+// Where a box sits and how it's turned.
+function boxMatrix(box: Box): THREE.Matrix4 {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(box.rot ?? [0, 0, 0])));
+  return new THREE.Matrix4().compose(new THREE.Vector3(...box.pos), q, new THREE.Vector3(1, 1, 1));
+}
+
+function addCollider(world: RAPIER.World, box: Box): void {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(box.rot ?? [0, 0, 0])));
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2)
+    RAPIER.ColliderDesc.cuboid(box.size[0] / 2, box.size[1] / 2, box.size[2] / 2)
       .setTranslation(...box.pos)
       .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
   );
+}
+
+// A magic barrier: see-through, its own mesh.
+function addBarrier(scene: THREE.Scene, box: Box): void {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(...box.size),
+    new THREE.MeshBasicMaterial({ color: box.color, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  mesh.applyMatrix4(boxMatrix(box));
+  scene.add(mesh);
 }
 
 const MARKER_IDLE = new THREE.Color("#b48cff");
@@ -74,8 +105,22 @@ export class CheckpointMarkers {
 
 // unlocked: what this player has opened (barriers they've earned are left out).
 export function buildLevel(scene: THREE.Scene, world: RAPIER.World, level: Level, unlocked = new Set<string>()): CheckpointMarkers {
+  // Game-dev note: drawing each box separately costs one "draw call" each
+  // (twice, with shadows), and a level has hundreds. Merged into one mesh,
+  // the whole level is a single draw call.
+  const solid: THREE.BufferGeometry[] = [];
   for (const box of level.boxes) {
-    if (!box.gate || !unlocked.has(box.gate)) addBox(scene, world, box);
+    if (box.gate && unlocked.has(box.gate)) continue; // opened: not there at all
+    addCollider(world, box);
+    if (box.gate) addBarrier(scene, box);
+    else solid.push(shadedBox(box, boxMatrix(box)));
+  }
+  if (solid.length) {
+    const mesh = new THREE.Mesh(mergeGeometries(solid), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    for (const g of solid) g.dispose();
   }
   for (const label of level.labels ?? []) {
     const locked = label.unlock && !unlocked.has(label.unlock);

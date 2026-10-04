@@ -123,6 +123,11 @@ export class ParkourRoom extends Room {
     const time = now - run.startedAt;
     const account = player.conn.account;
     if (!account) return;
+    if (account.isAdmin) {
+      // Admins can fly, so their times don't count.
+      player.conn.send({ t: "finish", time, best: time, newBest: false, firstClear: false });
+      return;
+    }
     recordFinish(account.id, this.name, time)
       .then(async (record) => {
         player.conn.send({ t: "finish", time, best: record.best, newBest: record.newBest, firstClear: record.firstClear });

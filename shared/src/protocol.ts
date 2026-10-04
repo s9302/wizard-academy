@@ -42,7 +42,8 @@ export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | 
 
 // ---- Server -> Client ----
 
-export type PlayerInfo = { id: number; name: string; p: Vec3; ry: number; look: Look };
+// admin: shown with a gold name tag.
+export type PlayerInfo = { id: number; name: string; p: Vec3; ry: number; look: Look; admin: boolean };
 
 // yaw: which way to face, if the room has an opinion (else the level's spawnYaw).
 export type WelcomeMsg = { t: "welcome"; id: number; room: string; spawn: Vec3; yaw?: number; time: number; players: PlayerInfo[] };

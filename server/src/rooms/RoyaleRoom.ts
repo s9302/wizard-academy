@@ -305,7 +305,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private damage(target: Player, amount: number, attacker: Player | null): void {
     const id = target.conn.id;
     const f = this.fighters.get(id);
-    if (!f || !this.alive.has(id) || amount <= 0) return;
+    if (!f || !this.alive.has(id) || amount <= 0 || target.conn.isAdmin) return; // admins can't be hurt
     const absorbed = Math.min(f.shield, amount);
     f.shield -= absorbed;
     f.hp = Math.max(0, f.hp - (amount - absorbed));

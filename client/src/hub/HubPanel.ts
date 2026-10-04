@@ -21,11 +21,11 @@ import {
   ROBE_NAMES,
   ROBES,
   UNLOCKS,
-  unlockedSet,
+  unlocksFor,
   unlocksForChapter,
 } from "../../../shared/src/unlocks.ts";
 
-export type PanelProfile = { xp: number; bestTimes: Record<string, number>; loadout: Loadout };
+export type PanelProfile = { xp: number; bestTimes: Record<string, number>; loadout: Loadout; isAdmin: boolean };
 
 const SPELL_TEXT: Record<PrimarySpell, string> = {
   bolt: "20 damage, fast. The reliable one.",
@@ -92,7 +92,7 @@ export class HubPanel {
   }
 
   private get unlocked(): Set<string> {
-    return unlockedSet(this.profile.xp, this.profile.bestTimes);
+    return unlocksFor(this.profile);
   }
 
   private lockText(id: string): string | null {

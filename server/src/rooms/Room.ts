@@ -113,13 +113,14 @@ export abstract class Room {
         p: other.p,
         ry: other.ry,
         look: other.conn.look,
+        admin: other.conn.isAdmin,
       })),
     });
 
     this.players.set(conn.id, player);
     conn.room = this;
     this.broadcast(
-      { t: "join", player: { id: conn.id, name: conn.name, p: player.p, ry: player.ry, look: conn.look }, time: Date.now() },
+      { t: "join", player: { id: conn.id, name: conn.name, p: player.p, ry: player.ry, look: conn.look, admin: conn.isAdmin }, time: Date.now() },
       conn.id,
     );
     this.onPlayerJoined(player);
@@ -154,7 +155,7 @@ export abstract class Room {
   protected giveXp(player: Player, amount: number, reason: string): void {
     const account = player.conn.account;
     const xp = Math.round(amount);
-    if (!account || xp <= 0) return;
+    if (!account || account.isAdmin || xp <= 0) return; // admins don't level
     awardXp(account.id, xp, reason)
       .then((total) => player.conn.send({ t: "xp", amount: xp, reason, total }))
       .catch((err) => console.error(`XP award failed for ${account.username}:`, err));
@@ -175,7 +176,8 @@ export abstract class Room {
   protected handleMove(player: Player, msg: MoveMsg): void {
     if (msg.tp !== player.tp) return; // sent before the client saw our last teleport
 
-    if (!player.moveCheck.allow(player.p, msg.p)) {
+    // Admins can fly (and pass through walls), so they skip the speed check.
+    if (!player.conn.isAdmin && !player.moveCheck.allow(player.p, msg.p)) {
       const conn = player.conn;
       console.warn(`[${this.name}] rejected move from ${conn.name} (#${conn.id}): ${JSON.stringify(player.p)} -> ${JSON.stringify(msg.p)}`);
       this.strikes.record(String(conn.id));

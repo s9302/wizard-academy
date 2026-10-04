@@ -9,7 +9,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import argon2 from "argon2";
 import { levelInfo, type LevelInfo } from "../../shared/src/progression.ts";
-import { type Loadout, sanitizeLoadout, unlockedSet } from "../../shared/src/unlocks.ts";
+import { allUnlocks, type Loadout, sanitizeLoadout, unlockedSet } from "../../shared/src/unlocks.ts";
 import { config } from "./config.ts";
 import { pool, transaction } from "./db.ts";
 
@@ -28,7 +28,8 @@ const DUMMY_HASH = await argon2.hash("not a real password", HASH_OPTIONS);
 
 // unlocked and loadout are as of when the account was loaded (each WebSocket
 // connection loads it fresh, and every room switch is a new connection).
-export type Account = { id: number; username: string; unlocked: Set<string>; loadout: Loadout };
+// isAdmin: can't be hurt, can fly, has everything; earns no XP or times.
+export type Account = { id: number; username: string; unlocked: Set<string>; loadout: Loadout; isAdmin: boolean };
 
 // ---- Registration and login ----
 
@@ -120,12 +121,19 @@ export async function accountFromRequest(req: IncomingMessage): Promise<Account 
 // XP, best times and the saved loadout -> what's unlocked and what's equipped.
 async function loadAccount(id: number, username: string): Promise<Account> {
   const state = await progressOf(id);
-  const unlocked = unlockedSet(state.xp, state.bestTimes);
-  return { id, username, unlocked, loadout: sanitizeLoadout(state.loadout, unlocked) };
+  const unlocked = unlocksOf(state);
+  return { id, username, unlocked, loadout: sanitizeLoadout(state.loadout, unlocked), isAdmin: state.isAdmin };
 }
 
-async function progressOf(accountId: number): Promise<{ xp: number; bestTimes: Record<string, number>; loadout: unknown }> {
-  const acc = await pool.query<{ xp: number; loadout: unknown }>("SELECT xp, loadout FROM accounts WHERE id = $1", [accountId]);
+type Progress = { xp: number; bestTimes: Record<string, number>; loadout: unknown; isAdmin: boolean };
+
+const unlocksOf = (p: Progress) => (p.isAdmin ? allUnlocks() : unlockedSet(p.xp, p.bestTimes));
+
+async function progressOf(accountId: number): Promise<Progress> {
+  const acc = await pool.query<{ xp: number; loadout: unknown; is_admin: boolean }>(
+    "SELECT xp, loadout, is_admin FROM accounts WHERE id = $1",
+    [accountId],
+  );
   const times = await pool.query<{ course_id: string; time_ms: number }>(
     "SELECT course_id, time_ms FROM best_times WHERE account_id = $1",
     [accountId],
@@ -134,6 +142,7 @@ async function progressOf(accountId: number): Promise<{ xp: number; bestTimes: R
     xp: acc.rows[0]?.xp ?? 0,
     bestTimes: Object.fromEntries(times.rows.map((r) => [r.course_id, r.time_ms])),
     loadout: acc.rows[0]?.loadout ?? {},
+    isAdmin: acc.rows[0]?.is_admin ?? false,
   };
 }
 
@@ -141,7 +150,7 @@ async function progressOf(accountId: number): Promise<{ xp: number; bestTimes: R
 // against fresh XP and best times). Returns what was saved.
 export async function saveLoadout(accountId: number, wanted: unknown): Promise<{ loadout: Loadout; unlocked: Set<string> }> {
   const state = await progressOf(accountId);
-  const unlocked = unlockedSet(state.xp, state.bestTimes);
+  const unlocked = unlocksOf(state);
   const loadout = sanitizeLoadout(wanted, unlocked);
   await pool.query("UPDATE accounts SET loadout = $2 WHERE id = $1", [accountId, JSON.stringify(loadout)]);
   return { loadout, unlocked };
@@ -155,13 +164,15 @@ export type Profile = {
   level: LevelInfo;
   bestTimes: Record<string, number>; // course id -> ms
   loadout: Loadout;
+  isAdmin: boolean;
 };
 
 export async function getProfile(accountId: number): Promise<Profile | null> {
   const acc = await pool.query<{ username: string }>("SELECT username FROM accounts WHERE id = $1", [accountId]);
   if (!acc.rows[0]) return null;
-  const { xp, bestTimes, loadout } = await progressOf(accountId);
-  return { username: acc.rows[0].username, xp, level: levelInfo(xp), bestTimes, loadout: sanitizeLoadout(loadout, unlockedSet(xp, bestTimes)) };
+  const state = await progressOf(accountId);
+  const { xp, bestTimes, loadout, isAdmin } = state;
+  return { username: acc.rows[0].username, xp, level: levelInfo(xp), bestTimes, loadout: sanitizeLoadout(loadout, unlocksOf(state)), isAdmin };
 }
 
 // Adds XP and logs why. Returns the new total.
