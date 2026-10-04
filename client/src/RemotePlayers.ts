@@ -16,6 +16,8 @@ import {
   chillAvatar,
   glowAvatar,
   createAvatar,
+  dieAvatar,
+  reviveAvatar,
   disposeAvatar,
   flashAvatar,
   setAvatarHealth,
@@ -93,6 +95,17 @@ export class RemotePlayers {
   }
 
   // ---- Battle royale ----
+
+  // Eliminated: the fall (see dieAvatar). revive() stands them back up.
+  die(id: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) dieAvatar(remote.avatar);
+  }
+
+  revive(id: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) reviveAvatar(remote.avatar);
+  }
 
   // A copy of someone's avatar (name tag and all), for Mirror Images.
   cloneOf(id: number): THREE.Group | null {

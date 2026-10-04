@@ -192,8 +192,12 @@ export class MonsterViews {
     const color = v.kind === "slime" ? "#5ad16e" : v.kind === "wolf" ? "#6a5a9a" : "#9a96aa";
     particles.emit({ at: v.root.position, count: 50, color, color2: "#ffffff", speed: 4, up: 1.5, life: 1, size: 0.3, gravity: 6 });
     sound.play(v.kind === "golem" ? "metalHeavy0" : "punchHeavy1", { at: [v.root.position.x, v.root.position.y, v.root.position.z] });
-    this.remove(id, v);
+    // It keels over and shrinks away (see update) instead of vanishing.
+    this.views.delete(id);
+    this.dying.push({ v, at: performance.now(), y: v.root.position.y });
   }
+
+  private dying: { v: View; at: number; y: number }[] = [];
 
   flash(id: number): boolean {
     const v = this.views.get(id);
@@ -223,6 +227,17 @@ export class MonsterViews {
 
   update(): void {
     const now = performance.now();
+    this.dying = this.dying.filter((d) => {
+      const k = (now - d.at) / 800;
+      if (k >= 1) {
+        this.remove(-1, d.v);
+        return false;
+      }
+      d.v.root.rotation.z = Math.min(1, k * 2.5) * (Math.PI / 2) * 0.9; // over onto its side
+      d.v.root.position.y = d.y - k * 0.6;
+      d.v.root.scale.setScalar(1 - Math.max(0, k - 0.5) * 2);
+      return true;
+    });
     for (const v of this.views.values()) {
       const k = Math.min(1, (now - v.at) / LERP_MS);
       const before = v.root.position.clone();
@@ -250,5 +265,7 @@ export class MonsterViews {
 
   clear(): void {
     for (const [id, v] of this.views) this.remove(id, v);
+    for (const d of this.dying) this.remove(-1, d.v);
+    this.dying = [];
   }
 }

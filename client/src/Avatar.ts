@@ -952,6 +952,51 @@ export function setAvatarWeapon(group: THREE.Group, weapon: WeaponId | null): vo
   hand.add(model);
 }
 
+// ---- Dying ----
+
+const DIE_MS = 700; // falling over
+const SINK_START_MS = 1500; // then lying there, then sinking away
+const SINK_MS = 900;
+
+// Eliminated: crumple and fall backward, lie there a moment, then sink into
+// the ground (Royale hides them after DEATH_SHOW_MS).
+export function dieAvatar(group: THREE.Group): void {
+  group.userData.diedAt = performance.now();
+}
+
+export function reviveAvatar(group: THREE.Group): void {
+  if (group.userData.diedAt === undefined) return;
+  group.userData.diedAt = undefined;
+  const parts = group.userData.parts as AvatarParts | undefined;
+  if (parts) {
+    parts.rig.body.rotation.set(0, 0, 0);
+    parts.rig.body.position.set(0, 0, 0);
+  }
+}
+
+export const DEATH_SHOW_MS = SINK_START_MS + SINK_MS;
+
+// The fall: knees buckle, then the body tips back to lie on the ground.
+function animateDeath(rig: Rig, ms: number): void {
+  const k = Math.min(1, ms / DIE_MS);
+  const fall = k * k; // speeds up as it goes
+  const sink = Math.max(0, Math.min(1, (ms - SINK_START_MS) / SINK_MS));
+  // Pivot about the feet: tip backward (+x rotation leans back for a body
+  // facing -z), dropping to lie flat at about the ground.
+  rig.body.rotation.x = fall * (Math.PI / 2) * 0.96;
+  rig.body.position.set(0, -fall * 0.7 - sink * 0.6, fall * 0.75);
+  rig.legL.hip.rotation.x = -0.4 * k;
+  rig.legR.hip.rotation.x = -0.25 * k;
+  rig.legL.knee.rotation.x = -0.9 * Math.sin(k * Math.PI);
+  rig.legR.knee.rotation.x = -0.6 * Math.sin(k * Math.PI);
+  // Arms flung out, then limp.
+  rig.armL.shoulder.rotation.set(-0.6 * k, 0, -1.1 * k);
+  rig.armR.shoulder.rotation.set(-0.5 * k, 0, 1.2 * k);
+  rig.armL.elbow.rotation.x = -0.3 * k;
+  rig.armR.elbow.rotation.x = -0.3 * k;
+  rig.head.rotation.x = 0.3 * k;
+}
+
 export function swingAvatar(group: THREE.Group): void {
   group.userData.swingAt = performance.now();
 }
@@ -963,6 +1008,7 @@ export function animateAvatar(group: THREE.Group, now: number, speed = 0): void 
   const dt = Math.min(0.1, Math.max(0, (now - parts.last) / 1000));
   parts.last = now;
   const rig = parts.rig;
+  if (group.userData.diedAt !== undefined) return animateDeath(rig, now - group.userData.diedAt);
   // Stride: about one full step cycle per 1.6 m walked.
   parts.walk += speed * dt * ((Math.PI * 2) / 1.6);
   const amp = Math.min(1, speed / 4.5) * 0.75;

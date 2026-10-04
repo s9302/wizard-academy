@@ -40,7 +40,9 @@ import { RemotePlayers } from "./RemotePlayers.ts";
 import { Royale } from "./royale/Royale.ts";
 import { BossView } from "./bosses/BossView.ts";
 import { ServerClock } from "./ServerClock.ts";
-import { animateAvatar, createAvatar, disposeAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
+import { animateAvatar, createAvatar, dieAvatar, disposeAvatar, reviveAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
+
+const DEATH_VIEW_MS = 1800; // how long your own fall takes before spectating
 import { lookOf } from "../../shared/src/unlocks.ts";
 import { sound } from "./audio/Sound.ts";
 import { moodFor } from "./audio/tracks.ts";
@@ -104,6 +106,7 @@ export class Game {
   private invertUntil = 0; // Inversion: the camera rolled upside down until then
   private giantUntil = 0; // your own Giant Form
   private spinUntil = 0; // caught in a tornado: the view turns on its own
+  private deathAt = -Infinity; // knocked out: the view drops and tilts, then you spectate
   private selfLast = new THREE.Vector3();
   private selfSpeed = 0;
   private camDistance = 3.4;
@@ -216,6 +219,14 @@ export class Game {
         onInvert: (ms) => (this.invertUntil = performance.now() + ms),
         onGiant: (ms) => (this.giantUntil = performance.now() + ms),
         onSpin: (ms) => (this.spinUntil = performance.now() + ms),
+        onDeath: () => {
+          this.deathAt = performance.now();
+          if (this.selfAvatar) dieAvatar(this.selfAvatar);
+        },
+        onRevive: () => {
+          this.deathAt = -Infinity;
+          if (this.selfAvatar) reviveAvatar(this.selfAvatar);
+        },
         selfClone: () => createAvatar(this.myId, this.name, lookOf(this.profile.loadout), this.profile.isAdmin),
         unlocked: () => unlocksFor(this.profile),
         onArena: (id) => {
@@ -876,6 +887,16 @@ export class Game {
     if (performance.now() < this.spinUntil) this.input.yaw += 9 * dt;
     this.camera.rotation.set(this.input.pitch, this.input.yaw, performance.now() < this.invertUntil ? Math.PI : 0);
     if (performance.now() < this.giantUntil) this.camera.position.y += 1.1; // see over things
+    // Just knocked out: for a moment the view sinks toward the ground and
+    // rolls, like falling over; then it's back for spectating.
+    const sinceDeath = performance.now() - this.deathAt;
+    if (sinceDeath < DEATH_VIEW_MS) {
+      const k = sinceDeath / DEATH_VIEW_MS;
+      const fall = Math.min(1, k * 3) * (1 - Math.max(0, (k - 0.75) * 4)); // down fast, back up at the end
+      this.camera.position.y -= fall * 1.3;
+      this.camera.rotation.z += fall * 0.7;
+      this.camera.rotation.x += fall * 0.35;
+    }
     if (this.input.consumeView()) this.setThirdPerson(!this.thirdPerson);
     this.updateSelf(pos, dt);
     this.sun.target.position.copy(pos);

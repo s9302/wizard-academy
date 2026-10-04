@@ -19,7 +19,7 @@ import { Viewmodel } from "./Viewmodel.ts";
 import { MonsterViews } from "./Monsters.ts";
 import { Fields } from "./Fields.ts";
 import { Decoys } from "./Decoys.ts";
-import { setAvatarWeapon } from "../Avatar.ts";
+import { DEATH_SHOW_MS, setAvatarWeapon } from "../Avatar.ts";
 import { particles } from "../graphics/Particles.ts";
 import { glowMat } from "../bosses/BossView.ts";
 import { isMonsterId } from "../../../shared/src/monsters.ts";
@@ -49,6 +49,8 @@ export type RoyaleHooks = {
   onInvert: (ms: number) => void; // the world upside down
   onGiant: (ms: number) => void; // your own Giant Form (third-person body)
   onSpin: (ms: number) => void; // caught in a tornado: the view whirls
+  onDeath: () => void; // you're out: the view drops
+  onRevive: () => void; // back in for a new round
   selfClone: () => THREE.Group; // an avatar of you (your Mirror Images)
   unlocked: () => Set<string>;
 };
@@ -66,6 +68,7 @@ export class Royale {
   private chosen: [AbilityId, AbilityId]; // on E and R (the server says, with "abilitySet")
   private teams = new Map<number, 0 | 1>(); // a team round: who's on which
   private held = new Map<number, WeaponId>(); // what everyone has in hand (for their copies)
+  private dyingUntil = new Map<number, number>(); // eliminated: shown falling until then
   private lastUpdate = performance.now();
   private remotes: RemotePlayers;
   private hooks: RoyaleHooks;
@@ -193,15 +196,42 @@ export class Royale {
         this.monsters.died(msg.id);
         if (msg.by === me) this.hud.hitMarker();
         return true;
-      case "alive":
+      case "alive": {
         if (this.state === "playing" && this.alive.has(me) && !msg.ids.includes(me)) sound.fx("defeat");
         else if (this.state === "playing" && msg.ids.length < this.alive.size) sound.play("bell2", { volume: 0.35, rate: 1.5 });
-        this.alive = new Set(msg.ids);
+        const now = performance.now();
+        const next = new Set(msg.ids);
+        // Just eliminated (mid-round): they fall, and are shown until they've sunk away.
+        if (this.state === "playing") {
+          for (const id of this.alive) {
+            if (next.has(id)) continue;
+            if (id === me) {
+              this.hooks.onDeath();
+              continue;
+            }
+            this.remotes.die(id);
+            this.dyingUntil.set(id, now + DEATH_SHOW_MS);
+            const at = this.remotes.positionOf(id);
+            if (at) {
+              particles.emit({ at, count: 30, color: "#e6d4ff", color2: "#7a4fd0", speed: 1.5, up: 2, spread: 0.4, life: 1.4, size: 0.2, gravity: -1 });
+              setTimeout(() => particles.emit({ at, count: 40, color: "#c58fff", color2: "#ffffff", speed: 0.6, up: 2.5, spread: 0.6, life: 1.6, size: 0.25, gravity: -1.5 }), DEATH_SHOW_MS - 900);
+            }
+          }
+        }
+        // Back in (a new round): stand up.
+        for (const id of next) {
+          if (this.alive.has(id)) continue;
+          if (id === me) this.hooks.onRevive();
+          else this.remotes.revive(id);
+          this.dyingUntil.delete(id);
+        }
+        this.alive = next;
         this.hud.alive(msg.ids.length, this.alive.has(me));
         this.showTeams();
         this.viewmodel.setVisible(!this.thirdPerson && (this.state !== "playing" || this.alive.has(me)));
         this.refreshVisibility();
         return true;
+      }
       case "health":
         this.health.set(msg.id, { hp: msg.hp, max: msg.max, shield: msg.shield });
         if (msg.id === me) {
@@ -331,7 +361,8 @@ export class Royale {
   // During a round, only those still in it are shown; spectators are invisible.
   private refreshVisibility(): void {
     const hide = this.state === "playing";
-    this.remotes.forEachId((id) => this.remotes.setVisible(id, !hide || this.alive.has(id)));
+    const now = performance.now();
+    this.remotes.forEachId((id) => this.remotes.setVisible(id, !hide || this.alive.has(id) || now < (this.dyingUntil.get(id) ?? 0)));
   }
 
   // E (slot 0) / R (slot 1): this class's ability. The server does the work
@@ -575,6 +606,12 @@ export class Royale {
     this.fields.update(Math.min(0.1, (now - this.lastUpdate) / 1000));
     this.lastUpdate = now;
     this.decoys.update();
+    // The fallen have sunk away: hide them now.
+    for (const [id, until] of this.dyingUntil) {
+      if (now < until) continue;
+      this.dyingUntil.delete(id);
+      this.refreshVisibility();
+    }
     this.hud.abilities(
       [...abilities],
       this.abilityReadyAt.map((t, i) => Math.max(0, t - now) / ABILITIES[abilities[i]].cooldownMs),
