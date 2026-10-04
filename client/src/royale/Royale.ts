@@ -19,6 +19,7 @@ import { Viewmodel } from "./Viewmodel.ts";
 import { MonsterViews } from "./Monsters.ts";
 import { Fields } from "./Fields.ts";
 import { Decoys } from "./Decoys.ts";
+import { setAvatarWeapon } from "../Avatar.ts";
 import { particles } from "../graphics/Particles.ts";
 import { glowMat } from "../bosses/BossView.ts";
 import { isMonsterId } from "../../../shared/src/monsters.ts";
@@ -64,6 +65,7 @@ export class Royale {
   private scene: THREE.Scene;
   private chosen: [AbilityId, AbilityId]; // on E and R (the server says, with "abilitySet")
   private teams = new Map<number, 0 | 1>(); // a team round: who's on which
+  private held = new Map<number, WeaponId>(); // what everyone has in hand (for their copies)
   private lastUpdate = performance.now();
   private remotes: RemotePlayers;
   private hooks: RoyaleHooks;
@@ -96,7 +98,19 @@ export class Royale {
     this.scene = scene;
     this.chosen = CLASS_ABILITIES[cls];
     this.fields = new Fields(scene, clock);
-    this.decoys = new Decoys(scene, (owner) => (owner === hooks.myId() ? hooks.selfClone() : remotes.cloneOf(owner)));
+    this.decoys = new Decoys(
+      scene,
+      (owner) => {
+        // A copy holds what its owner holds, too.
+        const clone = owner === hooks.myId() ? hooks.selfClone() : remotes.cloneOf(owner);
+        if (clone) setAvatarWeapon(clone, this.weaponOf(owner));
+        return clone;
+      },
+      (owner) => {
+        const h = this.health.get(owner) ?? { hp: 100, max: 100, shield: 0 };
+        return { hp: h.hp / h.max, shield: h.shield / MAX_SHIELD };
+      },
+    );
     this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, {
       onBots: (action) => hooks.send({ t: "bots", action }),
       onMonsters: (action) => hooks.send({ t: "monsters", action }),
@@ -193,8 +207,10 @@ export class Royale {
           this.hud.health(msg.hp, msg.max, msg.shield);
         }
         else this.remotes.setHealth(msg.id, msg.hp / msg.max, msg.shield / MAX_SHIELD);
+        this.decoys.setHealth(msg.id, msg.hp / msg.max, msg.shield / MAX_SHIELD);
         return true;
       case "equip":
+        this.held.set(msg.id, weaponOf(msg.cls, msg.hand));
         if (msg.id === me) {
           // The server's word on our class and hand. A new class starts with
           // its abilities ready (the server resets them too).
@@ -384,6 +400,10 @@ export class Royale {
     }
     if (mine && kind === "fortify") this.hud.callout("Fortified!");
     this.masteryEffect(mine, id, kind, ms, at, from, to);
+  }
+
+  private weaponOf(id: number): WeaponId | null {
+    return id === this.hooks.myId() ? this.weapon : (this.held.get(id) ?? null);
   }
 
   // Team rings under everyone, and the HUD's team counts.

@@ -1463,9 +1463,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     // Rogue copies run straight on; at a wall or an edge they turn.
     if (!this.decoys.size) return;
     const grid = navGridFor(this.level);
+    let expired = false;
     for (const decoy of [...this.decoys.values()]) {
       if (now >= decoy.until) {
         this.decoys.delete(decoy.id);
+        expired = true;
         continue;
       }
       const nx = decoy.p[0] + decoy.dir[0] * DECOYS.speed * dt;
@@ -1479,7 +1481,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       }
       decoy.ry = Math.atan2(-decoy.dir[0], -decoy.dir[1]);
     }
-    if (now - this.lastDecoyBroadcast >= DECOY_BROADCAST_MS) this.broadcastDecoys(now);
+    // Gone ones are told right away (the last one going would otherwise never be).
+    if (expired || now - this.lastDecoyBroadcast >= DECOY_BROADCAST_MS) this.broadcastDecoys(now);
   }
 
   // A tornado catches enemies (players, bots, monsters) it touches, once

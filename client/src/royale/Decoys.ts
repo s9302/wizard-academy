@@ -3,19 +3,26 @@
 
 import * as THREE from "three";
 import type { DecoyState } from "../../../shared/src/protocol.ts";
-import { animateAvatar, disposeAvatar } from "../Avatar.ts";
+import { animateAvatar, disposeAvatar, setAvatarHealth } from "../Avatar.ts";
 import { particles } from "../graphics/Particles.ts";
 
-type View = { avatar: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; at: number; ry: number };
+type View = { owner: number; avatar: THREE.Group; from: THREE.Vector3; to: THREE.Vector3; at: number; ry: number };
 
 export class Decoys {
   private scene: THREE.Scene;
   private makeAvatar: (owner: number) => THREE.Group | null;
+  private healthOf: (owner: number) => { hp: number; shield: number }; // fractions 0..1
   private views = new Map<number, View>();
 
-  constructor(scene: THREE.Scene, makeAvatar: (owner: number) => THREE.Group | null) {
+  constructor(scene: THREE.Scene, makeAvatar: (owner: number) => THREE.Group | null, healthOf: (owner: number) => { hp: number; shield: number }) {
     this.scene = scene;
     this.makeAvatar = makeAvatar;
+    this.healthOf = healthOf;
+  }
+
+  // The owner's health changed: their copies' bars match (so they don't give themselves away).
+  setHealth(owner: number, hp: number, shield: number): void {
+    for (const v of this.views.values()) if (v.owner === owner) setAvatarHealth(v.avatar, hp, shield);
   }
 
   set(list: DecoyState[]): void {
@@ -28,8 +35,10 @@ export class Decoys {
         const avatar = this.makeAvatar(d.owner);
         if (!avatar) continue;
         avatar.position.set(...d.p);
+        const h = this.healthOf(d.owner);
+        setAvatarHealth(avatar, h.hp, h.shield);
         this.scene.add(avatar);
-        v = { avatar, from: new THREE.Vector3(...d.p), to: new THREE.Vector3(...d.p), at: now, ry: d.ry };
+        v = { owner: d.owner, avatar, from: new THREE.Vector3(...d.p), to: new THREE.Vector3(...d.p), at: now, ry: d.ry };
         this.views.set(d.id, v);
       }
       v.from.copy(v.avatar.position);

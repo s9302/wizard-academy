@@ -414,7 +414,7 @@ text in `shared/src/abilityInfo.ts`.
 
 | Class | Mastery abilities |
 |---|---|
-| **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 5 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
+| **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
 | **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no Wizard/Rogue/Cleric abilities), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
 | **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (leap up, 9 s of slow falling and 35% more speed, no fall damage), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
 
@@ -466,7 +466,7 @@ round or the boss fight; **Divine Smite** (R, 11 s) marks a spot up to 25 m
 away and a pillar of light lands 0.7 s later (40 within 3 m, and slowed).
 Level 11 adds **Sanctuary** (a 6 m circle healing you and teammates 12/s for
 6 s), **Aegis** (a 50 shield on the teammate you aim at, or yourself) and
-**Judgment** (the enemy you aim at takes 35% more damage for 6 s). Bots
+**Judgment** (the enemy you aim at takes 35% more damage for 15 s). Bots
 don't play Clerics.
 
 - **1 / 2 / mouse wheel** switch hands. Switching takes 0.4 s (no attacking

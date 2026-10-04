@@ -155,6 +155,8 @@ await sleep(600);
 const decoys = kinds(a.since(mark), "decoys").at(-1);
 check("Mirror Images: two copies", decoys?.t === "decoys" && decoys.list.length === 2, decoys?.t === "decoys" ? `${decoys.list.length}` : "none");
 check("Glide", a.since(mark).some((m) => m.t === "effect" && m.kind === "glide"));
+// When their time is up, everyone's told they're gone (the last one used to linger).
+check("...and the copies disappear when their time is up", await waitFor(() => { const d = kinds(a.since(mark), "decoys").at(-1); return d?.t === "decoys" && d.list.length === 0; }, 9000));
 await a.become("rogue");
 await a.equip("rogue", "smoke", "blink");
 mark = a.msgs.length;

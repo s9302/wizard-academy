@@ -56,7 +56,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   tornado: { name: "Tornado", cooldownMs: 16_000, durationMs: 4_000, description: "A tornado rolls where you aim. Whoever it touches takes 25 and is thrown into the air." },
   flames: { name: "Wall of Flame", cooldownMs: 15_000, durationMs: 7_000, description: "A 12 m line of fire where you aim, for 7 s. Burns anyone in it (24 a second)." },
   hellpit: { name: "Pit to Hell", cooldownMs: 20_000, durationMs: 5_000, description: "The ground opens where you aim, for 5 s: it drags you in, slows you, and burns (36 a second)." },
-  invert: { name: "Inversion", cooldownMs: 14_000, durationMs: 5_000, description: "Curse whoever you aim at (30 m): their world turns upside down for 5 s." },
+  invert: { name: "Inversion", cooldownMs: 14_000, durationMs: 10_000, description: "Curse whoever you aim at (30 m): their world turns upside down for 10 s." },
   shockwave: { name: "Shockwave", cooldownMs: 12_000, description: "Blast everyone within 9 m away from you (18 damage, and a long way back)." },
   // Knight, level 11+
   nullzone: { name: "Null Zone", cooldownMs: 20_000, durationMs: 7_000, description: "A 7 m circle for 7 s where no ranged attack works: spells, arrows and holy light fizzle, and no magic abilities." },
@@ -71,7 +71,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   // Cleric, level 11+
   sanctuary: { name: "Sanctuary", cooldownMs: 20_000, durationMs: 6_000, description: "A 6 m circle of light for 6 s: you and your teammates inside heal 12 a second." },
   aegis: { name: "Aegis", cooldownMs: 14_000, description: "A 50-point shield on the teammate you aim at (30 m), or on yourself." },
-  judgment: { name: "Judgment", cooldownMs: 15_000, durationMs: 6_000, description: "Mark the enemy you aim at (30 m): they take 35% more damage for 6 s." },
+  judgment: { name: "Judgment", cooldownMs: 15_000, durationMs: 15_000, description: "Mark the enemy you aim at (30 m): they take 35% more damage for 15 s." },
   smoke: { name: "Smoke Bomb", cooldownMs: 16_000, durationMs: 8_000, description: "A thick cloud where you aim, for 8 s. Anyone inside is hidden from everyone outside." },
 };
 
