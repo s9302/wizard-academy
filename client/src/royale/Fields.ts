@@ -57,7 +57,10 @@ export class Fields {
         rim.position.y = 0.06;
         hole.position.y = 0.04;
         swirl.position.y = 0.05;
-        root.add(rim, hole, swirl);
+        // A dim red glow rising from it, so it reads on slopes and steps too.
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(info.r, info.r * 0.85, 3, 32, 1, true), see("#ff3a1a", 0.13));
+        column.position.y = 1.2;
+        root.add(rim, hole, swirl, column);
         spin.push(swirl);
         sound.fx("explosion", { at: info.p, volume: 0.7 });
         sound.fx("rumble", { at: info.p });

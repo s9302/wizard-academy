@@ -200,6 +200,22 @@ await sleep(1800);
 const knocks = kinds(b.since(mark), "knock").length;
 check("...carries them along for a while, then flings them", knocks > 10, `${knocks} pushes`);
 
+// ---- Pit to Hell opens anywhere and reaches up and down slopes ----
+await a.equip("wizard", "hellpit", "wall");
+await sleep(2500); // the tornado's throw settles
+mark = a.msgs.length;
+a.use(0, [0, 0.8, -0.6]); // at the sky
+await waitFor(() => a.since(mark).some((m) => m.t === "field" && m.field.kind === "hellpit"), 2000);
+const pit = a.since(mark).find((m) => m.t === "field" && m.field.kind === "hellpit");
+check("Pit to Hell opens even aimed at the sky", pit?.t === "field" && !a.since(mark).some((m) => m.t === "abilityFailed"), pit?.t === "field" ? pit.field.p.map((n) => n.toFixed(1)).join(",") : "failed");
+if (pit?.t === "field") {
+  const c = pit.field.p;
+  await b.walkTo([c[0] + 1, c[1] + 0.95 + 3, c[2]]); // 3 m above it, like on a ramp
+  const bmark = b.msgs.length;
+  await waitFor(() => b.since(bmark).some((m) => m.t === "health" && m.id === b.me.id), 2500);
+  check("...and hurts someone 3 m above it (slopes and steps)", b.since(bmark).some((m) => m.t === "health" && m.id === b.me.id));
+}
+
 a.ws.close();
 b.ws.close();
 console.log(failures ? `${failures} FAILED` : "all checks passed");

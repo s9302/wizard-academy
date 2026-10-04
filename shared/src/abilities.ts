@@ -149,7 +149,10 @@ export const fieldCenter = (f: FieldInfo, now: number): Vec3 => {
 // Is a point (a player's center) inside a field right now?
 export function inField(f: FieldInfo, p: Vec3, now: number): boolean {
   const c = fieldCenter(f, now);
-  if (Math.abs(p[1] - c[1]) > (f.kind === "smoke" || f.kind === "tornado" ? 4 : 2.2)) return false;
+  // How far above or below the center still counts: the pit to hell reaches
+  // up and down slopes, steps and rubble (it works on any ground).
+  const reach = f.kind === "hellpit" ? 4.5 : f.kind === "smoke" || f.kind === "tornado" ? 4 : 2.2;
+  if (Math.abs(p[1] - c[1]) > reach) return false;
   if (f.kind === "flames") {
     // Along the line (yaw), within half its length; across it, within r.
     const yaw = f.yaw ?? 0;

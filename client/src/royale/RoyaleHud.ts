@@ -56,6 +56,7 @@ export class RoyaleHud {
   private modeBox: HTMLElement;
   private teamBox: HTMLElement;
   private botList: HTMLElement;
+  private lastLineup: [LineupEntry[], RoyaleMode, RoyaleMode, number] | null = null;
   private readyButton: HTMLButtonElement;
   // The ready vote: how many have voted, how many it needs, and me.
   private readyVotes = { count: 0, needed: 0, mine: false, on: false };
@@ -387,6 +388,7 @@ export class RoyaleHud {
   // and the bots with their class and team.
   lineup(players: LineupEntry[], mode: RoyaleMode, next: RoyaleMode, myId: number): void {
     if (this.boss) return;
+    this.lastLineup = [players, mode, next, myId];
     // Mode: a two-way switch for the next round.
     this.modeBox.replaceChildren();
     const title = document.createElement("div");
@@ -410,7 +412,10 @@ export class RoyaleHud {
     this.teamBox.replaceChildren();
     this.teamBox.hidden = next !== "teams";
     if (next === "teams") {
-      const mine = players.find((p) => p.id === myId)?.team ?? null;
+      const meEntry = players.find((p) => p.id === myId);
+      const mine = meEntry?.team ?? null; // the team I'm on now (or picked, between rounds)
+      const pick = meEntry?.pick ?? null;
+      const midRound = this.state === "playing" || this.state === "countdown";
       const cols = document.createElement("div");
       cols.className = "team-cols";
       for (const team of [0, 1] as const) {
@@ -427,14 +432,29 @@ export class RoyaleHud {
         }
         const join = document.createElement("button");
         join.type = "button";
-        join.textContent = mine === team ? "Your team" : `Join ${team === 0 ? "Red" : "Blue"}`;
-        join.disabled = mine === team;
+        const name = team === 0 ? "Red" : "Blue";
+        if (midRound && pick === team && mine !== team) {
+          // Picked mid-round: it happens at the next round.
+          join.textContent = "Switching next round \u2713";
+          join.disabled = true;
+        } else if (mine === team && (!midRound || pick === null || pick === team)) {
+          join.textContent = "Your team";
+          join.disabled = true;
+        } else {
+          join.textContent = midRound ? `Join ${name} next round` : `Join ${name}`;
+        }
         join.onclick = () => this.actions.onPickTeam(team);
         col.appendChild(join);
         cols.appendChild(col);
       }
       const either = players.filter((p) => p.team === null);
       this.teamBox.appendChild(cols);
+      if (midRound && pick !== null && pick !== mine) {
+        const note = document.createElement("div");
+        note.className = "team-either";
+        note.textContent = `You'll be on ${pick === 0 ? "Red" : "Blue"} from the next round.`;
+        this.teamBox.appendChild(note);
+      }
       if (either.length) {
         const note = document.createElement("div");
         note.className = "team-either";
@@ -536,6 +556,7 @@ export class RoyaleHud {
     this.endsAt = endsAt;
     if (state !== "ended") this.resultsEl.hidden = true;
     this.showReady();
+    if (this.lastLineup) this.lineup(...this.lastLineup); // "next round" wording depends on the state
     if (state === "countdown") this.banner("Get ready!", 1500);
     if (state === "playing") this.banner(this.boss ? "Bring it down!" : "Last wizard standing wins!", 2500);
   }

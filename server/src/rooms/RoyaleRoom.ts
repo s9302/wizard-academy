@@ -300,6 +300,13 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   protected override onRoundEnded(): void {
+    // The round's teams are over (results and XP are already worked out):
+    // from now the lineup shows everyone's pick for the next round.
+    if (this.teams.size) {
+      this.teams.clear();
+      this.broadcastTeams();
+      this.broadcastLineup();
+    }
     this.setZone(null);
     this.projectiles.clear();
     this.openVote();
@@ -499,6 +506,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       bot: p.conn.isBot,
       cls: this.classOf(p),
       team: this.teams.get(p.conn.id) ?? this.teamPick.get(p.conn.id) ?? null,
+      pick: this.teamPick.get(p.conn.id) ?? null,
     }));
     this.broadcast({ t: "lineup", players, mode: this.teamsMode ? "teams" : "ffa", next: this.nextTeams ? "teams" : "ffa" });
   }
@@ -1266,8 +1274,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       }
       case "hellpit": {
-        const spot = this.aimedFloor(player, d);
-        if (!spot) return "Nothing to open there.";
+        // Anywhere: where your aim meets the ground, or (aiming at the sky or
+        // over an edge) the ground at the end of your aim.
+        const spot = this.aimedFloor(player, d) ?? this.groundAhead(player, d, CONJURE_RANGE);
         this.addField({ kind: "hellpit", owner: pid, p: spot, r: HELLPIT.radius }, ms, now);
         return null;
       }
@@ -1625,6 +1634,16 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const at: Vec3 = [from[0] + d[0] * dist, from[1] + d[1] * dist, from[2] + d[2] * dist];
     const floor = floorBelow(at[0], at[2], at[1] + 0.2, this.allBoxes());
     return floor === null ? null : [at[0], floor, at[2]];
+  }
+
+  // The ground under a point `range` meters ahead along your aim (flat), or
+  // your own feet's height if there's nothing under it.
+  private groundAhead(player: Player, d: Vec3, range: number): Vec3 {
+    const flat = norm2(d);
+    const x = player.p[0] + flat[0] * range;
+    const z = player.p[2] + flat[1] * range;
+    const floor = floorBelow(x, z, player.p[1] + 20, this.allBoxes());
+    return [x, floor ?? player.p[1] - 0.95, z];
   }
 
   private conjure(box: Box, ms: number, now: number): void {

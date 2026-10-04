@@ -164,7 +164,9 @@ export type AbilitySetMsg = { t: "abilitySet"; e: AbilityId; r: AbilityId };
 export type TeamsMsg = { t: "teams"; teams: [number[], number[]] | null };
 // Everyone in the arena with their class and team choice, and the mode
 // (now, and for the next round). Sent whenever any of it changes.
-export type LineupEntry = { id: number; name: string; bot: boolean; cls: ClassId; team: 0 | 1 | null };
+// team: the team they're on in this round (or, between rounds, the one they
+// picked); pick: the team they picked for the next round.
+export type LineupEntry = { id: number; name: string; bot: boolean; cls: ClassId; team: 0 | 1 | null; pick: 0 | 1 | null };
 export type LineupMsg = { t: "lineup"; players: LineupEntry[]; mode: RoyaleMode; next: RoyaleMode };
 // Who has voted to start the next round, and how many votes it needs.
 // on: false when the vote is switched off (tests).
