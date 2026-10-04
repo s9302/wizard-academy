@@ -124,6 +124,7 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
   }
   for (const label of level.labels ?? []) {
     const locked = label.unlock && !unlocked.has(label.unlock);
+    if (label.onlyLocked && !locked) continue;
     const requires = UNLOCKS.find((u) => u.id === label.unlock)?.requires;
     const sign = new Sign({
       title: label.title,

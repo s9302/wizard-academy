@@ -3,7 +3,7 @@
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
 first person with friends. Built in phases. **Phase 12** added class abilities (wizards
 reshape the arena; rogues teleport and vanish; knights charge and fortify)
-and more story trials.
+and three more story trials (Chapters IV–VI, through the Sanctum).
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -83,7 +83,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `admin-check`,
+`hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `story-check`, `admin-check`,
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -136,6 +136,7 @@ no guest play: XP and best times need an owner.
 | | XP |
 |---|---|
 | First clear of Trial I / II / III | 100 / 150 / 200 |
+| First clear of Trial IV / V / VI | 250 / 300 / 400 |
 | Clearing it again | a quarter of that, +25 for a new personal best |
 | Finishing a tag or infection round | 20 |
 | Tag: least time as It | +40 |
@@ -199,6 +200,13 @@ GAME_PIN=... node server/scripts/hub-check.ts http://localhost:3000   # arrival 
 | I: The Floating Steps | The gentle one: wide stones, a couple of 4 m running jumps |
 | II: The Spiral Spire | Three laps, ~20 running jumps in a row that each climb 0.8 m onto 1.5 m stones; a slip costs a lap |
 | III: The Shattered Bridge | 6 m running leaps, 1 m pillars that each rise a full metre, a 0.4 m tightrope |
+| IV: The Storm Gate | A zig-zag climb of gate stones, narrow beams with sharp turns, a row of storm teeth, long leaps down |
+| V: The Hollow Stair | A broken stair down, tiny stones offset both ways, rising columns, a tightrope that turns |
+| VI: The Eye of the Storm | Long leaps down, pillars a full metre apart, a ring of stones round the eye, one last tightrope |
+
+Trials IV–VI are reached through portals inside the **Sanctum** (back wall):
+Trial IV opens with the Sanctum (Chapter III), V needs Chapter IV and VI
+needs Chapter V; until then a barrier stands in front of the portal.
 
 - The timer starts when you step off the start platform. Reach the three
   checkpoints (teal platforms, crystals light up green) in order, then the
@@ -459,7 +467,7 @@ GAME_PIN=... node server/scripts/classes-check.ts http://localhost:3000   # heal
 
 **The story** is told through the trials and the hub. Headmaster Orrin Vale
 vanished into the storm (the battle royale's), leaving three trials for a
-successor. Each trial is a chapter: its opening text appears when you
+successor; three more, through the Sanctum, follow him into it. Each trial is a chapter: its opening text appears when you
 arrive, and its ending (plus what it unlocked) the first time you clear it.
 A chapter is complete once you have a time on its trial. The text is in
 `shared/src/story.ts`.
@@ -492,7 +500,10 @@ looks.
 | Gold robe | Level 10 |
 | **Frost Shard**, the Spell Garden | Chapter I (clear Trial I) |
 | **Spark Volley**, the Observatory, Starry hat | Chapter II |
-| The Sanctum, Headmaster's crown, Ivory robe | Chapter III |
+| The Sanctum (and Trial IV), Headmaster's crown, Ivory robe | Chapter III |
+| Trial V, Storm robe | Chapter IV |
+| Trial VI, Ember robe | Chapter V |
+| Stormcaller's hat | Chapter VI |
 
 **Perks are off in the trials**, so trial times stay comparable.
 
@@ -720,7 +731,7 @@ shared/src/unlocks.ts      what unlocks when, loadouts, hats and robes
 shared/src/levels/geometry.ts  line-vs-box and line-vs-player tests (spell hits)
 server/src/bots/   server-side bots: NavGrid (walking map + A*), BotWalker
                    (path following), ChaseBot and RoyaleBot (brains)
-server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check, royale-check, unlocks-check
+server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check, royale-check, unlocks-check, story-check
 client/scripts/  simulate-course, walk-hub, walk-arena (physics bots)
 client/src/royale/ battle royale client: spells, storm, pickups, HUD
 client/src/hub/    the Spellbook / Wardrobe / Chronicle window

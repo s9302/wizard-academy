@@ -3,7 +3,7 @@
 export const XP = {
   // Parkour: full reward the first time you clear a course, a quarter for
   // repeats (so farming one course is slow), plus a bonus for a new best.
-  parkourFirstClear: { trial1: 100, trial2: 150, trial3: 200 } as Record<string, number>,
+  parkourFirstClear: { trial1: 100, trial2: 150, trial3: 200, trial4: 250, trial5: 300, trial6: 400 } as Record<string, number>,
   parkourDefault: 100,
   parkourRepeatFraction: 0.25,
   parkourPersonalBest: 25,

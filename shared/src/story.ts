@@ -1,9 +1,9 @@
-// The academy's story, told through the three trials (one chapter each) and
-// the hub. Each chapter has a few lines when you start the trial and a few
+// The academy's story, told through the trials (one chapter each: three
+// in the courtyard, three more through the Sanctum) and the hub. Each chapter has a few lines when you start the trial and a few
 // when you clear it for the first time; clearing it is what completes the
 // chapter. The hub's Chronicle board and lore tablets show the rest.
 
-export type ChapterId = 1 | 2 | 3;
+export type ChapterId = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type Chapter = {
   id: ChapterId;
@@ -51,6 +51,45 @@ export const CHAPTERS: Chapter[] = [
     outro: [
       "The final pillar holds. Far behind you, the academy's great doors grind open for the first time in years.",
       "Whatever Vale left inside is waiting for you.",
+    ],
+  },
+  {
+    id: 4,
+    trial: "trial4",
+    title: "Chapter IV: The Storm Gate",
+    intro: [
+      "Vale's letter pointed past the ruins, to where the storm begins. In the Sanctum, a doorway nobody had noticed is glowing.",
+      "Beyond it, the gate stones float in the wind. Climb them, and mind the corners.",
+    ],
+    outro: [
+      "The Storm Gate lets you through. On the far side, a stair spirals down into the dark.",
+      "The storm has left its colors on your robes.",
+    ],
+  },
+  {
+    id: 5,
+    trial: "trial5",
+    title: "Chapter V: The Hollow Stair",
+    intro: [
+      "The stair goes down into the hollow at the storm's heart. Only Vale has ever come back up it.",
+      "The stones get smaller the deeper you go.",
+    ],
+    outro: [
+      "At the bottom of the hollow you find his footprints, glowing faintly, leading up toward the eye.",
+      "He's close now.",
+    ],
+  },
+  {
+    id: 6,
+    trial: "trial6",
+    title: "Chapter VI: The Eye of the Storm",
+    intro: [
+      "The eye is quiet. Stones circle it like moths around a lamp, and in the middle, wild magic pours upward in a column.",
+      "Somewhere past the ring, Vale is waiting. Don't keep him waiting any longer.",
+    ],
+    outro: [
+      "Vale is sitting on the last stone, tired and grinning. \"You took your time,\" he says. Then, more quietly: \"Thank you.\"",
+      "The storm will always come back, he tells you on the walk home. But now the academy has someone who knows the way through it.",
     ],
   },
 ];

@@ -19,10 +19,11 @@ await RAPIER.init();
 
 // A world as a player sees it: with every barrier (new player), or with
 // the barriers they've opened left out.
-function makeWorld(openGates: boolean): RAPIER.World {
+function makeWorld(open: boolean | ((gate: string) => boolean)): RAPIER.World {
+  const isOpen = typeof open === "function" ? open : () => open;
   const world = new RAPIER.World({ x: 0, y: -20, z: 0 });
   for (const box of academy.boxes) {
-    if (box.gate && openGates) continue;
+    if (box.gate && isOpen(box.gate)) continue;
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(box.rot ?? [0, 0, 0])));
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(box.size[0] / 2, box.size[1] / 2, box.size[2] / 2)
@@ -44,7 +45,8 @@ const input = {
   consumeRestart: () => false,
 };
 const DT = 1 / 60;
-let player = new PlayerController(makeWorld(false), academy.killY);
+// The portals: everything opened (the Sanctum's are behind the great door).
+let player = new PlayerController(makeWorld(true), academy.killY);
 const portals = academy.portals!;
 const pos = (): Vec3 => [player.position.x, player.position.y, player.position.z];
 const touching = () => portals.find((p) => inPortal(pos(), p))?.room ?? null;
@@ -71,11 +73,19 @@ const check = (ok: boolean, what: string) => {
 };
 const xz = (p: Vec3): [number, number] => [p[0], p[2]];
 
+// The Sanctum: round the plaza, past the battle royale portal (it stands on
+// the path), up the steps and through the great door.
+const toSanctum: [number, number][] = [[0, 12], [9, 9], [11, -6], [5, -21], [0, -24], [0, -30]];
+const inSanctum = (p: Portal) => p.pos[2] < -30;
+
 for (const portal of portals) {
   // From the spawn to the south edge of the plaza, around it (the pedestal
   // is in the middle) to the portal's path, and in.
   player.teleport(...academy.spawn);
-  const entered = walk([[0, 10], ...aroundPlaza(portal), xz(portalPoint(portal, 0, 0, 8)), xz(portalPoint(portal, 0, 0, -1))]);
+  const route: [number, number][] = inSanctum(portal)
+    ? [...toSanctum, [portal.pos[0], -31.3], xz(portalPoint(portal, 0, 0, -1))]
+    : [[0, 10], ...aroundPlaza(portal), xz(portalPoint(portal, 0, 0, 8)), xz(portalPoint(portal, 0, 0, -1))];
+  const entered = walk(route);
   check(entered === portal.room, `walk into ${portal.room} from the spawn (entered: ${entered})`);
 
   // From behind, walking straight at it.
@@ -129,7 +139,7 @@ const routes: Record<string, [number, number][]> = {
   chronicle: [[0, 12], [-9, 9], [-11, -2]],
   garden: [[-6, 18], [-20, 27.5], [-27, 27.5]],
   observatory: [[6, 18], [20, 27.5], [28, 27.5], [32, 22], [32, 29.5]],
-  sanctum: [[0, 12], [9, 9], [11, -6], [5, -21], [0, -24], [0, -30]],
+  sanctum: [...toSanctum, [-6.5, -31.3]],
 };
 const AREAS: Record<string, string> = { garden: "area:garden", observatory: "area:observatory", sanctum: "area:sanctum" };
 
@@ -141,7 +151,18 @@ function reaches(id: string): number {
   return Math.hypot(p.x - st.pos[0], p.z - st.pos[2]) + Math.max(0, Math.abs(p.y - 0.9 - st.pos[1]) - 0.3);
 }
 
+// Chapters IV-V not done yet: the barriers stop you walking into Trials V
+// and VI (everything else open).
+player = new PlayerController(makeWorld((g) => g !== "area:trial5" && g !== "area:trial6"), academy.killY);
+for (const room of ["trial5", "trial6"]) {
+  const portal = academy.portals!.find((p) => p.room === room)!;
+  player.teleport(...academy.spawn);
+  const entered = walk([...toSanctum, [portal.pos[0], -31.3], xz(portalPoint(portal, 0, 0, -1))]);
+  check(entered === null, `locked: the barrier keeps you out of ${room} (entered: ${entered})`);
+}
+
 // A new player: plaza stations yes, story areas no.
+player = new PlayerController(makeWorld(false), academy.killY);
 for (const id of stations.keys()) {
   const miss = reaches(id);
   if (AREAS[id]) check(miss > 2.5, `locked: ${id} can't be reached (stopped ${miss.toFixed(1)} m away)`);

@@ -13,8 +13,8 @@ import { type ChapterId, chaptersDone } from "./story.ts";
 export type Requirement = { level: number } | { chapter: ChapterId };
 
 export type PrimarySpell = "bolt" | "frost" | "spark";
-export type Hat = "classic" | "tall" | "starry" | "crown";
-export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold";
+export type Hat = "classic" | "tall" | "starry" | "crown" | "storm";
+export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold" | "storm" | "ember";
 
 export type Unlock = {
   id: string;
@@ -40,13 +40,18 @@ export const UNLOCKS: Unlock[] = [
   { id: "area:sanctum", name: "The Headmaster's Sanctum", kind: "area", requires: { chapter: 3 }, description: "The academy's doors open." },
   { id: "hat:crown", name: "Headmaster's crown", kind: "hat", requires: { chapter: 3 }, description: "Left on a stand in the Sanctum." },
   { id: "robe:ivory", name: "Ivory robe", kind: "robe", requires: { chapter: 3 }, description: "The Headmaster's colors." },
+  { id: "area:trial5", name: "Trial V", kind: "area", requires: { chapter: 4 }, description: "The portal to the Hollow Stair." },
+  { id: "robe:storm", name: "Storm robe", kind: "robe", requires: { chapter: 4 }, description: "The storm's colors." },
+  { id: "area:trial6", name: "Trial VI", kind: "area", requires: { chapter: 5 }, description: "The portal to the Eye of the Storm." },
+  { id: "robe:ember", name: "Ember robe", kind: "robe", requires: { chapter: 5 }, description: "Still warm from the hollow." },
+  { id: "hat:storm", name: "Stormcaller's hat", kind: "hat", requires: { chapter: 6 }, description: "It crackles." },
 ];
 
 // Always available.
 const DEFAULTS = ["spell:bolt", "hat:classic", "robe:auto"];
 
 export function requirementText(r: Requirement): string {
-  return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III"][r.chapter - 1]}`;
+  return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III", "IV", "V", "VI"][r.chapter - 1]}`;
 }
 
 // Admins have everything.
@@ -86,16 +91,24 @@ export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassI
 export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard" };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
-export const HATS: Hat[] = ["classic", "tall", "starry", "crown"];
-export const ROBES: Robe[] = ["auto", "crimson", "emerald", "midnight", "ivory", "gold"];
+export const HATS: Hat[] = ["classic", "tall", "starry", "crown", "storm"];
+export const ROBES: Robe[] = ["auto", "crimson", "emerald", "midnight", "ivory", "gold", "storm", "ember"];
 export const ROBE_COLORS: Record<Exclude<Robe, "auto">, string> = {
   crimson: "#a8283a",
   emerald: "#2f9e5a",
   midnight: "#26306b",
   ivory: "#ece3cf",
   gold: "#d9a72b",
+  storm: "#4b3f8f",
+  ember: "#b8502a",
 };
-export const HAT_NAMES: Record<Hat, string> = { classic: "Classic hat", tall: "Tall hat", starry: "Starry hat", crown: "Headmaster's crown" };
+export const HAT_NAMES: Record<Hat, string> = {
+  classic: "Classic hat",
+  tall: "Tall hat",
+  starry: "Starry hat",
+  crown: "Headmaster's crown",
+  storm: "Stormcaller's hat",
+};
 export const ROBE_NAMES: Record<Robe, string> = {
   auto: "Your own color",
   crimson: "Crimson",
@@ -103,6 +116,8 @@ export const ROBE_NAMES: Record<Robe, string> = {
   midnight: "Midnight",
   ivory: "Ivory",
   gold: "Gold",
+  storm: "Storm",
+  ember: "Ember",
 };
 
 // Keep only valid, unlocked choices; anything else falls back to the default.

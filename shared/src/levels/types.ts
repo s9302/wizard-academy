@@ -29,7 +29,8 @@ export type Station = {
 
 // A floating sign. If `unlock` is set and the player doesn't have it, the
 // sign says how to get it.
-export type Label = { pos: Vec3; title: string; subtitle?: string; color: string; unlock?: string };
+// onlyLocked: show it only until the unlock (e.g. a portal that has its own sign).
+export type Label = { pos: Vec3; title: string; subtitle?: string; color: string; unlock?: string; onlyLocked?: boolean };
 
 // A warm light (indoors, where the sun doesn't reach).
 export type PointLightDef = { pos: Vec3; color: string; intensity: number; distance: number };

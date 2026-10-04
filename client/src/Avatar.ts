@@ -108,6 +108,17 @@ const HATS: Record<Hat, { color: string; build: (mat: THREE.MeshLambertMaterial,
       return mats;
     },
   },
+  // Storm-violet, with a crackling tip.
+  storm: {
+    color: "#3a2f6b",
+    build: (mat, g) => {
+      const mats = cone(mat, g, 1.0);
+      const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), new THREE.MeshLambertMaterial({ color: "#8fe3ff", emissive: "#8fe3ff", emissiveIntensity: 0.9, flatShading: true }));
+      tip.position.set(0, TOP + 0.9, 0.12);
+      g.add(tip);
+      return mats;
+    },
+  },
   // A gold crown: a band and five points.
   crown: {
     color: "#e8c547",

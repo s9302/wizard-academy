@@ -84,24 +84,26 @@ for (const x of [-22, 22]) {
 const HALL_Z = FRONT - 4; // the middle of the hall
 boxes.push({ pos: [0, 0.02, HALL_Z], size: [38.8, 0.04, 7.4], color: STONE }); // floor
 boxes.push({ pos: [0, 0.05, HALL_Z], size: [2.6, 0.04, 7], color: CARPET });
-for (const x of [-13, -7, 7, 13]) boxes.push({ pos: [x, 7, HALL_Z], size: [0.8, 14, 0.8], color: STONE });
-// Bookshelves along the back wall.
-for (const cx of [-14, 14]) {
-  boxes.push({ pos: [cx, 2.2, BACK + 0.9], size: [8, 4.4, 0.6], color: WOOD });
+for (const x of [-7, 7]) boxes.push({ pos: [x, 7, HALL_Z], size: [0.8, 14, 0.8], color: STONE });
+// Bookshelves along the back wall, between the three portals (further down).
+for (const cx of [-6.75, 6.75]) {
+  boxes.push({ pos: [cx, 2.2, BACK + 0.9], size: [5, 4.4, 0.6], color: WOOD });
   for (let row = 0; row < 3; row++) {
-    for (let i = 0; i < 6; i++) {
-      boxes.push({ pos: [cx - 3.2 + i * 1.28, 0.9 + row * 1.35, BACK + 1.25], size: [1.0, 0.85, 0.12], color: BOOKS[(i + row * 2) % BOOKS.length] });
+    for (let i = 0; i < 4; i++) {
+      boxes.push({ pos: [cx - 1.9 + i * 1.27, 0.9 + row * 1.35, BACK + 1.25], size: [1.0, 0.85, 0.12], color: BOOKS[(i + row * 2) % BOOKS.length] });
     }
   }
 }
-// The Headmaster's desk (his letter is on it), chair, and the crown on its stand.
-boxes.push({ pos: [0, 0.5, BACK + 2.2], size: [3, 1, 1.2], color: WOOD });
-boxes.push({ pos: [0.6, 1.05, BACK + 2.2], size: [0.5, 0.06, 0.4], color: "#f4efe6" });
-boxes.push({ pos: [0, 0.9, BACK + 1.1], size: [1, 1.8, 0.2], color: CARPET });
-boxes.push({ pos: [-5, 0.55, BACK + 1.6], size: [0.8, 1.1, 0.8], color: STONE });
+// The Headmaster's desk (his letter is on it) and chair, front left; the
+// crown on its stand, front right.
+const DESK: [number, number] = [-6.5, FRONT - 2.2];
+boxes.push({ pos: [DESK[0], 0.5, DESK[1]], size: [3, 1, 1.2], color: WOOD });
+boxes.push({ pos: [DESK[0] + 0.6, 1.05, DESK[1]], size: [0.5, 0.06, 0.4], color: "#f4efe6" });
+boxes.push({ pos: [DESK[0], 0.9, DESK[1] + 1.1], size: [1, 1.8, 0.2], color: CARPET });
+boxes.push({ pos: [6.5, 0.55, DESK[1]], size: [0.8, 1.1, 0.8], color: STONE });
 for (let i = 0; i < 5; i++) {
   const a = (i / 5) * Math.PI * 2;
-  boxes.push({ pos: [-5 + Math.cos(a) * 0.22, 1.32, BACK + 1.6 + Math.sin(a) * 0.22], size: [0.14, 0.34, 0.14], color: GOLD });
+  boxes.push({ pos: [6.5 + Math.cos(a) * 0.22, 1.32, DESK[1] + Math.sin(a) * 0.22], size: [0.14, 0.34, 0.14], color: GOLD });
 }
 
 // ---- The Spell Garden (southwest corner, Chapter I) ----
@@ -173,7 +175,7 @@ const stations: Station[] = [
   { id: "chronicle", kind: "chronicle", pos: front(chronicle), label: "The Chronicle" },
   { id: "garden", kind: "tablet", pos: [-27, 0, 23.6], label: "A note", tablet: "garden" },
   { id: "observatory", kind: "tablet", pos: [30.8, OBS_TOP, 31.4], label: "Star chart", tablet: "observatory" },
-  { id: "sanctum", kind: "tablet", pos: [0, 0, BACK + 3.3], label: "The Headmaster's letter", tablet: "sanctum" },
+  { id: "sanctum", kind: "tablet", pos: [DESK[0], 0, DESK[1] - 1.1], label: "The Headmaster's letter", tablet: "sanctum" },
 ];
 
 const labels: Label[] = [
@@ -183,6 +185,8 @@ const labels: Label[] = [
   { pos: [-22.8, 4, 27.5], title: "The Spell Garden", color: "#8fe3ff", unlock: "area:garden" },
   { pos: [22.8, 4, 27.5], title: "The Observatory", color: "#ffe066", unlock: "area:observatory" },
   { pos: [0, 10.2, FRONT + 1.2], title: "The Sanctum", color: "#ff8fb8", unlock: "area:sanctum" },
+  { pos: [-13, 3, BACK + 2.6], title: "Trial V", color: "#7b5bd6", unlock: "area:trial5", onlyLocked: true },
+  { pos: [13, 3, BACK + 2.6], title: "Trial VI", color: "#c65bd6", unlock: "area:trial6", onlyLocked: true },
 ];
 
 const lights: PointLightDef[] = [
@@ -216,11 +220,22 @@ const portalAngles: [string, number, string][] = [
   ["royale", 270, "#ff3d8b"],
 ];
 
-export const portals: Portal[] = portalAngles.map(([room, degrees, color]) => {
+const ringPortals: Portal[] = portalAngles.map(([room, degrees, color]) => {
   const a = (degrees * Math.PI) / 180;
   // Face the center: front = (-sin yaw, -cos yaw) must point at (-cos a, -sin a).
   return { room, pos: [PORTAL_RING * Math.cos(a), 0, PORTAL_RING * Math.sin(a)] as Vec3, yaw: Math.atan2(Math.cos(a), Math.sin(a)), color };
 });
+
+// Chapters IV to VI: three more portals along the Sanctum's back wall,
+// facing the great door. V and VI are behind barriers until the chapter
+// before them is done.
+const sanctumPortals: Portal[] = [
+  { room: "trial4", pos: [0, 0, BACK + 1.2], yaw: Math.PI, color: "#9f7bff" },
+  { room: "trial5", pos: [-13, 0, BACK + 1.2], yaw: Math.PI, color: "#7b5bd6" },
+  { room: "trial6", pos: [13, 0, BACK + 1.2], yaw: Math.PI, color: "#c65bd6" },
+];
+
+export const portals: Portal[] = [...ringPortals, ...sanctumPortals];
 
 const PILLAR = 0.8;
 for (const portal of portals) {
@@ -235,8 +250,21 @@ for (const portal of portals) {
   boxes.push({ pos: portalPoint(portal, 0, PORTAL_STEP + pillarH + 0.4, 0), size: [PORTAL_WIDTH + 2 * PILLAR + 0.6, 0.8, PILLAR + 0.2], color: STONE_DARK, rot });
   boxes.push({ pos: portalPoint(portal, 0, PORTAL_STEP + pillarH + 1.2, 0), size: [0.6, 0.6, 0.6], color: GOLD, rot: [0.6, portal.yaw, 0.6] });
   boxes.push({ pos: portalPoint(portal, 0, PORTAL_STEP + pillarH / 2, -0.6), size: [PORTAL_WIDTH + 0.4, pillarH, 0.3], color: "#241c3a", rot });
-  // A flagstone path from the plaza to the portal.
-  boxes.push({ pos: portalPoint(portal, 0, 0.03, 6), size: [2.4, 0.06, 7], color: FLAGSTONE, rot });
+  // A flagstone path from the plaza to the portal (the courtyard ones).
+  if (ringPortals.includes(portal)) boxes.push({ pos: portalPoint(portal, 0, 0.03, 6), size: [2.4, 0.06, 7], color: FLAGSTONE, rot });
+}
+for (const [room, gate] of [
+  ["trial5", "area:trial5"],
+  ["trial6", "area:trial6"],
+]) {
+  const portal = sanctumPortals.find((p) => p.room === room)!;
+  boxes.push({
+    pos: portalPoint(portal, 0, PORTAL_STEP + PORTAL_HEIGHT / 2, 0.9),
+    size: [PORTAL_WIDTH + 0.6, PORTAL_HEIGHT + 0.4, 0.3],
+    color: BARRIER,
+    rot: [0, portal.yaw, 0],
+    gate,
+  });
 }
 
 // ---- Greenery ----
