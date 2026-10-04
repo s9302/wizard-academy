@@ -63,9 +63,15 @@
         </form>
         <p id="overlay-message"></p>
         <p id="resume-hint" hidden>Click to resume</p>
+        <!-- The controls for this room (Game.ts), also shown at the bottom left. -->
+        <p id="pause-help" class="hint"></p>
         <!-- Shown in the pause panel while you're in a room. -->
         <button type="button" id="exit-button" class="secondary" hidden>Exit to menu</button>
         <button type="button" id="quality-button" class="link">Graphics: High</button>
+        <div id="audio-controls">
+          <label>Music <input type="range" id="music-volume" min="0" max="100" step="5" /></label>
+          <label>Effects <input type="range" id="sfx-volume" min="0" max="100" step="5" /></label>
+        </div>
         <!-- Tag / infection only (ChaseHud shows it). -->
         <div id="bot-controls" hidden>
           <span>Bots</span>

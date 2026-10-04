@@ -23,7 +23,7 @@ import { unlocksAtLevel, unlocksFor } from "../../shared/src/unlocks.ts";
 import { HubPanel, type PanelProfile } from "./hub/HubPanel.ts";
 import { Portals } from "./levels/Portals.ts";
 import { StoryCard } from "./StoryCard.ts";
-import { addDecor } from "./levels/Decor.ts";
+import { addDecor, onGrass } from "./levels/Decor.ts";
 import { quality } from "./quality.ts";
 import { Sky } from "./Sky.ts";
 import { Net } from "./Net.ts";
@@ -32,6 +32,8 @@ import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
 import { Royale } from "./royale/Royale.ts";
 import { ServerClock } from "./ServerClock.ts";
+import { sound } from "./audio/Sound.ts";
+import { moodFor } from "./audio/tracks.ts";
 
 const FIXED_DT = 1 / 60;
 const MAX_FRAME_DT = 0.1; // after a long pause, don't try to catch up seconds of physics
@@ -51,6 +53,9 @@ const HELP: Record<string, string> = {
   royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
+const STEP_EVERY = 2.1; // meters walked per footstep sound
+const STEPS = ["stepStone0", "stepStone1", "stepStone2", "stepStone3"] as const;
+const GRASS_STEPS = ["stepGrass0", "stepGrass1", "stepGrass2", "stepGrass3"] as const;
 
 export type GameOptions = {
   name: string;
@@ -139,6 +144,7 @@ export class Game {
     this.feedEl = document.getElementById("feed")!;
     this.crosshairEl = document.getElementById("crosshair")!;
     this.showXp();
+    sound.music(moodFor(room.mode));
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     // Low quality draws at 1 pixel per CSS pixel (much less work on high-DPI screens).
@@ -267,6 +273,8 @@ export class Game {
         .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
     );
     this.conjured.set(id, { mesh, collider, box, born: performance.now() });
+    sound.fx("rumble", { at: box.pos });
+    sound.play(["mining0", "mining1"], { at: box.pos, volume: 0.7, rate: 0.8 });
     this.royale?.setBoxes([...this.level.boxes, ...[...this.conjured.values()].map((c) => c.box)]);
   }
 
@@ -357,15 +365,18 @@ export class Game {
         this.addFeed(msg.text);
         break;
       case "runStart":
+        sound.fx("go", { volume: 0.6 });
         this.parkour?.runStart(msg.time);
         this.story?.hideSoon();
         break;
       case "checkpoint":
+        if (msg.reached > 0) sound.fx("checkpoint");
         this.parkour?.checkpoint(msg.reached, msg.split);
         this.markers.setReached(msg.reached);
         break;
       case "finish": {
         this.parkour?.finish(msg.time, msg.best, msg.newBest);
+        sound.fx(msg.newBest ? "victory" : "finish");
         this.profile.bestTimes[this.room.id] = msg.best;
         this.onProfile(this.profile);
         const chapter = chapterForTrial(this.room.id);
@@ -380,14 +391,21 @@ export class Game {
         this.parkour?.leaderboard(msg.entries, this.name);
         break;
       case "round":
+        if (this.chase && msg.state === "playing") sound.fx("go", { volume: 0.7 });
+        if (this.chase && msg.state === "ended") sound.play("bell", { volume: 0.6 });
         this.chase?.round(msg.state, msg.endsAt);
         break;
       case "chasers":
+        if (msg.ids.includes(this.myId) && !this.chase?.isChaser) sound.fx("sting");
         this.remotes.setChasers(msg.ids, this.room.mode === "tag" ? "it" : "cursed");
         this.chase?.chasers(msg.ids, this.myId, this.remotes.count + 1);
         break;
-      case "tagged":
-        break; // the "chasers" and "announce" messages that follow carry the news
+      case "tagged": {
+        // The "chasers" and "announce" messages that follow carry the news.
+        const at = msg.victim === this.myId ? null : this.remotes.positionOf(msg.victim);
+        sound.play(["punch0", "punch1", "punch2"], { at, volume: 0.9 });
+        break;
+      }
       case "xp":
         this.onXp(msg.amount, msg.reason, msg.total);
         break;
@@ -404,6 +422,8 @@ export class Game {
         this.remotes.setLook(msg.id, msg.look);
         break;
       case "bounce":
+        sound.play("softHeavy");
+        sound.play("punchHeavy0", { volume: 0.7 });
         this.player.bounce();
         break;
       case "loadoutSaved":
@@ -440,6 +460,7 @@ export class Game {
     this.onProfile(this.profile);
     this.showXp();
     this.addFeed(`+${amount} XP \u00b7 ${reason}`);
+    sound.play("coins", { volume: 0.6 });
     const after = levelInfo(total).level;
     if (after > before) {
       const unlocked: string[] = [];
@@ -450,6 +471,7 @@ export class Game {
       const el = document.getElementById("levelup")!;
       el.textContent = `Level up! You're level ${after}${unlocked.length ? ` \u00b7 ${unlocked.join(", ")}` : ""}`;
       el.classList.add("show");
+      sound.fx("levelUp");
       window.clearTimeout(this.levelUpTimer);
       this.levelUpTimer = window.setTimeout(() => el.classList.remove("show"), 3500);
     }
@@ -461,7 +483,9 @@ export class Game {
     const allowed = this.room.mode !== "parkour";
     this.player.perks = { doubleJump: allowed && unlocked.has("perk:doubleJump"), dash: allowed && unlocked.has("perk:dash") };
     const extra = [HELP[this.room.mode], this.player.perks.dash ? "Q dash" : "", this.profile.isAdmin ? "F fly" : ""].filter(Boolean);
-    document.getElementById("help")!.textContent = [MOVE_HELP, ...extra, "Esc pause"].join(" \u00b7 ");
+    const help = [MOVE_HELP, ...extra, "Esc pause"].join(" \u00b7 ");
+    document.getElementById("help")!.textContent = help;
+    document.getElementById("pause-help")!.textContent = help;
     if (this.perkEl) {
       const names = [this.player.perks.doubleJump ? "Double Jump" : "", this.player.perks.dash ? "Q Blink Dash" : ""].filter(Boolean);
       this.perkEl.textContent = names.join(" \u00b7 ");
@@ -493,6 +517,7 @@ export class Game {
     this.stationHint.classList.toggle("show", !!near && !this.hubPanel.isOpen);
     if (this.input.consumeInteract() && near && !this.hubPanel.isOpen) {
       this.hubPanel.open(near);
+      sound.play("bookOpen");
       document.exitPointerLock(); // free the mouse to click in the window
     }
   }
@@ -536,6 +561,7 @@ export class Game {
     const hud = document.getElementById("hud")!;
     for (const child of [...hud.children]) if (!this.hudBaseline.has(child)) child.remove();
     this.feedEl.replaceChildren();
+    document.getElementById("pause-help")!.textContent = "";
     this.crosshairEl.classList.remove("target", "hit");
     document.getElementById("levelup")!.classList.remove("show");
     document.getElementById("bot-controls")!.hidden = true;
@@ -544,6 +570,28 @@ export class Game {
     // next one (otherwise it looks like a second tab and kicks this one).
     await closed;
   }
+
+  // Footsteps, jumps and landings: only your own (others' would be noise).
+  private stepDistance = 0;
+  private movementSounds(): void {
+    const e = this.player.events;
+    const dir = this.camera.getWorldDirection(this.tmpDir);
+    const p = this.camera.position;
+    sound.listen(p.x, p.y, p.z, dir.x, dir.y, dir.z);
+    if (e.jumped) sound.fx("jump", { volume: 0.6 });
+    if (e.dashed) sound.fx("blink", { volume: 0.6 });
+    if (e.landed > 6) sound.play("softHeavy", { volume: Math.min(1, e.landed / 18) });
+    else if (e.landed > 3) sound.play([...STEPS], { volume: 0.5 });
+    this.stepDistance += e.walked;
+    if (this.stepDistance > STEP_EVERY) {
+      this.stepDistance = 0;
+      const f = this.player.position;
+      const grassy = onGrass(this.level, f.x, f.y - 0.9, f.z);
+      sound.play([...(grassy ? GRASS_STEPS : STEPS)], { volume: 0.35 });
+    }
+    this.player.events = { jumped: false, dashed: false, landed: 0, walked: 0 };
+  }
+  private tmpDir = new THREE.Vector3();
 
   private start(): void {
     if (this.running) return;
@@ -608,6 +656,7 @@ export class Game {
     this.sun.target.position.copy(pos);
     this.sun.position.copy(pos).add(this.sunOffset);
     this.sky.update(this.camera, dt);
+    this.movementSounds();
 
     // Send our position ~20 times a second.
     this.sendTimer += dt * 1000;

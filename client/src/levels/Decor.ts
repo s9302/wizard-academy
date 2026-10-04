@@ -7,10 +7,19 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
 
-const GRASS = new Set(["#6fae5c", "#4f7d45", "#6f8f4f"]);
+export const GRASS = new Set(["#6fae5c", "#4f7d45", "#6f8f4f"]);
 const SAND = new Set(["#b9a27a"]);
 const MAX_TUFTS = 7000;
 const MAX_PEBBLES = 1500;
+
+// Is the ground at (x, y, z) a lawn? (For footstep sounds.)
+export function onGrass(level: Level, x: number, y: number, z: number): boolean {
+  for (const b of level.boxes) {
+    if (b.rot || Math.abs(x - b.pos[0]) > b.size[0] / 2 || Math.abs(z - b.pos[2]) > b.size[2] / 2) continue;
+    if (Math.abs(b.pos[1] + b.size[1] / 2 - y) < 0.3) return GRASS.has(b.color);
+  }
+  return false;
+}
 
 // The top of a flat, unrotated box, if it's big enough to decorate.
 function topOf(box: Box): { x0: number; x1: number; z0: number; z1: number; y: number } | null {

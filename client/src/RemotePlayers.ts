@@ -158,6 +158,12 @@ export class RemotePlayers {
     return best;
   }
 
+  // Where a player is drawn right now (for positional sound), or null.
+  positionOf(id: number): Vec3 | null {
+    const a = this.remotes.get(id)?.avatar;
+    return a ? [a.position.x, a.position.y + 1, a.position.z] : null;
+  }
+
   clear(): void {
     for (const id of [...this.remotes.keys()]) this.remove(id);
   }

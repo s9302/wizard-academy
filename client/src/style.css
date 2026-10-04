@@ -275,53 +275,95 @@ button.link { background: none; border: none; color: var(--ink); opacity: 0.7; t
 #royale-bottom {
   position: absolute;
   left: 50%;
-  bottom: 48px; /* above the controls line */
+  bottom: 14px;
   transform: translateX(-50%);
   display: grid;
   gap: 8px;
-  justify-items: center;
-  width: min(420px, calc(100vw - 32px));
+  justify-items: stretch;
+  width: max-content;
+  max-width: calc(100vw - 24px);
 }
+.vitals { display: flex; align-items: center; gap: 10px; }
 .hp-bar {
   position: relative;
-  width: 100%;
-  height: 20px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.55);
+  flex: 1;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(10, 6, 24, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   overflow: hidden;
 }
-#hp-fill { height: 100%; width: 100%; background: #6ee36e; transition: width 0.2s; }
-#hp-fill.mid { background: #ffd04a; }
-#hp-fill.low { background: #ff5a4a; }
-#shield-fill { position: absolute; left: 0; bottom: 0; height: 5px; background: #5ac8ff; transition: width 0.2s; }
+#hp-fill { height: 100%; width: 100%; background: linear-gradient(#8ef28e, #4cc04c); transition: width 0.2s; }
+#hp-fill.mid { background: linear-gradient(#ffe07a, #e8b52c); }
+#hp-fill.low { background: linear-gradient(#ff8a7a, #e0402e); }
+#shield-fill { position: absolute; left: 0; bottom: 0; height: 5px; background: #5ac8ff; box-shadow: 0 0 6px #5ac8ff; transition: width 0.2s; }
 #shield-fill[hidden] { display: none; }
 #hp-text {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   text-shadow: 0 1px 2px #000;
 }
 
-#spell-slots { display: flex; gap: 8px; }
+#spell-slots { display: flex; gap: 14px; justify-content: center; }
+.slot-group { display: flex; gap: 6px; }
 .spell-slot {
   position: relative;
-  min-width: 110px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.5);
+  width: 74px;
+  height: 64px;
+  border-radius: 10px;
+  background: rgba(14, 10, 30, 0.72);
   border: 2px solid var(--accent);
   overflow: hidden;
-  text-align: center;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  padding: 4px 3px 3px;
+  box-sizing: border-box;
 }
 .spell-slot.fire { border-color: #ff7a2e; }
 .spell-slot.empty { opacity: 0.45; }
-.slot-key { font-size: 11px; opacity: 0.75; }
-.slot-name { font-size: 14px; font-weight: 700; }
-.slot-count { font-size: 14px; font-weight: 700; color: #ffb27a; }
-.slot-cooldown { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(255, 255, 255, 0.25); }
+.slot-key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  opacity: 0.85;
+  text-shadow: 0 1px 2px #000;
+  z-index: 1;
+}
+.slot-icon { line-height: 0; z-index: 1; color: #e9dcff; filter: drop-shadow(0 0 4px rgba(180, 140, 255, 0.7)); }
+.ability .slot-icon { color: #c8ffe0; filter: drop-shadow(0 0 4px rgba(125, 255, 176, 0.6)); }
+.fire .slot-icon { color: #ffc08a; filter: drop-shadow(0 0 4px rgba(255, 122, 46, 0.8)); }
+.slot-name {
+  max-width: 100%;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.05;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  z-index: 1;
+}
+.slot-count {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffb27a;
+  text-shadow: 0 1px 2px #000;
+  z-index: 1;
+}
+/* Cooldown: a dark curtain that shrinks as the slot gets ready. */
+.slot-cooldown { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.6); }
 
 /* Hurt: a quick red flash at the screen edges. In the storm: a purple haze. */
 #hurt-flash, #storm-haze {
@@ -339,9 +381,6 @@ button.link { background: none; border: none; color: var(--ink); opacity: 0.7; t
 body.spectating #game canvas { filter: saturate(0.35); }
 body.spectating #royale-bottom { opacity: 0.4; }
 
-@media (max-width: 700px) {
-  .spell-slot { min-width: 0; }
-}
 
 /* ---- Phase 8: stations, story, perks ---- */
 
@@ -437,9 +476,9 @@ body.spectating #royale-bottom { opacity: 0.4; }
 
 /* ---- Phase 10: classes ---- */
 
-.class-badge { font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; }
-.spell-slot.active { box-shadow: 0 0 0 2px #fff inset; background: rgba(40, 30, 70, 0.8); }
-.spell-slot:not(.active) { opacity: 0.65; }
+.class-badge { white-space: nowrap; font-size: 14px; font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; }
+.spell-slot.active { box-shadow: 0 0 0 2px #fff inset, 0 0 12px rgba(180, 140, 255, 0.6); background: rgba(48, 34, 86, 0.85); }
+.weapons .spell-slot:not(.active) { opacity: 0.6; }
 
 #callout {
   position: absolute;
@@ -494,7 +533,7 @@ body.spectating #royale-bottom { opacity: 0.4; }
 #vote-card .mine { color: #7dffb0; }
 
 /* ---- Phase 12: abilities ---- */
-.spell-slot.ability { border-color: #7dffb0; min-width: 96px; }
+.spell-slot.ability { border-color: #7dffb0; }
 .spell-slot.ability.cooling { opacity: 0.6; }
 #stealth-note {
   position: absolute;
@@ -509,4 +548,40 @@ body.spectating #royale-bottom { opacity: 0.4; }
 }
 #stealth-note.show { opacity: 0.85; }
 body.stealthed #hud::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px 50px rgba(20, 10, 40, 0.75); }
-@media (max-width: 900px) { .spell-slot { min-width: 0; padding: 6px; } }
+@media (max-width: 560px) {
+  .spell-slot { width: 52px; height: 52px; }
+  .slot-icon svg { width: 22px; height: 22px; }
+  .slot-name { display: none; }
+  #spell-slots { gap: 8px; }
+}
+
+/* ---- Phase 13: sound ---- */
+#audio-controls { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 8px; font-size: 13px; opacity: 0.85; }
+#audio-controls label { display: flex; align-items: center; gap: 6px; }
+#audio-controls input[type="range"] { width: 110px; accent-color: var(--accent); }
+
+/* The arena's controls line would run into the action bar: it moves up
+   under the status box, and the XP bar takes its place. */
+body.in-royale #help { top: 48px; bottom: auto; max-width: 330px; font-size: 12px; line-height: 1.5; }
+body.in-royale #xp-hud { bottom: 12px; }
+@media (max-width: 1000px) {
+  body.in-royale #help, body.in-royale #status { display: none; }
+  body.in-royale #xp-hud .xp-bar { width: 48px; }
+}
+body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
+#pause-help { margin: 10px 0 0; line-height: 1.5; }
+#pause-help:empty { display: none; }
+
+/* The arena's pause panel holds a lot (class, vote, bots): two columns on
+   wide screens, and it scrolls instead of running off short ones. */
+#overlay .panel { max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; }
+@media (min-width: 860px) {
+  body.in-royale #overlay .panel { width: min(860px, calc(100vw - 32px)); }
+  #arena-side { float: right; width: 52%; margin-left: 28px; text-align: left; }
+  #arena-side > :first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  /* Blocks next to a float still stretch underneath it (and would swallow
+     clicks on the class buttons); flow-root keeps them beside it. */
+  body.in-royale #overlay .panel > h1,
+  body.in-royale #overlay .panel > p { display: flow-root; }
+  body.in-royale #overlay .panel > p[hidden], body.in-royale #overlay .panel > p:empty { display: none; }
+}

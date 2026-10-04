@@ -10,6 +10,7 @@ import { Game } from "./Game.ts";
 import { quality, setQuality } from "./quality.ts";
 import { Input } from "./Input.ts";
 import { formatTime } from "./ParkourHud.ts";
+import { sound } from "./audio/Sound.ts";
 import "./style.css";
 
 type Profile = { username: string; xp: number; bestTimes: Record<string, number>; loadout: Loadout; isAdmin: boolean };
@@ -127,6 +128,22 @@ api("/api/me")
 enterButton.disabled = false;
 enterButton.textContent = "Enter the Academy";
 
+// ---- Sound ----
+
+// Browsers allow sound only after the player clicks or types something.
+for (const type of ["pointerdown", "keydown"]) document.addEventListener(type, () => sound.unlock(), { capture: true });
+// Every button in the menus and panels clicks.
+document.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("button")) sound.play("click", { volume: 0.5 });
+}, { capture: true });
+sound.music("academy"); // starts with the first click
+const musicSlider = $<HTMLInputElement>("music-volume");
+const sfxSlider = $<HTMLInputElement>("sfx-volume");
+musicSlider.value = String(Math.round(sound.musicVolume * 100));
+sfxSlider.value = String(Math.round(sound.sfxVolume * 100));
+musicSlider.addEventListener("input", () => sound.setMusicVolume(Number(musicSlider.value) / 100));
+sfxSlider.addEventListener("input", () => sound.setSfxVolume(Number(sfxSlider.value) / 100));
+
 // ---- Playing ----
 
 const input = new Input(container);
@@ -138,7 +155,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Dev server only (stripped from production builds): lets browser tests
 // reach the running game, e.g. to put the player next to a portal.
-if (import.meta.env.DEV) Object.assign(window, { wa: { get game() { return game; } } });
+if (import.meta.env.DEV) Object.assign(window, { wa: { get game() { return game; }, sound } });
 
 // Show the pause panel whenever the mouse is released (Esc), hide it when
 // captured. Not while a hub station's window is open: that freed the mouse.
@@ -155,7 +172,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 overlay.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("button, select, input")) return;
+  if ((e.target as HTMLElement).closest("button, select, input, label, #audio-controls")) return;
   if (game) input.lock();
 });
 
@@ -200,6 +217,7 @@ async function switchRoom(roomId: string): Promise<void> {
   const from = current.id;
   const portal = LEVELS[current.levelId]?.portals?.find((x) => x.room === roomId);
   fade.style.background = portal?.color ?? "#b48cff";
+  sound.fx("portal", { volume: 0.7 });
   fade.classList.add("show");
   await Promise.all([sleep(250), game.dispose()]);
   game = null;
@@ -258,6 +276,7 @@ async function backToMenu(reason = ""): Promise<void> {
   fade.classList.remove("show");
   hud.hidden = true;
   exitButton.hidden = true;
+  sound.music("academy");
   resumeHint.hidden = true;
   overlay.hidden = false;
   try {

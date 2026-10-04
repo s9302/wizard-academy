@@ -57,6 +57,8 @@ export class PlayerController {
   private burstSpeed = DASH_SPEED;
   private dashDir = { x: 0, z: 0 };
   dashCooldown = 0; // seconds until the dash is ready
+  // What happened since the game last looked (for sounds): read, then reset.
+  events = { jumped: false, dashed: false, landed: 0, walked: 0 };
   private slowLeft = 0; // seconds of Frost Shard slow remaining
   private slowFactor = 1;
   private previous = new THREE.Vector3();
@@ -81,6 +83,11 @@ export class PlayerController {
 
   get position(): THREE.Vector3 {
     return this.current;
+  }
+
+  // Meters per second, up positive (sounds use it for jumps and landings).
+  get verticalSpeed(): number {
+    return this.velocityY;
   }
 
   get isGrounded(): boolean {
@@ -162,11 +169,13 @@ export class PlayerController {
     if (this.grounded) this.airJumpUsed = false;
     if (this.timeSinceJumpPressed <= JUMP_BUFFER_TIME && this.timeSinceGrounded <= COYOTE_TIME) {
       this.velocityY = JUMP_SPEED;
+      this.events.jumped = true;
       this.timeSinceJumpPressed = Infinity;
       this.timeSinceGrounded = Infinity;
     } else if (this.perks.doubleJump && this.timeSinceJumpPressed === 0 && !this.grounded && !this.airJumpUsed) {
       // Double jump: once per time in the air.
       this.velocityY = DOUBLE_JUMP_SPEED;
+      this.events.jumped = true;
       this.airJumpUsed = true;
       this.timeSinceJumpPressed = Infinity;
     }
@@ -179,6 +188,7 @@ export class PlayerController {
       this.dashLeft = DASH_TIME;
       this.burstSpeed = DASH_SPEED;
       this.dashCooldown = DASH_COOLDOWN;
+      this.events.dashed = true;
     }
     let hx = dx * speed;
     let hz = dz * speed;
@@ -195,7 +205,10 @@ export class PlayerController {
     const desired = { x: hx * dt, y: this.velocityY * dt, z: hz * dt };
     this.controller.computeColliderMovement(this.collider, desired);
     const moved = this.controller.computedMovement();
+    const wasGrounded = this.grounded;
     this.grounded = this.controller.computedGrounded();
+    if (this.grounded && !wasGrounded && this.velocityY < 0) this.events.landed = Math.max(this.events.landed, -this.velocityY);
+    if (this.grounded) this.events.walked += Math.hypot(moved.x, moved.z);
 
     if (this.grounded && this.velocityY < 0) this.velocityY = 0;
     // Bumped our head on a ceiling: stop rising.
