@@ -4,6 +4,7 @@ import { academy } from "./academy.ts";
 import { arena } from "./arena.ts";
 import { ARENAS } from "./arenas.ts";
 import { courtyard } from "./courtyard.ts";
+import { clocktower, graveyard } from "./chaseMaps.ts";
 import { playground } from "./playground.ts";
 import { trial1 } from "./trial1.ts";
 import { trial2 } from "./trial2.ts";
@@ -26,5 +27,7 @@ export const LEVELS: Record<string, Level> = {
   [trial6.id]: trial6,
   [trial7.id]: trial7,
   [courtyard.id]: courtyard,
+  [clocktower.id]: clocktower,
+  [graveyard.id]: graveyard,
   [playground.id]: playground,
 };

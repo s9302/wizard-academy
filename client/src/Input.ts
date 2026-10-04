@@ -3,6 +3,7 @@
 
 const MOUSE_SENSITIVITY = 0.0022; // radians per pixel
 const MAX_PITCH = Math.PI / 2 - 0.01; // just short of straight up/down
+const DOUBLE_TAP_MS = 300; // two W presses this close together start a run
 
 export class Input {
   yaw = 0; // left/right look, radians
@@ -18,6 +19,8 @@ export class Input {
   private handQueued: "main" | "backup" | "toggle" | null = null;
   private lastWheel = 0;
   private element: HTMLElement;
+  private lastForwardTap = -Infinity;
+  private sprintTap = false; // W was double-tapped and is still held
 
   constructor(element: HTMLElement) {
     this.element = element;
@@ -28,11 +31,20 @@ export class Input {
       if (e.code === "KeyE" && !e.repeat && this.locked) this.interactQueued = true;
       if (e.code === "KeyF" && !e.repeat && this.locked) this.flyQueued = true;
       if (e.code === "KeyV" && !e.repeat && this.locked) this.viewQueued = true;
+      // Double-tap W (or Up): run until you let go of it.
+      if ((e.code === "KeyW" || e.code === "ArrowUp") && !e.repeat) {
+        const now = performance.now();
+        this.sprintTap = now - this.lastForwardTap < DOUBLE_TAP_MS;
+        this.lastForwardTap = now;
+      }
       if (e.code === "Digit1" && this.locked) this.handQueued = "main";
       if (e.code === "Digit2" && this.locked) this.handQueued = "backup";
       this.keys.add(e.code);
     });
-    window.addEventListener("keyup", (e) => this.keys.delete(e.code));
+    window.addEventListener("keyup", (e) => {
+      this.keys.delete(e.code);
+      if ((e.code === "KeyW" || e.code === "ArrowUp") && !this.down("KeyW", "ArrowUp")) this.sprintTap = false;
+    });
     // Forget held keys when the window loses focus, or the player keeps walking.
     window.addEventListener("blur", () => this.keys.clear());
 
@@ -83,8 +95,9 @@ export class Input {
     return (this.down("KeyD", "ArrowRight") ? 1 : 0) - (this.down("KeyA", "ArrowLeft") ? 1 : 0);
   }
 
+  // Run: hold Shift, or tap W twice quickly and keep holding it.
   get running(): boolean {
-    return this.down("ShiftLeft", "ShiftRight");
+    return this.down("ShiftLeft", "ShiftRight") || (this.sprintTap && this.down("KeyW", "ArrowUp"));
   }
 
   // Returns true once per left click while playing (tag someone).

@@ -56,7 +56,7 @@ const SHADOW_RANGE = 40;
 const SUN_DISTANCE = 45; // the shadow-casting light sits this far toward the sun
 
 // The controls line at the bottom left, per mode.
-const MOVE_HELP = "WASD move \u00b7 Shift run \u00b7 Space jump";
+const MOVE_HELP = "WASD move \u00b7 Shift (or W W) run \u00b7 Space jump";
 const HELP: Record<string, string> = {
   // (V third person is added to every mode in applyPerks)
   hub: "E use",
