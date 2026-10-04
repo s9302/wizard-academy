@@ -34,6 +34,8 @@ type Monster = {
   nextAttack: number;
   windupUntil: number; // 0 = not winding up
   windupTarget: number | null;
+  // Thrown (a shockwave, a tornado): moving at v until then, helpless.
+  push: { v: Vec3; until: number } | null;
 };
 
 const SPAWN_CLEARANCE = 12; // meters from any player
@@ -131,7 +133,10 @@ export class Monsters {
       this.spawnAt = now + 400; // the rest follow one by one
     }
     const prey = this.host.prey();
-    for (const m of this.monsters.values()) this.think(m, prey, now, dt);
+    for (const m of this.monsters.values()) {
+      if (m.push) this.fly(m, now, dt);
+      else this.think(m, prey, now, dt);
+    }
     this.separate();
     if (now - this.lastBroadcast < BROADCAST_MS) return null;
     if (!this.monsters.size && this.sentEmpty) return null;
@@ -177,8 +182,20 @@ export class Monsters {
       nextAttack: 0,
       windupUntil: 0,
       windupTarget: null,
+      push: null,
     };
     this.monsters.set(m.id, m);
+  }
+
+  // Throw a monster: velocity v (m/s, y up) for `seconds`. It can't act
+  // meanwhile, and walls and edges stop it sideways.
+  shove(id: number, v: Vec3, seconds: number): void {
+    const m = this.monsters.get(id);
+    if (!m) return;
+    m.push = { v: [...v], until: Date.now() + seconds * 1000 };
+    m.windupUntil = 0;
+    m.windupTarget = null;
+    m.path = [];
   }
 
   private spawn(): void {
@@ -237,6 +254,22 @@ export class Monsters {
       if (!m.path.length || now >= m.replanAt) this.plan(m, this.host.grid().randomSpot(), now + 5000);
       this.walk(m, def.speed * 0.45, dt, false);
     }
+  }
+
+  // Being thrown: move with the push, fall with gravity, land on the floor.
+  private fly(m: Monster, now: number, dt: number): void {
+    const push = m.push!;
+    const grid = this.host.grid();
+    const def = MONSTERS[m.kind];
+    const nx = m.p[0] + push.v[0] * dt;
+    const nz = m.p[2] + push.v[2] * dt;
+    const ok = grid.isWalkable(nx, nz);
+    push.v[1] -= 20 * dt;
+    const floor = grid.floorAt(ok ? nx : m.p[0], ok ? nz : m.p[2]);
+    const ground = (Number.isNaN(floor) ? m.p[1] - def.height : floor) + def.height;
+    const y = Math.max(ground, m.p[1] + push.v[1] * dt);
+    m.p = ok ? [nx, y, nz] : [m.p[0], y, m.p[2]];
+    if (now >= push.until && y <= ground + 0.01) m.push = null;
   }
 
   private inReach(m: Monster, p: Vec3, slack: number): boolean {

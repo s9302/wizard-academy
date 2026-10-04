@@ -3,8 +3,10 @@
 // marker when your spell lands, and a purple haze while you're in the storm.
 // Like the other HUDs, it only shows what the server decided.
 
-import { ABILITIES, type AbilityId, CLASS_ABILITY_POOL, MASTER_LEVEL } from "../../../shared/src/abilities.ts";
+import { ABILITIES, type AbilityId, abilityLevel, CLASS_ABILITY_POOL } from "../../../shared/src/abilities.ts";
 import { abilityAllowed } from "../../../shared/src/unlocks.ts";
+import { abilityInfo, weaponInfo } from "../../../shared/src/abilityInfo.ts";
+import { attachTooltip, hideTooltip } from "../ui/Tooltip.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
@@ -50,6 +52,9 @@ export class RoyaleHud {
   private picker: HTMLElement;
   private boss: boolean;
   private onModeVote: (mode: RoyaleMode) => void;
+  private readyButton: HTMLButtonElement;
+  // The ready vote: how many have voted, how many it needs, and me.
+  private readyVotes = { count: 0, needed: 0, mine: false, on: false };
   private myMode: RoyaleMode | null = null;
   // A team round: my team (0 red, 1 blue) and how many of each are standing.
   private team: 0 | 1 | null = null;
@@ -95,6 +100,7 @@ export class RoyaleHud {
       onVote: (arena: string) => void;
       onAbilities: (e: AbilityId, r: AbilityId) => void;
       onModeVote: (mode: RoyaleMode) => void;
+      onReady: () => void;
     },
     boss = false, // Trial VII: a boss fight, not a battle royale (other words; no monster buttons)
   ) {
@@ -114,6 +120,15 @@ export class RoyaleHud {
     this.picker = this.makePicker(actions.onClass);
     this.onAbilities = actions.onAbilities;
     this.onModeVote = actions.onModeVote;
+    // Vote to start the next round (also Enter).
+    this.readyButton = document.createElement("button");
+    this.readyButton.type = "button";
+    this.readyButton.id = "ready-button";
+    this.readyButton.hidden = true;
+    this.readyButton.onclick = (e) => {
+      e.stopPropagation();
+      actions.onReady();
+    };
     this.abilityPicker = document.createElement("div");
     this.abilityPicker.id = "ability-picker";
     this.abilityPicker.onclick = (e) => e.stopPropagation();
@@ -123,7 +138,7 @@ export class RoyaleHud {
     this.votePanel.hidden = true;
     this.votePanel.onclick = (e) => e.stopPropagation();
     this.monsterControls = new BotControls(actions.onMonsters, "monster");
-    this.side.append(this.picker, this.votePanel, document.getElementById("bot-controls")!, document.getElementById("monster-controls")!);
+    this.side.append(this.readyButton, this.picker, this.votePanel, document.getElementById("bot-controls")!, document.getElementById("monster-controls")!);
     if (boss) document.getElementById("monster-controls")!.hidden = true;
 
     document.body.classList.add("in-royale");
@@ -198,6 +213,23 @@ export class RoyaleHud {
       blurb.textContent = `${def.maxHealth} health · ${def.blurb}`;
       button.append(name, blurb);
       button.onclick = () => onClass(id);
+      // Hover: the class's numbers and both weapons'.
+      attachTooltip(button, () => {
+        const main = weaponInfo(def.main, "Your Spellbook spell");
+        const backup = weaponInfo(def.backup);
+        const brief = (i: ReturnType<typeof weaponInfo>) => i.lines.slice(0, 2).map(([, v]) => v).join(", ");
+        return {
+          title: def.name,
+          lines: [
+            ["Health", `${def.maxHealth}`],
+            ["Speed", `${Math.round(def.speed * 100)}%`],
+            ["Defense", def.defense ? `${Math.round(def.defense * 100)}% less damage` : "none"],
+            [`1: ${main.title}`, brief(main) || main.text],
+            [`2: ${backup.title}`, brief(backup) || backup.text],
+          ],
+          text: def.blurb,
+        };
+      });
       box.appendChild(button);
     }
     return box;
@@ -225,6 +257,7 @@ export class RoyaleHud {
   // 11 ones are greyed out until then). Picking one already on the other
   // key swaps them.
   showAbilities(cls: ClassId, chosen: [AbilityId, AbilityId], unlocked: Set<string>): void {
+    hideTooltip();
     this.abilityPicker.replaceChildren();
     const title = document.createElement("div");
     title.className = "picker-title";
@@ -244,7 +277,10 @@ export class RoyaleHud {
         const allowed = abilityAllowed(cls, id, unlocked);
         b.disabled = !allowed;
         b.className = chosen[slot] === id ? "on" : "";
-        b.title = `${ABILITIES[id].name}: ${ABILITIES[id].description}${allowed ? "" : ` (reach level ${MASTER_LEVEL})`}`;
+        attachTooltip(b, () => {
+          const info = abilityInfo(id);
+          return allowed ? info : { ...info, text: `${info.text} Locked: reach level ${abilityLevel(id)}.` };
+        });
         b.onclick = () => {
           const next: [AbilityId, AbilityId] = [...chosen];
           if (next[1 - slot] === id) next[1 - slot] = next[slot];
@@ -352,6 +388,27 @@ export class RoyaleHud {
     this.voteCard.appendChild(line);
   }
 
+  // Who has voted to start the next round.
+  readyState(count: number, needed: number, mine: boolean, on: boolean): void {
+    this.readyVotes = { count, needed, mine, on };
+    this.showReady();
+  }
+
+  private showReady(): void {
+    const between = this.state === "waiting" || this.state === "ended";
+    const { count, needed, mine, on } = this.readyVotes;
+    this.readyButton.hidden = !on || !between;
+    this.readyButton.textContent = mine ? `Voted to start (${count}/${needed}): click to take it back` : `Vote to start the round (${count}/${needed})`;
+    this.readyButton.classList.toggle("on", mine);
+  }
+
+  // Between rounds, waiting for votes? What the HUD's info line says.
+  private readyLine(): string | null {
+    const { count, needed, mine, on } = this.readyVotes;
+    if (!on) return null;
+    return mine ? `Voted to start \u00b7 ${count}/${needed}` : `Press Enter to vote start \u00b7 ${count}/${needed}`;
+  }
+
   // A team round started (or ended: null).
   setTeam(team: 0 | 1 | null, alive: [number, number]): void {
     const changed = team !== this.team;
@@ -392,6 +449,7 @@ export class RoyaleHud {
     this.state = state;
     this.endsAt = endsAt;
     if (state !== "ended") this.resultsEl.hidden = true;
+    this.showReady();
     if (state === "countdown") this.banner("Get ready!", 1500);
     if (state === "playing") this.banner(this.boss ? "Bring it down!" : "Last wizard standing wins!", 2500);
   }
@@ -463,10 +521,12 @@ export class RoyaleHud {
     const now = this.clock.now();
     const left = this.endsAt === null ? 0 : this.endsAt - now;
     switch (this.state) {
-      case "waiting":
-        this.timerEl.textContent = "—";
-        this.infoEl.textContent = "Waiting for 2+ players · Esc to add bots · practice your aim!";
+      case "waiting": {
+        const vote = this.readyLine();
+        this.timerEl.textContent = vote ? "Ready?" : "—";
+        this.infoEl.textContent = vote ? `${vote}${this.boss ? "" : " · Esc to add bots"}` : "Waiting for 2+ players · Esc to add bots · practice your aim!";
         break;
+      }
       case "countdown": {
         const secs = Math.max(1, Math.ceil(left / 1000));
         if (secs !== this.lastBeep && secs <= 5) sound.fx("beep", { volume: 0.5 });
@@ -496,10 +556,13 @@ export class RoyaleHud {
         this.infoEl.textContent = `${what} · ${status}`;
         break;
       }
-      case "ended":
-        this.timerEl.textContent = `${this.boss ? "Next attempt" : "Next round"} in ${Math.max(1, Math.ceil(left / 1000))}`;
-        this.infoEl.textContent = "Round over";
+      case "ended": {
+        const vote = this.readyLine();
+        if (left > 0 || !vote) this.timerEl.textContent = `${this.boss ? "Next attempt" : "Next round"} in ${Math.max(1, Math.ceil(left / 1000))}`;
+        else this.timerEl.textContent = this.boss ? "Fight again?" : "Next round?";
+        this.infoEl.textContent = vote ?? "Round over";
         break;
+      }
     }
     this.stormEl.classList.toggle("show", inStorm && this.state === "playing" && this.amAlive);
     const w = WEAPONS[weaponOf(this.cls, this.hand)];

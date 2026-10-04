@@ -103,6 +103,7 @@ export class Game {
   private selfAvatar: THREE.Group | null = null;
   private invertUntil = 0; // Inversion: the camera rolled upside down until then
   private giantUntil = 0; // your own Giant Form
+  private spinUntil = 0; // caught in a tornado: the view turns on its own
   private selfLast = new THREE.Vector3();
   private selfSpeed = 0;
   private camDistance = 3.4;
@@ -214,6 +215,7 @@ export class Game {
         onGlide: (seconds) => this.player.glide(seconds, GLIDE.lift, GLIDE.fall, GLIDE.speed),
         onInvert: (ms) => (this.invertUntil = performance.now() + ms),
         onGiant: (ms) => (this.giantUntil = performance.now() + ms),
+        onSpin: (ms) => (this.spinUntil = performance.now() + ms),
         selfClone: () => createAvatar(this.myId, this.name, lookOf(this.profile.loadout), this.profile.isAdmin),
         unlocked: () => unlocksFor(this.profile),
         onArena: (id) => {
@@ -871,6 +873,7 @@ export class Game {
     // Camera follows the interpolated player position.
     const pos = this.player.interpolate(this.accumulator / FIXED_DT);
     this.camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
+    if (performance.now() < this.spinUntil) this.input.yaw += 9 * dt;
     this.camera.rotation.set(this.input.pitch, this.input.yaw, performance.now() < this.invertUntil ? Math.PI : 0);
     if (performance.now() < this.giantUntil) this.camera.position.y += 1.1; // see over things
     if (this.input.consumeView()) this.setThirdPerson(!this.thirdPerson);

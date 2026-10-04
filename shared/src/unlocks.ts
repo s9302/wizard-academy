@@ -7,8 +7,10 @@
 // (an equipped spell or hat must really be unlocked).
 
 import { type Appearance, DEFAULT_APPEARANCE, sanitizeAppearance } from "./appearance.ts";
-import { type AbilityId, CLASS_ABILITIES, CLASS_ABILITY_POOL, MASTER_LEVEL } from "./abilities.ts";
-import { CLASS_IDS, type ClassId } from "./classes.ts";
+import { ABILITIES, type AbilityId, abilityLevel, CLASS_ABILITIES, CLASS_ABILITY_POOL } from "./abilities.ts";
+import { CLASS_IDS, CLASSES, type ClassId } from "./classes.ts";
+
+const CLASS_NAMES = Object.fromEntries(CLASS_IDS.map((c) => [c, CLASSES[c].name])) as Record<ClassId, string>;
 import { levelInfo } from "./progression.ts";
 import { type ChapterId, chaptersDone } from "./story.ts";
 
@@ -35,11 +37,16 @@ export const UNLOCKS: Unlock[] = [
   { id: "robe:midnight", name: "Midnight robe", kind: "robe", requires: { level: 7 }, description: "A robe the color of the night sky." },
   { id: "outfit:battlemage", name: "Battlemage armor", kind: "outfit", requires: { level: 8 }, description: "Plate shoulders and a belted coat." },
   { id: "robe:gold", name: "Gold robe", kind: "robe", requires: { level: 10 }, description: "For the truly dedicated." },
-  // Over-the-top E/R abilities for each class (battle royale; pick them in the Esc panel).
-  { id: "abilities:wizard", name: "Wizard mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Tornado, Wall of Flame, Pit to Hell, Inversion and Shockwave for E and R." },
-  { id: "abilities:knight", name: "Knight mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Null Zone, Giant Form and Chain Pull for E and R." },
-  { id: "abilities:cleric", name: "Cleric mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Sanctuary, Aegis and Judgment for E and R." },
-  { id: "abilities:rogue", name: "Rogue mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Mirror Images, Glide and Smoke Bomb for E and R." },
+  // Extra E/R abilities, one at a time (pick them in the arena's Esc panel).
+  ...Object.entries(CLASS_ABILITY_POOL).flatMap(([cls, pool]) =>
+    pool.slice(2).map((id): Unlock => ({
+      id: `ability:${id}`,
+      name: `${ABILITIES[id].name} (${CLASS_NAMES[cls as ClassId]})`,
+      kind: "abilities",
+      requires: { level: abilityLevel(id) },
+      description: ABILITIES[id].description,
+    })),
+  ),
   { id: "spell:frost", name: "Frost Shard", kind: "spell", requires: { chapter: 1 }, description: "14 damage and slows whoever it hits for 1.5 s." },
   { id: "area:garden", name: "The Spell Garden", kind: "area", requires: { chapter: 1 }, description: "A walled garden in the hub." },
   { id: "spell:spark", name: "Spark Volley", kind: "spell", requires: { chapter: 2 }, description: "Three sparks in a fan, 9 damage each. Short range." },
@@ -156,10 +163,10 @@ export function sanitizeLoadout(raw: unknown, unlocked: Set<string>): Loadout {
   };
 }
 
-// Can this class use this ability? (The defaults always; the rest from level 11.)
+// Can this class use this ability? (The first two always; the rest by level.)
 export function abilityAllowed(cls: ClassId, id: AbilityId, unlocked: Set<string>): boolean {
   if (!CLASS_ABILITY_POOL[cls].includes(id)) return false;
-  return CLASS_ABILITIES[cls].includes(id) || unlocked.has(`abilities:${cls}`);
+  return CLASS_ABILITIES[cls].includes(id) || unlocked.has(`ability:${id}`);
 }
 
 // A class's E and R, from a loadout (falling back to the defaults).

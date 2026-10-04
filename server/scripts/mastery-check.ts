@@ -186,6 +186,18 @@ await sleep(400);
 check("Shockwave throws them back", kinds(b.since(mark), "knock").length > 0);
 check("...and hurts them", b.since(mark).some((m) => m.t === "health" && m.id === b.me.id && m.hp < 100));
 
+// ---- The tornado catches them, spins them and carries them ----
+await a.equip("wizard", "wall", "tornado");
+await sleep(10_800); // R's cooldown (from the shockwave)
+await b.walkTo([a.me.pos[0] + 4, a.me.pos[1], a.me.pos[2]]);
+mark = b.msgs.length;
+a.use(1, a.aimAt(b.me.pos));
+await waitFor(() => b.since(mark).some((m) => m.t === "effect" && m.kind === "spin"), 3000);
+check("Tornado catches them (and spins their view)", b.since(mark).some((m) => m.t === "effect" && m.kind === "spin" && m.id === b.me.id));
+await sleep(1800);
+const knocks = kinds(b.since(mark), "knock").length;
+check("...carries them along for a while, then flings them", knocks > 10, `${knocks} pushes`);
+
 a.ws.close();
 b.ws.close();
 console.log(failures ? `${failures} FAILED` : "all checks passed");

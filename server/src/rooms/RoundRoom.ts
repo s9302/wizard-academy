@@ -4,6 +4,10 @@
 // Round cycle:  waiting (need 2+ players) -> countdown (everyone is moved to
 // a spawn point) -> playing -> ended (results shown) -> countdown ...
 //
+// Rooms with a ready vote (the battle royale, the boss fight) also wait, in
+// "waiting" and after the results, until most real players (more than half)
+// have voted to start.
+//
 // Subclasses say what happens when play starts, when a round is over, who
 // won, and what bots do.
 
@@ -21,6 +25,8 @@ export const SCALE = Math.min(1, Math.max(0.02, Number(process.env.ROUND_TIME_SC
 const COUNTDOWN_MS = 5_000 * SCALE;
 const RESULTS_MS = 8_000 * SCALE; // see resultsMs()
 const MIN_PLAYERS = 2;
+// Testing only: ROUND_READY=off starts rounds without the ready vote.
+const READY_OFF = process.env.ROUND_READY === "off";
 
 const MAX_BOTS = 6;
 const BOT_NAMES = ["Bot Ash", "Bot Briar", "Bot Cinder", "Bot Dusk", "Bot Ember", "Bot Fennel"];
@@ -47,6 +53,7 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   protected state: RoundState = "waiting";
   protected endsAt: number | null = null;
   protected bots = new Map<number, B>(); // by player id, in the order added
+  private ready = new Set<number>(); // people who voted to start the next round
   private lastTick = Date.now();
 
   constructor(info: RoomInfo, level: Level) {
@@ -69,6 +76,10 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   protected abstract runBot(bot: B, me: Player, now: number, dt: number): void;
 
   // Optional hooks.
+  // Wait for most players to vote before starting a round.
+  protected readyVote(): boolean {
+    return false;
+  }
   // Players needed for a round (a boss fight can be fought alone).
   protected minPlayers(): number {
     return MIN_PLAYERS;
@@ -107,7 +118,7 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
     const enough = this.players.size >= this.minPlayers();
     switch (this.state) {
       case "waiting":
-        if (enough) this.startCountdown(now);
+        if (enough && this.readyToStart()) this.startCountdown(now);
         break;
       case "countdown":
         if (!enough) this.setState("waiting", null);
@@ -119,8 +130,8 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
         break;
       case "ended":
         if (now >= this.endsAt!) {
-          if (enough) this.startCountdown(now);
-          else this.setState("waiting", null);
+          if (!enough) this.setState("waiting", null);
+          else if (this.readyToStart()) this.startCountdown(now);
         }
         break;
     }
@@ -133,7 +144,29 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
     this.broadcast({ t: "round", state, endsAt });
   }
 
+  // ---- The ready vote ----
+
+  private get humans(): number {
+    return [...this.players.values()].filter((p) => !p.conn.isBot).length;
+  }
+
+  private readyNeeded(): number {
+    return Math.floor(this.humans / 2) + 1;
+  }
+
+  private readyToStart(): boolean {
+    if (!this.readyVote() || READY_OFF) return true;
+    return this.humans > 0 && this.ready.size >= this.readyNeeded();
+  }
+
+  private broadcastReady(): void {
+    if (!this.readyVote()) return;
+    this.broadcast({ t: "readyState", ids: [...this.ready], needed: this.readyNeeded(), on: !READY_OFF });
+  }
+
   private startCountdown(now: number): void {
+    this.ready.clear();
+    this.broadcastReady();
     this.beforeCountdown(now);
     // Everyone to a different spawn point (as far as there are enough).
     const points = [...(this.level.spawnPoints ?? [this.level.spawn])].sort(() => Math.random() - 0.5);
@@ -186,11 +219,14 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   protected onPlayerJoined(player: Player): void {
     player.conn.send({ t: "round", state: this.state, endsAt: this.endsAt });
     player.conn.send({ t: "botCount", count: this.bots.size, max: MAX_BOTS });
+    this.broadcastReady(); // one more person: the number needed may change
     this.onJoinedRound(player);
   }
 
   protected onPlayerLeft(player: Player): void {
     this.bots.delete(player.conn.id);
+    this.ready.delete(player.conn.id);
+    this.broadcastReady();
     // Bots don't play on their own: when the last person leaves, so do they.
     if (!player.conn.isBot && ![...this.players.values()].some((p) => !p.conn.isBot)) {
       for (const bot of [...this.bots.values()]) this.leave(bot.peer);
@@ -199,6 +235,14 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   }
 
   protected onMessage(player: Player, msg: ClientMsg): void {
+    if (msg.t === "ready" && !player.conn.isBot) {
+      // Toggle, only between rounds.
+      if (this.state !== "waiting" && this.state !== "ended") return;
+      if (this.ready.has(player.conn.id)) this.ready.delete(player.conn.id);
+      else this.ready.add(player.conn.id);
+      this.broadcastReady();
+      return;
+    }
     if (msg.t === "bots" && !player.conn.isBot) {
       if (msg.action === "add") this.addBot(player);
       else this.removeBot(player);

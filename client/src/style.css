@@ -519,6 +519,32 @@ body.spectating #royale-bottom { opacity: 0.4; }
 #class-picker #ability-picker button:disabled { opacity: 0.3; cursor: not-allowed; }
 #ability-picker .ability-names { font-size: 12px; opacity: 0.85; text-align: center; }
 
+/* Hover panels (abilities, classes): ui/Tooltip.ts. */
+#tooltip {
+  position: fixed;
+  z-index: 50;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(20, 14, 38, 0.96);
+  border: 1px solid #5b4a8f;
+  color: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+#tooltip[hidden] { display: none; }
+#tooltip .tip-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; color: #e8d8ff; }
+#tooltip .tip-row { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
+#tooltip .tip-row span { opacity: 0.75; }
+#tooltip .tip-row strong { text-align: right; font-weight: 600; }
+#tooltip .tip-text { margin-top: 6px; opacity: 0.85; line-height: 1.35; }
+
+/* The ready vote's button, at the top of the arena column. */
+#ready-button { width: 100%; margin-bottom: 8px; background: #3d6b4a; color: #fff; font-weight: 700; }
+#ready-button.on { background: #2a4a34; box-shadow: 0 0 0 1px #7dffb0 inset; }
+#ready-button[hidden] { display: none; }
+
 /* Team rounds: the mode vote's two buttons side by side. */
 #arena-vote .mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 

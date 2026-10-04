@@ -3,9 +3,10 @@
 // teleport, vanishing); Knights push in and hold on (a charge, fortifying).
 // The server does the real work for all of them; these are the numbers.
 //
-// From level 11 (MASTER_LEVEL) each class has more to choose from, and you
-// pick which two go on E and R (Esc panel, saved in your loadout). These are
-// deliberately over the top. Bots never use them: they keep CLASS_ABILITIES.
+// Every class always has its first two (CLASS_ABILITIES). The rest of its
+// pool unlocks one at a time as you level: levels 3, 5, 7, 9, 11 (abilityLevel).
+// You pick which two go on E and R (Esc panel, saved in your loadout). The
+// extra ones are deliberately over the top. Bots keep CLASS_ABILITIES.
 
 import type { ClassId } from "./classes.ts";
 import type { Vec3 } from "./protocol.ts";
@@ -58,7 +59,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   invert: { name: "Inversion", cooldownMs: 14_000, durationMs: 5_000, description: "Curse whoever you aim at (30 m): their world turns upside down for 5 s." },
   shockwave: { name: "Shockwave", cooldownMs: 12_000, description: "Blast everyone within 9 m away from you (18 damage, and a long way back)." },
   // Knight, level 11+
-  nullzone: { name: "Null Zone", cooldownMs: 20_000, durationMs: 7_000, description: "A 7 m circle where magic dies for 7 s: no spells, no abilities, and spells flying in fizzle." },
+  nullzone: { name: "Null Zone", cooldownMs: 20_000, durationMs: 7_000, description: "A 7 m circle for 7 s where no ranged attack works: spells, arrows and holy light fizzle, and no magic abilities." },
   giant: { name: "Giant Form", cooldownMs: 22_000, durationMs: 8_000, description: "Double your size for 8 s: hit 60% harder with more reach, take 35% less damage." },
   chain: { name: "Chain Pull", cooldownMs: 11_000, description: "Hook the first enemy in your aim (20 m) and drag them to you. 12 damage." },
   // Rogue, level 11+
@@ -74,8 +75,6 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   smoke: { name: "Smoke Bomb", cooldownMs: 16_000, durationMs: 8_000, description: "A thick cloud where you aim, for 8 s. Anyone inside is hidden from everyone outside." },
 };
 
-// The level the new abilities unlock at.
-export const MASTER_LEVEL = 11;
 
 // What each class can choose from (the first two are the defaults).
 export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
@@ -84,7 +83,15 @@ export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
   knight: ["charge", "fortify", "nullzone", "giant", "chain"],
   cleric: ["heal", "smite", "sanctuary", "aegis", "judgment"],
 };
-export const MASTER_ABILITIES: AbilityId[] = ["tornado", "flames", "hellpit", "invert", "shockwave", "nullzone", "giant", "chain", "decoys", "glide", "smoke", "sanctuary", "aegis", "judgment"];
+// The level an ability unlocks at: 1 for a class's first two, then 3, 5, 7...
+// in pool order.
+export function abilityLevel(id: AbilityId): number {
+  for (const pool of Object.values(CLASS_ABILITY_POOL)) {
+    const i = pool.indexOf(id);
+    if (i >= 0) return i < 2 ? 1 : 3 + (i - 2) * 2;
+  }
+  return 1;
+}
 
 export const CLASS_ABILITIES: Record<ClassId, [AbilityId, AbilityId]> = {
   wizard: ["wall", "pillar"],

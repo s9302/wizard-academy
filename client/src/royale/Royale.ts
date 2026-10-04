@@ -47,6 +47,7 @@ export type RoyaleHooks = {
   onGlide: (seconds: number) => void;
   onInvert: (ms: number) => void; // the world upside down
   onGiant: (ms: number) => void; // your own Giant Form (third-person body)
+  onSpin: (ms: number) => void; // caught in a tornado: the view whirls
   selfClone: () => THREE.Group; // an avatar of you (your Mirror Images)
   unlocked: () => Set<string>;
 };
@@ -102,6 +103,7 @@ export class Royale {
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
       onModeVote: (mode) => hooks.send({ t: "modeVote", mode }),
+      onReady: () => hooks.send({ t: "ready" }),
       onAbilities: (e, r) => {
         this.chosen = [e, r];
         this.applyLoadout();
@@ -109,7 +111,15 @@ export class Royale {
       },
     }, !!level.bossFight);
     this.applyLoadout();
+    window.addEventListener("keydown", this.onKey);
   }
+
+  // Enter: vote to start the next round (between rounds).
+  private onKey = (e: KeyboardEvent): void => {
+    if (e.key !== "Enter" || e.repeat || (this.state !== "waiting" && this.state !== "ended")) return;
+    if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+    this.hooks.send({ t: "ready" });
+  };
 
   // What's in hand (the third-person body holds it too).
   get currentWeapon(): WeaponId {
@@ -246,6 +256,9 @@ export class Royale {
         return true;
       case "arenaVote":
         this.hud.vote(msg.options, msg.votes, msg.modes);
+        return true;
+      case "readyState":
+        this.hud.readyState(msg.ids.length, msg.needed, msg.ids.includes(me), msg.on);
         return true;
       case "teams":
         this.teams.clear();
@@ -391,6 +404,14 @@ export class Royale {
   // Level 11+ ability effects.
   private masteryEffect(mine: boolean, id: number, kind: string, ms: number, at: Vec3 | null, from?: Vec3, to?: Vec3): void {
     const where = at ?? this.remotes.positionOf(id);
+    if (kind === "spin") {
+      if (mine) {
+        this.hooks.onSpin(ms);
+        this.hud.callout("Caught in the tornado!");
+      }
+      sound.fx("rumble", { at, volume: 0.6 });
+      return;
+    }
     if (kind === "invert") {
       sound.fx("stealth", { at, rate: 0.6 });
       if (mine) {
@@ -481,7 +502,7 @@ export class Royale {
   attack(button: "primary" | "fireball", origin: THREE.Vector3, dir: THREE.Vector3): void {
     const now = performance.now();
     if (!this.hud.canAct || now < this.handReadyAt) return;
-    if ((button === "fireball" || WEAPONS[this.weapon].kind === "spell" || this.weapon === "holy") && this.fields.inNullZone(origin)) {
+    if ((button === "fireball" || WEAPONS[this.weapon].kind === "spell" || WEAPONS[this.weapon].kind === "projectile") && this.fields.inNullZone(origin)) {
       this.hud.callout("No magic here!");
       return;
     }
@@ -546,6 +567,7 @@ export class Royale {
   }
 
   dispose(): void {
+    window.removeEventListener("keydown", this.onKey);
     this.spells.clear();
     this.monsters.clear();
     this.fields.clear();

@@ -56,12 +56,14 @@ export type AbilitiesMsg = { t: "abilities"; cls: ClassId; e: AbilityId; r: Abil
 // Vote for the next round's mode (battle royale, between rounds).
 export type RoyaleMode = "ffa" | "teams";
 export type ModeVoteMsg = { t: "modeVote"; mode: RoyaleMode };
+// Vote to start the next round (toggles; battle royale and boss fight).
+export type ReadyMsg = { t: "ready" };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
 // Battle royale: add or remove a monster.
 export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeVoteMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeVoteMsg | ReadyMsg;
 
 // ---- Server -> Client ----
 
@@ -142,7 +144,7 @@ export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<st
 export type ConjureMsg = { t: "conjure"; id: number; box: Box; ms: number };
 export type UnconjureMsg = { t: "unconjure"; id: number };
 // Someone vanished, fortified, charged or shadow-stepped (ms 0: it ended).
-export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment";
+export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment" | "spin";
 // id: who it's on (for chain: who was pulled; from = the Knight's position).
 export type EffectMsg = { t: "effect"; id: number; kind: EffectKind; ms: number; from?: Vec3; to?: Vec3 };
 // Level 11+ abilities: areas on the ground, being thrown, and Rogue copies.
@@ -156,6 +158,9 @@ export type DecoysMsg = { t: "decoys"; list: DecoyState[] };
 export type AbilitySetMsg = { t: "abilitySet"; e: AbilityId; r: AbilityId };
 // A team round: who's on which team (0 red, 1 blue); null when it isn't one.
 export type TeamsMsg = { t: "teams"; teams: [number[], number[]] | null };
+// Who has voted to start the next round, and how many votes it needs.
+// on: false when the vote is switched off (tests).
+export type ReadyStateMsg = { t: "readyState"; ids: number[]; needed: number; on: boolean };
 // To one player: an ability you tried didn't work (cooldown refunded).
 export type AbilityFailedMsg = { t: "abilityFailed"; slot: 0 | 1; reason: string };
 // You landed on someone: bounce off.
@@ -235,6 +240,7 @@ export type ServerMsg =
   | DecoysMsg
   | AbilitySetMsg
   | TeamsMsg
+  | ReadyStateMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg

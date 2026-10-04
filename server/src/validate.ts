@@ -68,6 +68,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (len < 0.9 || len > 1.1) return null;
       return { t: "ability", slot: msg.slot, o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
     }
+    case "ready":
+      return { t: "ready" };
     case "modeVote":
       if (msg.mode !== "ffa" && msg.mode !== "teams") return null;
       return { t: "modeVote", mode: msg.mode };
