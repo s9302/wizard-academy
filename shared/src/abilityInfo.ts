@@ -48,7 +48,7 @@ const ROWS: Record<AbilityId, [string, string][]> = {
   stealth: [["Lasts", s(ABILITIES.stealth.durationMs!)], ["Effect", "Invisible until you attack"]],
   charge: [["Distance", `${Math.round(CHARGE_SPEED * CHARGE_TIME)} m`], ["Damage", `${CHARGE_DAMAGE} to everyone in the path`], ["Effect", `Shoved aside, slowed ${s(CHARGE_SLOW_MS)}`]],
   fortify: [["Lasts", s(ABILITIES.fortify.durationMs!)], ["Damage taken", pct(FORTIFY_FACTOR)], ["Heal", `${FORTIFY_HEAL}`], ["Effect", "Can't be slowed or knocked back"]],
-  tornado: [["Damage", `${TORNADO.damage}`], ["Range", `${TORNADO.range} m`], ["Effect", "Catches enemies and monsters, carries and spins them, then flings them"]],
+  tornado: [["Damage", `${TORNADO.damage}`], ["Width", `${TORNADO.radius * 2} m`], ["Range", `${TORNADO.range} m`], ["Effect", "Catches enemies and monsters, carries and spins them, then flings them"]],
   flames: [["Damage", `${FLAMES.dps} per second`], ["Size", `${FLAMES.length} m line`], ["Lasts", s(ABILITIES.flames.durationMs!)]],
   hellpit: [["Damage", `${HELLPIT.dps} per second`], ["Radius", `${HELLPIT.radius} m`], ["Lasts", s(ABILITIES.hellpit.durationMs!)], ["Effect", "Drags enemies in and slows them"]],
   invert: [["Range", `${INVERT_RANGE} m`], ["Lasts", s(ABILITIES.invert.durationMs!)], ["Effect", "Their screen turns upside down"]],

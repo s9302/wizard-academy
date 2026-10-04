@@ -115,7 +115,7 @@ export const FORTIFY_FACTOR = 0.3; // damage multiplier
 export const FORTIFY_HEAL = 25;
 
 // Level 11+ numbers.
-export const TORNADO = { speed: 7, radius: 2.2, damage: 25, lift: 14, range: 30 };
+export const TORNADO = { speed: 7, radius: 3.5, damage: 25, lift: 14, range: 30 };
 export const FLAMES = { length: 12, width: 1.6, dps: 24 };
 export const HELLPIT = { radius: 3.6, dps: 36, pull: 3, slow: 0.4 };
 export const INVERT_RANGE = 30;
@@ -151,7 +151,7 @@ export function inField(f: FieldInfo, p: Vec3, now: number): boolean {
   const c = fieldCenter(f, now);
   // How far above or below the center still counts: the pit to hell reaches
   // up and down slopes, steps and rubble (it works on any ground).
-  const reach = f.kind === "hellpit" ? 4.5 : f.kind === "smoke" || f.kind === "tornado" ? 4 : 2.2;
+  const reach = f.kind === "hellpit" ? 4.5 : f.kind === "tornado" ? 5 : f.kind === "smoke" ? 4 : 2.2;
   if (Math.abs(p[1] - c[1]) > reach) return false;
   if (f.kind === "flames") {
     // Along the line (yaw), within half its length; across it, within r.
