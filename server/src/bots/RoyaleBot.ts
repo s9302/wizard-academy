@@ -11,6 +11,7 @@
 //  - Otherwise: hunt the nearest wizard.
 
 import { MAX_HEALTH, type SpellId, SPELLS } from "../../../shared/src/combat.ts";
+import { PRIMARY_SPELLS, type PrimarySpell } from "../../../shared/src/unlocks.ts";
 import { EYE_HEIGHT, RUN_SPEED, WALK_SPEED } from "../../../shared/src/constants.ts";
 import { lineOfSight } from "../../../shared/src/levels/geometry.ts";
 import type { Box } from "../../../shared/src/levels/types.ts";
@@ -30,6 +31,8 @@ const LEAD = 0.6; // how much of a target's running a bot aims ahead for
 const REACTION_MS: [number, number] = [250, 650]; // extra wait after each cooldown
 const SPOT_MS: [number, number] = [600, 1100]; // "who's that?": before the first shot at someone new
 const FIREBALL_RANGE = 20;
+const SLOW_FACTOR = SPELLS.frost.slowFactor!;
+let botCount = 0; // bots take turns: bolt, frost, spark, bolt...
 
 export type RoyaleView = {
   now: number;
@@ -40,6 +43,7 @@ export type RoyaleView = {
   enemies: Player[]; // others who can be hit
   hp: number;
   fireballs: number;
+  slowed: boolean; // hit by Frost Shard
   circles: { now: [number, number, number]; next: [number, number, number] } | null;
   pickups: PickupInfo[];
 };
@@ -50,6 +54,8 @@ const eye = (p: Vec3): Vec3 => [p[0], p[1] + EYE_HEIGHT, p[2]];
 
 export class RoyaleBot extends BotWalker {
   private boxes: Box[];
+  // Each bot has one left-click spell, like a player picks in the Spellbook.
+  readonly primary: PrimarySpell = PRIMARY_SPELLS[botCount++ % PRIMARY_SPELLS.length];
   private target: number | null = null; // player id in sight
   private sightCheckAt = 0;
   private nextCastAt = 0;
@@ -97,7 +103,7 @@ export class RoyaleBot extends BotWalker {
       }
     }
 
-    const p = this.step(me.p, speed, view.dt);
+    const p = this.step(me.p, view.slowed ? speed * SLOW_FACTOR : speed, view.dt);
     if (target) {
       cast = this.aim(view, target, p);
       this.ry = Math.atan2(-(target.p[0] - p[0]), -(target.p[2] - p[2])); // face them while strafing
@@ -165,7 +171,9 @@ export class RoyaleBot extends BotWalker {
     const dz = target.p[2] - me.p[2];
     const d = Math.hypot(dx, dz) || 1;
     const [fx, fz] = [dx / d, dz / d];
-    const forward = d > 22 ? 4 : d < 9 ? -3 : 0;
+    // Spark Volley only reaches 20 m: those bots fight closer.
+    const [far, near] = this.primary === "spark" ? [13, 6] : [22, 9];
+    const forward = d > far ? 4 : d < near ? -3 : 0;
     const goal: Vec2 = [me.p[0] + fx * forward - fz * 4 * this.strafeSide, me.p[2] + fz * forward + fx * 4 * this.strafeSide];
     this.planTo(goal, now, 700);
   }
@@ -173,7 +181,7 @@ export class RoyaleBot extends BotWalker {
   private aim(view: RoyaleView, target: Player, from: Vec3): RoyaleAction["cast"] {
     if (view.now < this.nextCastAt) return null;
     const dist = flatDist(from, target.p);
-    const spell: SpellId = view.fireballs > 0 && dist <= FIREBALL_RANGE ? "fireball" : "bolt";
+    const spell: SpellId = view.fireballs > 0 && dist <= FIREBALL_RANGE ? "fireball" : this.primary;
     const def = SPELLS[spell];
     if (dist > def.range * 0.9) return null;
     this.nextCastAt = view.now + def.cooldownMs + REACTION_MS[0] + Math.random() * (REACTION_MS[1] - REACTION_MS[0]);

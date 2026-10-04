@@ -7,17 +7,15 @@ import { PORTAL_HEIGHT, PORTAL_STEP, PORTAL_WIDTH, inPortal, portalPoint, type P
 import type { Vec3 } from "../../../shared/src/protocol.ts";
 import { findRoom } from "../../../shared/src/rooms.ts";
 import { formatTime } from "../ParkourHud.ts";
+import { Sign } from "./Sign.ts";
 
 const RING_COUNT = 3;
-const SIGN_W = 512;
-const SIGN_H = 208;
 
 type PortalView = {
   portal: Portal;
   sheet: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   rings: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>[];
-  sign: CanvasRenderingContext2D;
-  texture: THREE.CanvasTexture;
+  sign: Sign;
 };
 
 export class Portals {
@@ -73,55 +71,27 @@ export class Portals {
     light.position.set(...portalPoint(portal, 0, PORTAL_STEP + 2, 1.2));
     scene.add(light);
 
-    // The sign: a canvas texture on a sprite, redrawn when the counts change.
-    const canvas = document.createElement("canvas");
-    canvas.width = SIGN_W;
-    canvas.height = SIGN_H;
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthWrite: false }));
-    sprite.scale.set(5.4, (5.4 * SIGN_H) / SIGN_W, 1);
-    sprite.position.set(...portalPoint(portal, 0, PORTAL_STEP + PORTAL_HEIGHT + 3.6, 0.6));
-    scene.add(sprite);
+    // The sign, redrawn when the counts change.
+    const sign = new Sign({ title: "", color: portal.color });
+    sign.sprite.position.set(...portalPoint(portal, 0, PORTAL_STEP + PORTAL_HEIGHT + 3.6, 0.6));
+    scene.add(sign.sprite);
 
-    const view: PortalView = { portal, sheet, rings, sign: canvas.getContext("2d")!, texture };
+    const view: PortalView = { portal, sheet, rings, sign };
     this.drawSign(view);
     return view;
   }
 
   private drawSign(view: PortalView): void {
-    const ctx = view.sign;
     const room = findRoom(view.portal.room);
     // "Trial I: The Floating Steps" -> a title and a subtitle.
-    const [title, subtitle = ""] = (room?.name ?? view.portal.room).split(": ");
+    const [title, subtitle] = (room?.name ?? view.portal.room).split(": ");
     const count = this.counts[view.portal.room] ?? 0;
     const lines = [count === 1 ? "1 wizard playing" : `${count} wizards playing`];
     if (room?.mode === "parkour") {
       const best = this.bestTimes[room.id];
       lines.push(best ? `Your best: ${formatTime(best)}` : "Not cleared yet");
     }
-
-    ctx.clearRect(0, 0, SIGN_W, SIGN_H);
-    ctx.fillStyle = "rgba(20, 14, 38, 0.78)";
-    ctx.beginPath();
-    ctx.roundRect(4, 4, SIGN_W - 8, SIGN_H - 8, 22);
-    ctx.fill();
-    ctx.strokeStyle = view.portal.color;
-    ctx.lineWidth = 5;
-    ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 50px system-ui, sans-serif";
-    ctx.fillText(title, SIGN_W / 2, subtitle ? 48 : 62);
-    ctx.fillStyle = view.portal.color;
-    ctx.font = "600 34px system-ui, sans-serif";
-    if (subtitle) ctx.fillText(subtitle, SIGN_W / 2, 92);
-    ctx.fillStyle = "#e8e0f5";
-    ctx.font = "32px system-ui, sans-serif";
-    lines.forEach((line, i) => ctx.fillText(line, SIGN_W / 2, (subtitle ? 136 : 118) + i * 36));
-    view.texture.needsUpdate = true;
+    view.sign.draw({ title, subtitle, lines, color: view.portal.color });
   }
 
   setCounts(counts: Record<string, number>): void {

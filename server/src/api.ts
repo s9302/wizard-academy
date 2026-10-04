@@ -135,10 +135,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, path:
       loginFailuresByIp.record(ipKey);
       loginFailuresByName.record(nameKey);
       console.warn(`failed login for "${creds.username.slice(0, 32)}" from ${clientIp(req)}`);
-      {
       json(res, 401, { error: result.error });
       return true;
-    }
     }
     json(res, 200, await getProfile(result.account.id), { "set-cookie": accountCookie(result.account.id, result.sessionVersion) });
     return true;

@@ -3,6 +3,7 @@
 
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { type Hat, HATS, type PrimarySpell, PRIMARY_SPELLS, type Robe, ROBES } from "../../shared/src/unlocks.ts";
 
 // The world is small; anything outside this box is garbage or an attack.
 const MAX_COORD = 1000;
@@ -59,6 +60,12 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (len < 0.9 || len > 1.1) return null;
       const d: Vec3 = [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len];
       return { t: "cast", spell: msg.spell as SpellId, o: [msg.o[0], msg.o[1], msg.o[2]], d, seq: msg.seq as number };
+    }
+    case "loadout": {
+      // Shape only; whether each choice is unlocked is checked when saving.
+      if (!PRIMARY_SPELLS.includes(msg.primary as PrimarySpell)) return null;
+      if (!HATS.includes(msg.hat as Hat) || !ROBES.includes(msg.robe as Robe)) return null;
+      return { t: "loadout", primary: msg.primary as PrimarySpell, hat: msg.hat as Hat, robe: msg.robe as Robe };
     }
     case "tag":
       if (!Number.isSafeInteger(msg.target) || (msg.target as number) < 1) return null;

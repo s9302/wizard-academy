@@ -2,15 +2,20 @@
 // the battle royale's shrinking storm. The server enforces all of them; the
 // client uses them to draw spells and show cooldowns.
 
-import type { ZoneState } from "./protocol.ts";
+import type { Vec3, ZoneState } from "./protocol.ts";
 
 export const MAX_HEALTH = 100;
 export const MAX_SHIELD = 50;
 
-export type SpellId = "bolt" | "fireball";
+export type SpellId = "bolt" | "frost" | "spark" | "fireball";
+
+// Which button, and whose cooldown: the three left-click spells share one
+// cooldown (you pick one in the Spellbook), so swapping can't fire faster.
+export type SpellSlot = "primary" | "fireball";
 
 export type SpellDef = {
   name: string;
+  slot: SpellSlot;
   speed: number; // m/s, straight line, no gravity
   range: number; // meters before it fizzles
   radius: number; // the projectile's size, for hitting players
@@ -21,15 +26,48 @@ export type SpellDef = {
   splashRadius?: number;
   splashMax?: number;
   splashMin?: number;
+  // Spark Volley: several projectiles, fanned out sideways by spreadDeg each.
+  count?: number;
+  spreadDeg?: number;
+  // Frost Shard: slows whoever it hits.
+  slowMs?: number;
+  slowFactor?: number; // movement speed multiplier while slowed
   color: string;
 };
 
 export const SPELLS: Record<SpellId, SpellDef> = {
   // Always available. Five hits to take down a full-health wizard.
-  bolt: { name: "Arcane Bolt", speed: 38, range: 50, radius: 0.25, damage: 20, cooldownMs: 550, color: "#b48cff" },
+  bolt: { name: "Arcane Bolt", slot: "primary", speed: 38, range: 50, radius: 0.25, damage: 20, cooldownMs: 550, color: "#b48cff" },
+  // Unlocked by Chapter I. Less damage, but the target is slowed.
+  frost: {
+    name: "Frost Shard",
+    slot: "primary",
+    speed: 42,
+    range: 45,
+    radius: 0.22,
+    damage: 14,
+    cooldownMs: 550,
+    slowMs: 1500,
+    slowFactor: 0.6,
+    color: "#8fe3ff",
+  },
+  // Unlocked by Chapter II. Strong up close if all three land, weak at range.
+  spark: {
+    name: "Spark Volley",
+    slot: "primary",
+    speed: 30,
+    range: 20,
+    radius: 0.2,
+    damage: 9,
+    cooldownMs: 750,
+    count: 3,
+    spreadDeg: 6,
+    color: "#ffe066",
+  },
   // From a Fire Tome pickup (3 charges): slower, but it explodes.
   fireball: {
     name: "Fireball",
+    slot: "fireball",
     speed: 24,
     range: 45,
     radius: 0.35,
@@ -43,6 +81,20 @@ export const SPELLS: Record<SpellId, SpellDef> = {
 };
 
 export const SPELL_IDS = Object.keys(SPELLS) as SpellId[];
+
+// The direction of each projectile a cast makes (Spark Volley fans out
+// sideways around the aim; everything else is one projectile straight ahead).
+export function castDirections(spell: SpellId, d: Vec3): Vec3[] {
+  const def = SPELLS[spell];
+  const count = def.count ?? 1;
+  const out: Vec3[] = [];
+  for (let k = 0; k < count; k++) {
+    const a = ((k - (count - 1) / 2) * (def.spreadDeg ?? 0) * Math.PI) / 180;
+    // Rotate around the vertical axis.
+    out.push([d[0] * Math.cos(a) + d[2] * Math.sin(a), d[1], -d[0] * Math.sin(a) + d[2] * Math.cos(a)]);
+  }
+  return out;
+}
 
 // The server accepts a cast's starting point if it is this close to where it
 // thinks your eyes are (positions arrive 20 times a second, so it lags a bit).

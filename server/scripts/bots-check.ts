@@ -48,6 +48,9 @@ class Client {
   chaserSets: number[][] = [];
   tags = 0;
   spellsBy = new Map<number, number>(); // caster -> spells cast
+  spellKinds = new Map<string, number>(); // spell -> projectiles
+  sparkCasts = new Map<string, number>(); // "caster:seq" -> projectiles (Spark Volley fires 3)
+  slowed = 0;
   spellHits = 0;
   announcements: string[] = [];
   results: string[] = [];
@@ -69,7 +72,11 @@ class Client {
         this.positions.set(msg.id, list);
       } else if (msg.t === "chasers") this.chaserSets.push(msg.ids);
       else if (msg.t === "tagged") this.tags++;
-      else if (msg.t === "spell") this.spellsBy.set(msg.caster, (this.spellsBy.get(msg.caster) ?? 0) + 1);
+      else if (msg.t === "spell") {
+        this.spellsBy.set(msg.caster, (this.spellsBy.get(msg.caster) ?? 0) + 1);
+        this.spellKinds.set(msg.spell, (this.spellKinds.get(msg.spell) ?? 0) + 1);
+        if (msg.spell === "spark") this.sparkCasts.set(`${msg.caster}:${msg.time}`, (this.sparkCasts.get(`${msg.caster}:${msg.time}`) ?? 0) + 1);
+      } else if (msg.t === "slowed") this.slowed++;
       else if (msg.t === "spellEnd" && msg.hit !== null) this.spellHits++;
       else if (msg.t === "announce") this.announcements.push(msg.text);
       else if (msg.t === "roundResult") this.results.push(msg.title);
@@ -130,8 +137,16 @@ for (const room of ["tag", "infection", "royale"]) {
     const blasts = a.announcements.filter((t) => t.includes("blasted")).length;
     check("royale: bots take each other out", blasts >= 1, `${blasts} blasted, ${a.announcements.filter((t) => t.includes("storm")).length} storm`);
     console.log(`      (result: ${a.results.find((r) => r !== "Round cancelled")})`);
+    const kinds = Object.fromEntries(a.spellKinds);
+    check("royale: bots use all three left-click spells", ["bolt", "frost", "spark"].every((k) => (kinds[k] ?? 0) > 0), JSON.stringify(kinds));
+    check("royale: each Spark Volley is 3 projectiles", [...a.sparkCasts.values()].every((n) => n === 3), `${a.sparkCasts.size} volleys`);
+    check("royale: Frost Shard hits slow people", a.slowed > 0, `${a.slowed} slowed`);
   } else if (room === "tag") {
-    check("tag: bots tag each other (It changes hands)", a.tags >= 1, `${a.tags} tags`);
+    // The watcher stands still; if it drew "It", nobody gets tagged. Only
+    // judge when a bot was It at some point.
+    const botWasIt = a.chaserSets.some((set) => set.length === 1 && set[0] !== a.id);
+    if (!botWasIt) console.log("      (skipped: the watcher was It the whole time)");
+    else check("tag: bots tag each other (It changes hands)", a.tags >= 1, `${a.tags} tags`);
   } else {
     // If the watcher (who stands still) started with the curse, nobody spreads
     // it that round; look at rounds where a bot started cursed.

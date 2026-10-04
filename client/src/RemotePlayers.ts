@@ -8,7 +8,8 @@
 
 import * as THREE from "three";
 import type { PlayerInfo, Vec3 } from "../../shared/src/protocol.ts";
-import { type AvatarStatus, createAvatar, disposeAvatar, flashAvatar, setAvatarHealth, setAvatarStatus } from "./Avatar.ts";
+import type { Look } from "../../shared/src/unlocks.ts";
+import { type AvatarStatus, chillAvatar, createAvatar, disposeAvatar, flashAvatar, setAvatarHealth, setAvatarLook, setAvatarStatus } from "./Avatar.ts";
 import type { ServerClock } from "./ServerClock.ts";
 
 const INTERP_DELAY_MS = 120;
@@ -48,7 +49,7 @@ export class RemotePlayers {
 
   add(info: PlayerInfo, serverTime: number): void {
     this.remove(info.id);
-    const avatar = createAvatar(info.id, info.name);
+    const avatar = createAvatar(info.id, info.name, info.look);
     this.scene.add(avatar);
     const remote: Remote = { name: info.name, avatar, snapshots: [] };
     this.remotes.set(info.id, remote);
@@ -86,6 +87,17 @@ export class RemotePlayers {
   setHealth(id: number, hp: number, shield: number): void {
     const remote = this.remotes.get(id);
     if (remote) setAvatarHealth(remote.avatar, hp, shield);
+  }
+
+  chill(id: number, ms: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) chillAvatar(remote.avatar, ms);
+  }
+
+  // Someone changed hat or robe.
+  setLook(id: number, look: Look): void {
+    const remote = this.remotes.get(id);
+    if (remote) setAvatarLook(remote.avatar, id, look);
   }
 
   flash(id: number): void {

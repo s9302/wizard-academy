@@ -2,6 +2,7 @@
 // Client and server import these types so both sides agree on the shape.
 
 import type { PickupKind, SpellId } from "./combat.ts";
+import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 
 export type Vec3 = [number, number, number];
 
@@ -33,11 +34,15 @@ export type BotsMsg = { t: "bots"; action: "add" | "remove" };
 // spell you're already drawing.
 export type CastMsg = { t: "cast"; spell: SpellId; o: Vec3; d: Vec3; seq: number };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg;
+// Change what you use and wear (the Spellbook and Wardrobe in the hub). The
+// server checks each choice is unlocked, saves it, and shows others your look.
+export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: Robe };
+
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg;
 
 // ---- Server -> Client ----
 
-export type PlayerInfo = { id: number; name: string; p: Vec3; ry: number };
+export type PlayerInfo = { id: number; name: string; p: Vec3; ry: number; look: Look };
 
 // yaw: which way to face, if the room has an opinion (else the level's spawnYaw).
 export type WelcomeMsg = { t: "welcome"; id: number; room: string; spawn: Vec3; yaw?: number; time: number; players: PlayerInfo[] };
@@ -56,7 +61,8 @@ export type AnnounceMsg = { t: "announce"; text: string };
 // The server decides all of these; the client only displays them.
 export type RunStartMsg = { t: "runStart"; time: number }; // server clock at start
 export type CheckpointMsg = { t: "checkpoint"; reached: number; count: number; split: number };
-export type FinishMsg = { t: "finish"; time: number; best: number; newBest: boolean };
+// firstClear: the first time you finished this course (it completes a chapter).
+export type FinishMsg = { t: "finish"; time: number; best: number; newBest: boolean; firstClear: boolean };
 export type RunResetMsg = { t: "runReset" };
 // Best times in this room (to everyone).
 export type LeaderboardMsg = { t: "leaderboard"; entries: { name: string; time: number }[] };
@@ -79,7 +85,8 @@ export type RoomCountsMsg = { t: "roomCounts"; counts: Record<string, number> };
 // ---- Battle royale (server -> everyone in the room) ----
 // A spell is flying. Clients draw it moving from o along d at its speed,
 // starting at server time `time`.
-export type SpellMsg = { t: "spell"; id: number; caster: number; seq: number; spell: SpellId; o: Vec3; d: Vec3; time: number };
+// k numbers the projectiles of one cast (Spark Volley makes 3).
+export type SpellMsg = { t: "spell"; id: number; caster: number; seq: number; k: number; spell: SpellId; o: Vec3; d: Vec3; time: number };
 // It hit something at p (hit = the player it struck directly, if any).
 export type SpellEndMsg = { t: "spellEnd"; id: number; p: Vec3; hit: number | null };
 export type HealthMsg = { t: "health"; id: number; hp: number; shield: number };
@@ -91,8 +98,16 @@ export type ZoneState = { from: [number, number, number]; to: [number, number, n
 export type ZoneMsg = { t: "zone"; zone: ZoneState | null };
 export type PickupInfo = { id: number; kind: PickupKind; p: Vec3 };
 export type PickupsMsg = { t: "pickups"; items: PickupInfo[] };
+// Someone was hit by Frost Shard: slowed for ms (the player slows themselves).
+export type SlowedMsg = { t: "slowed"; id: number; ms: number };
 // To one player: your fireball charges.
 export type ChargesMsg = { t: "charges"; fireball: number };
+
+// ---- Looks and loadout ----
+// Someone changed their hat or robe.
+export type LookMsg = { t: "look"; id: number; look: Look };
+// To one player: your saved loadout (after a "loadout" request).
+export type LoadoutSavedMsg = { t: "loadoutSaved"; primary: PrimarySpell; hat: Hat; robe: Robe };
 
 // ---- Progression (server -> one player) ----
 // total = your XP after this award. The client works out the level from it.
@@ -124,4 +139,7 @@ export type ServerMsg =
   | ZoneMsg
   | PickupsMsg
   | ChargesMsg
+  | SlowedMsg
+  | LookMsg
+  | LoadoutSavedMsg
   | XpMsg;

@@ -4,12 +4,14 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { LEVELS } from "../../shared/src/levels/index.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
 import { findRoom, HUB_ROOM, ROOMS, type RoomInfo } from "../../shared/src/rooms.ts";
+import { CHAPTERS, chaptersDone } from "../../shared/src/story.ts";
+import { type Loadout, UNLOCKS, unlockedSet } from "../../shared/src/unlocks.ts";
 import { Game } from "./Game.ts";
 import { Input } from "./Input.ts";
 import { formatTime } from "./ParkourHud.ts";
 import "./style.css";
 
-type Profile = { username: string; xp: number; bestTimes: Record<string, number> };
+type Profile = { username: string; xp: number; bestTimes: Record<string, number>; loadout: Loadout };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const container = $("game");
@@ -69,6 +71,13 @@ function showProfile(p: Profile): void {
   $("profile-name").textContent = `${p.username} · Level ${info.level}`;
   $("profile-xp-fill").style.width = `${(100 * info.intoLevel) / info.forNext}%`;
   $("profile-xp-text").textContent = `${info.intoLevel} / ${info.forNext} XP to level ${info.level + 1}`;
+
+  // Story progress and the next thing to unlock.
+  const done = chaptersDone(p.bestTimes).length;
+  const unlocked = unlockedSet(p.xp, p.bestTimes);
+  const next = UNLOCKS.filter((u) => "level" in u.requires && !unlocked.has(u.id))[0];
+  $("profile-story").textContent =
+    `Chapters: ${done} of ${CHAPTERS.length}` + (next && "level" in next.requires ? ` \u00b7 Next: ${next.name} at level ${next.requires.level}` : "");
 
   const times = $("profile-times");
   times.replaceChildren();
@@ -130,10 +139,18 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // reach the running game, e.g. to put the player next to a portal.
 if (import.meta.env.DEV) Object.assign(window, { wa: { get game() { return game; } } });
 
-// Show the pause panel whenever the mouse is released (Esc), hide it when captured.
+// Show the pause panel whenever the mouse is released (Esc), hide it when
+// captured. Not while a hub station's window is open: that freed the mouse.
 document.addEventListener("pointerlockchange", () => {
   if (!game) return;
-  overlay.hidden = input.locked;
+  overlay.hidden = input.locked || game.panelOpen;
+});
+
+// Esc with a station's window open: close it, and show the pause panel.
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Escape" || !game?.panelOpen) return;
+  game.closePanel();
+  overlay.hidden = false;
 });
 
 overlay.addEventListener("click", (e) => {
@@ -160,11 +177,13 @@ function startGame(room: RoomInfo, from?: string): Game | null {
   exitButton.textContent = room.id === HUB_ROOM ? "Exit to menu" : "Back to the Academy";
   game = new Game(container, input, {
     name: profile.username,
-    xp: profile.xp,
+    profile: { xp: profile.xp, bestTimes: profile.bestTimes, loadout: profile.loadout },
     room,
     level,
     from,
-    bestTimes: profile.bestTimes,
+    onProfile: (p) => {
+      if (profile) profile = { ...profile, xp: p.xp, bestTimes: { ...p.bestTimes }, loadout: p.loadout };
+    },
     onDisconnect: (reason) => backToMenu(reason),
     onPortal: (roomId) => switchRoom(roomId),
   });

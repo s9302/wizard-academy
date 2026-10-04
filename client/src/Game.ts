@@ -16,7 +16,12 @@ import type { RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
 import type { Input } from "./Input.ts";
 import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
+import { SPELLS } from "../../shared/src/combat.ts";
+import { chapterForTrial } from "../../shared/src/story.ts";
+import { unlockedSet, unlocksAtLevel } from "../../shared/src/unlocks.ts";
+import { HubPanel, type PanelProfile } from "./hub/HubPanel.ts";
 import { Portals } from "./levels/Portals.ts";
+import { StoryCard } from "./StoryCard.ts";
 import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
@@ -35,22 +40,23 @@ const SUN_OFFSET = new THREE.Vector3(20, 35, 10);
 // The controls line at the bottom left, per mode.
 const MOVE_HELP = "WASD move \u00b7 Shift run \u00b7 Space jump";
 const HELP: Record<string, string> = {
-  free: `${MOVE_HELP} \u00b7 Esc pause`,
-  parkour: `${MOVE_HELP} \u00b7 R restart run \u00b7 Esc pause`,
-  tag: `${MOVE_HELP} \u00b7 Click tag \u00b7 Esc pause`,
-  infection: `${MOVE_HELP} \u00b7 Click curse \u00b7 Esc pause`,
-  royale: `${MOVE_HELP} \u00b7 Click Arcane Bolt \u00b7 Right-click Fireball \u00b7 Esc pause`,
+  hub: "E use",
+  parkour: "R restart run",
+  tag: "Click tag",
+  infection: "Click curse",
+  royale: "Click spell \u00b7 Right-click Fireball",
 };
+const STATION_REACH = 2.2; // meters, to use a hub station
 
 export type GameOptions = {
   name: string;
-  xp: number;
+  profile: PanelProfile; // XP, best times and loadout: unlocks, signs, spells
   room: RoomInfo;
   level: Level;
   from?: string; // the room we just came from (the hub puts us at its portal)
-  bestTimes: Record<string, number>; // for the hub's portal signs
   onDisconnect: (reason: string) => void;
   onPortal: (roomId: string) => void; // walked into a portal in the hub
+  onProfile: (profile: PanelProfile) => void; // XP, a best time or the loadout changed
 };
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
@@ -71,6 +77,12 @@ export class Game {
   private chase: ChaseHud | null = null;
   private portals: Portals | null = null;
   private royale: Royale | null = null;
+  private profile: PanelProfile;
+  private onProfile: (profile: PanelProfile) => void;
+  private hubPanel: HubPanel | null = null;
+  private stationHint: HTMLElement | null = null;
+  private story: StoryCard | null = null;
+  private perkEl: HTMLElement | null = null;
   private onPortal: (roomId: string) => void;
   private resolveReady!: () => void;
   // Resolves once the server has welcomed us into the room (or hung up).
@@ -105,7 +117,9 @@ export class Game {
     const { room, level, onDisconnect } = options;
     this.input = input;
     this.name = options.name;
-    this.xp = options.xp;
+    this.profile = { ...options.profile, bestTimes: { ...options.profile.bestTimes } };
+    this.onProfile = options.onProfile;
+    this.xp = this.profile.xp;
     this.room = room;
     this.level = level;
     this.onPortal = options.onPortal;
@@ -126,20 +140,38 @@ export class Game {
     this.setupScene();
 
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
-    this.markers = buildLevel(this.scene, this.world, level);
-    if (level.portals) this.portals = new Portals(this.scene, level.portals, options.bestTimes);
+    // The player's own world: barriers they've opened are left out.
+    this.markers = buildLevel(this.scene, this.world, level, unlockedSet(this.profile.xp, this.profile.bestTimes));
+    if (level.portals) this.portals = new Portals(this.scene, level.portals, this.profile.bestTimes);
     this.world.step(); // builds the collision lookup structures before the first move
     this.player = new PlayerController(this.world, level.killY);
     this.remotes = new RemotePlayers(this.scene, this.clock);
     if (room.mode === "parkour" && level.course) {
       this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, room.name);
+      if (chapterForTrial(room.id)) this.story = new StoryCard(hud);
     } else if (room.mode === "tag" || room.mode === "infection") {
       this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }));
     } else if (room.mode === "royale") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
-      this.royale = new Royale(this.scene, hud, this.clock, level, room.name, this.remotes, send, () => this.myId);
+      const slowFactor = SPELLS.frost.slowFactor!;
+      this.royale = new Royale(this.scene, hud, this.clock, level, room.name, this.remotes, send, () => this.myId, this.profile.loadout.primary, (ms) =>
+        this.player.slow(ms / 1000, slowFactor),
+      );
     }
-    document.getElementById("help")!.textContent = HELP[room.mode] ?? HELP.free;
+    if (level.stations) {
+      this.hubPanel = new HubPanel(
+        this.profile,
+        (loadout) => this.net.send({ t: "loadout", ...loadout }),
+        () => this.input.lock(),
+      );
+      this.stationHint = document.createElement("div");
+      this.stationHint.id = "station-hint";
+      hud.appendChild(this.stationHint);
+    }
+    this.perkEl = document.createElement("div");
+    this.perkEl.id = "perk-hud";
+    hud.appendChild(this.perkEl);
+    this.applyPerks();
 
     this.resize();
     window.addEventListener("resize", this.onResize);
@@ -198,6 +230,7 @@ export class Game {
         this.player.teleport(...msg.spawn);
         this.input.yaw = msg.yaw ?? this.level.spawnYaw ?? 0;
         this.input.pitch = 0;
+        if (this.story) this.story.intro(chapterForTrial(this.room.id)!);
         for (const info of msg.players) {
           this.remotes.add(info, msg.time);
           this.royale?.onRemoteAdded(info.id);
@@ -227,14 +260,20 @@ export class Game {
         break;
       case "runStart":
         this.parkour?.runStart(msg.time);
+        this.story?.hideSoon();
         break;
       case "checkpoint":
         this.parkour?.checkpoint(msg.reached, msg.split);
         this.markers.setReached(msg.reached);
         break;
-      case "finish":
+      case "finish": {
         this.parkour?.finish(msg.time, msg.best, msg.newBest);
+        this.profile.bestTimes[this.room.id] = msg.best;
+        this.onProfile(this.profile);
+        const chapter = chapterForTrial(this.room.id);
+        if (msg.firstClear && chapter) this.story?.outro(chapter);
         break;
+      }
       case "runReset":
         this.parkour?.reset();
         this.markers.setReached(0);
@@ -263,6 +302,14 @@ export class Game {
       case "roomCounts":
         this.portals?.setCounts(msg.counts);
         break;
+      case "look":
+        this.remotes.setLook(msg.id, msg.look);
+        break;
+      case "loadoutSaved":
+        this.profile.loadout = { primary: msg.primary, hat: msg.hat, robe: msg.robe };
+        this.hubPanel?.update(this.profile);
+        this.onProfile(this.profile);
+        break;
       case "error":
         console.warn("server:", msg.message);
         break;
@@ -288,15 +335,59 @@ export class Game {
   private onXp(amount: number, reason: string, total: number): void {
     const before = levelInfo(this.xp).level;
     this.xp = total;
+    this.profile.xp = total;
+    this.onProfile(this.profile);
     this.showXp();
     this.addFeed(`+${amount} XP \u00b7 ${reason}`);
     const after = levelInfo(total).level;
     if (after > before) {
+      const unlocked: string[] = [];
+      for (let level = before + 1; level <= after; level++) unlocked.push(...unlocksAtLevel(level).map((u) => u.name));
+      for (const name of unlocked) this.addFeed(`Unlocked: ${name}!`);
+      this.applyPerks();
+      this.hubPanel?.update(this.profile);
       const el = document.getElementById("levelup")!;
-      el.textContent = `Level up! You're level ${after}`;
+      el.textContent = `Level up! You're level ${after}${unlocked.length ? ` \u00b7 ${unlocked.join(", ")}` : ""}`;
       el.classList.add("show");
       window.clearTimeout(this.levelUpTimer);
       this.levelUpTimer = window.setTimeout(() => el.classList.remove("show"), 3500);
+    }
+  }
+
+  // Movement perks from unlocks. Not in the trials, so times stay comparable.
+  private applyPerks(): void {
+    const unlocked = unlockedSet(this.profile.xp, this.profile.bestTimes);
+    const allowed = this.room.mode !== "parkour";
+    this.player.perks = { doubleJump: allowed && unlocked.has("perk:doubleJump"), dash: allowed && unlocked.has("perk:dash") };
+    const extra = [HELP[this.room.mode], this.player.perks.dash ? "Q dash" : ""].filter(Boolean);
+    document.getElementById("help")!.textContent = [MOVE_HELP, ...extra, "Esc pause"].join(" \u00b7 ");
+    if (this.perkEl) {
+      const names = [this.player.perks.doubleJump ? "Double Jump" : "", this.player.perks.dash ? "Q Blink Dash" : ""].filter(Boolean);
+      this.perkEl.textContent = names.join(" \u00b7 ");
+      this.perkEl.hidden = names.length === 0;
+    }
+  }
+
+  // Is a station's window open? (main.ts keeps the pause panel hidden then.)
+  get panelOpen(): boolean {
+    return this.hubPanel?.isOpen ?? false;
+  }
+
+  // Esc while a station's window is open closes it.
+  closePanel(): void {
+    this.hubPanel?.close();
+  }
+
+  // Hub stations: show "E: Spellbook" when close enough, open on E.
+  private updateStations(): void {
+    if (!this.hubPanel || !this.stationHint) return;
+    const p = this.player.position;
+    const near = this.level.stations?.find((s) => Math.hypot(s.pos[0] - p.x, s.pos[2] - p.z) < STATION_REACH && Math.abs(p.y - 0.9 - s.pos[1]) < 1.5);
+    this.stationHint.textContent = near && !this.hubPanel.isOpen ? `E \u00b7 ${near.label}` : "";
+    this.stationHint.classList.toggle("show", !!near && !this.hubPanel.isOpen);
+    if (this.input.consumeInteract() && near && !this.hubPanel.isOpen) {
+      this.hubPanel.open(near);
+      document.exitPointerLock(); // free the mouse to click in the window
     }
   }
 
@@ -321,6 +412,8 @@ export class Game {
     window.clearTimeout(this.levelUpTimer);
 
     this.royale?.dispose();
+    this.story?.dispose();
+    this.hubPanel?.close();
     this.remotes.clear();
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
@@ -372,7 +465,7 @@ export class Game {
     const rightClicked = this.input.consumeRightClick();
     if (this.royale && (clicked || rightClicked)) {
       const dir = this.camera.getWorldDirection(new THREE.Vector3());
-      this.royale.cast(clicked ? "bolt" : "fireball", this.camera.position, dir);
+      this.royale.cast(clicked ? "primary" : "fireball", this.camera.position, dir);
     }
 
     // Fell off the level: freeze and ask the server to respawn us (retrying
@@ -411,6 +504,8 @@ export class Game {
     this.markers.update(now / 1000);
     this.portals?.update(now / 1000);
     this.royale?.update(now / 1000, this.player.position, this.clock.now());
+    this.updateStations();
+    if (this.perkEl) this.perkEl.classList.toggle("cooling", this.player.dashCooldown > 0);
     if (this.portals) {
       const p = this.player.position;
       const target = this.portals.enteredPortal([p.x, p.y, p.z]);

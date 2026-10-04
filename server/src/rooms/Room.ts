@@ -112,13 +112,14 @@ export abstract class Room {
         name: other.conn.name,
         p: other.p,
         ry: other.ry,
+        look: other.conn.look,
       })),
     });
 
     this.players.set(conn.id, player);
     conn.room = this;
     this.broadcast(
-      { t: "join", player: { id: conn.id, name: conn.name, p: player.p, ry: player.ry }, time: Date.now() },
+      { t: "join", player: { id: conn.id, name: conn.name, p: player.p, ry: player.ry, look: conn.look }, time: Date.now() },
       conn.id,
     );
     this.onPlayerJoined(player);

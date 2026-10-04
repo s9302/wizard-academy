@@ -16,6 +16,7 @@
 
 import {
   CAST_ORIGIN_SLACK,
+  castDirections,
   MAX_FIREBALL_CHARGES,
   MAX_HEALTH,
   MAX_SHIELD,
@@ -25,6 +26,7 @@ import {
   POTION_HEAL,
   type PickupKind,
   type SpellId,
+  type SpellSlot,
   SPELLS,
   STORM_FINAL_DPS,
   STORM_STAGES,
@@ -51,8 +53,9 @@ type Fighter = {
   hp: number;
   shield: number;
   fireball: number; // charges
-  nextCast: Record<SpellId, number>; // server time
+  nextCast: Record<SpellSlot, number>; // server time
   eliminations: number;
+  slowedUntil: number; // Frost Shard (bots read this; players slow themselves)
 };
 
 type Projectile = { id: number; caster: number; spell: SpellId; p: Vec3; d: Vec3; travelled: number };
@@ -177,7 +180,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   private resetFighter(player: Player, tell = true): void {
-    const f: Fighter = { hp: MAX_HEALTH, shield: 0, fireball: 0, nextCast: { bolt: 0, fireball: 0 }, eliminations: 0 };
+    const f: Fighter = { hp: MAX_HEALTH, shield: 0, fireball: 0, nextCast: { primary: 0, fireball: 0 }, eliminations: 0, slowedUntil: 0 };
     this.fighters.set(player.conn.id, f);
     if (tell) this.broadcast({ t: "health", id: player.conn.id, hp: f.hp, shield: f.shield });
     player.conn.send({ t: "charges", fireball: 0 });
@@ -213,21 +216,26 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (!f || this.state === "countdown") return;
     if (this.state === "playing" && !this.alive.has(id)) return; // spectators can't cast
     const def = SPELLS[msg.spell];
-    if (now < f.nextCast[msg.spell]) return; // too soon: ignore quietly
+    // Left-click spells must be unlocked (bots have them all).
+    const account = player.conn.account;
+    if (def.slot === "primary" && account && !account.unlocked.has(`spell:${msg.spell}`)) return;
+    if (now < f.nextCast[def.slot]) return; // too soon: ignore quietly
     if (msg.spell === "fireball") {
       if (f.fireball <= 0) return;
       f.fireball -= 1;
       player.conn.send({ t: "charges", fireball: f.fireball });
     }
-    f.nextCast[msg.spell] = now + def.cooldownMs * COOLDOWN_SLACK;
+    f.nextCast[def.slot] = now + def.cooldownMs * COOLDOWN_SLACK;
 
     // Start from where the client says its eyes are, if that's believable:
     // close to where we think they are, and not through a wall.
     const expected = eye(player.p);
     const o = dist3(msg.o, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, msg.o, this.level.boxes) ? msg.o : expected;
-    const spell: Projectile = { id: nextSpellId++, caster: id, spell: msg.spell, p: o, d: msg.d, travelled: 0 };
-    this.projectiles.set(spell.id, spell);
-    this.broadcast({ t: "spell", id: spell.id, caster: id, seq: msg.seq, spell: msg.spell, o, d: msg.d, time: now });
+    castDirections(msg.spell, msg.d).forEach((d, k) => {
+      const spell: Projectile = { id: nextSpellId++, caster: id, spell: msg.spell, p: o, d, travelled: 0 };
+      this.projectiles.set(spell.id, spell);
+      this.broadcast({ t: "spell", id: spell.id, caster: id, seq: msg.seq, k, spell: msg.spell, o, d, time: now });
+    });
   }
 
   private stepProjectiles(dt: number): void {
@@ -271,7 +279,14 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (this.state !== "playing") return;
     const def = SPELLS[spell.spell];
     const attacker = this.players.get(spell.caster) ?? null;
-    if (hit) this.damage(hit, def.damage, attacker);
+    if (hit) {
+      this.damage(hit, def.damage, attacker);
+      if (def.slowMs && this.alive.has(hit.conn.id)) {
+        const f = this.fighters.get(hit.conn.id);
+        if (f) f.slowedUntil = Date.now() + def.slowMs;
+        this.broadcast({ t: "slowed", id: hit.conn.id, ms: def.slowMs });
+      }
+    }
     if (!def.splashRadius) return;
     // Splash: everyone else near the blast, unless a wall is in the way. The
     // check starts a little back toward the caster so the wall it hit
@@ -441,6 +456,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       enemies: [...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id)),
       hp: f?.hp ?? MAX_HEALTH,
       fireballs: f?.fireball ?? 0,
+      slowed: (f?.slowedUntil ?? 0) > now,
       circles: this.safeCircles(now),
       pickups: this.pickupList(),
     });

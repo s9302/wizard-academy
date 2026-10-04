@@ -125,7 +125,7 @@ export class ParkourRoom extends Room {
     if (!account) return;
     recordFinish(account.id, this.name, time)
       .then(async (record) => {
-        player.conn.send({ t: "finish", time, best: record.best, newBest: record.newBest });
+        player.conn.send({ t: "finish", time, best: record.best, newBest: record.newBest, firstClear: record.firstClear });
         const name = player.conn.name;
         console.log(`[${this.name}] ${name} finished in ${formatTime(time)}${record.newBest ? " (personal best)" : ""}`);
         this.broadcast({ t: "announce", text: `${name} finished in ${formatTime(time)}${record.newBest ? " \u2014 a new personal best!" : ""}` });
@@ -144,7 +144,7 @@ export class ParkourRoom extends Room {
       })
       .catch((err) => {
         console.error(`[${this.name}] saving finish for ${account.username} failed:`, err);
-        player.conn.send({ t: "finish", time, best: time, newBest: false });
+        player.conn.send({ t: "finish", time, best: time, newBest: false, firstClear: false });
       });
   }
 }

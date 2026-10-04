@@ -12,6 +12,8 @@ export class Input {
   private restartQueued = false;
   private clickQueued = false;
   private rightClickQueued = false;
+  private dashQueued = false;
+  private interactQueued = false;
   private element: HTMLElement;
 
   constructor(element: HTMLElement) {
@@ -19,6 +21,8 @@ export class Input {
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space" && !e.repeat) this.jumpQueued = true;
       if (e.code === "KeyR" && !e.repeat && this.locked) this.restartQueued = true;
+      if (e.code === "KeyQ" && !e.repeat && this.locked) this.dashQueued = true;
+      if (e.code === "KeyE" && !e.repeat && this.locked) this.interactQueued = true;
       this.keys.add(e.code);
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
@@ -79,6 +83,20 @@ export class Input {
   consumeRightClick(): boolean {
     const queued = this.rightClickQueued;
     this.rightClickQueued = false;
+    return queued;
+  }
+
+  // Returns true once per Q press (Blink Dash perk).
+  consumeDash(): boolean {
+    const queued = this.dashQueued;
+    this.dashQueued = false;
+    return queued;
+  }
+
+  // Returns true once per E press (use a station in the hub).
+  consumeInteract(): boolean {
+    const queued = this.interactQueued;
+    this.interactQueued = false;
     return queued;
   }
 

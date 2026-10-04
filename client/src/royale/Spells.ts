@@ -34,7 +34,7 @@ export class Spells {
   private clock: ServerClock;
   private boxes: Box[];
   private byId = new Map<number, Flying>();
-  private mine = new Map<number, Flying>(); // my casts by seq, until the server confirms
+  private mine = new Map<string, Flying>(); // my casts by "seq:k", until the server confirms
   private blasts: Blast[] = [];
   private geometry = new THREE.IcosahedronGeometry(1, 0);
   private materials: Record<SpellId, THREE.MeshBasicMaterial>;
@@ -44,7 +44,12 @@ export class Spells {
     this.clock = clock;
     this.boxes = boxes;
     const glow = (color: string) => new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.materials = { bolt: glow(SPELLS.bolt.color), fireball: glow(SPELLS.fireball.color) };
+    this.materials = {
+      bolt: glow(SPELLS.bolt.color),
+      frost: glow(SPELLS.frost.color),
+      spark: glow(SPELLS.spark.color),
+      fireball: glow(SPELLS.fireball.color),
+    };
   }
 
   private create(spell: SpellId, o: Vec3, d: Vec3, start: number): Flying {
@@ -64,16 +69,18 @@ export class Spells {
     return flying;
   }
 
-  // I just cast this (drawn right away).
-  castLocal(seq: number, spell: SpellId, o: Vec3, d: Vec3): void {
-    this.mine.set(seq, this.create(spell, o, d, this.clock.now()));
+  // I just cast this (drawn right away). Spark Volley is several projectiles,
+  // numbered k like the server's.
+  castLocal(seq: number, spell: SpellId, o: Vec3, dirs: Vec3[]): void {
+    const now = this.clock.now();
+    dirs.forEach((d, k) => this.mine.set(`${seq}:${k}`, this.create(spell, o, d, now)));
   }
 
-  // The server says a spell is flying.
-  started(id: number, spell: SpellId, o: Vec3, d: Vec3, time: number, mineSeq: number | null): void {
-    const local = mineSeq !== null ? this.mine.get(mineSeq) : undefined;
+  // The server says a spell is flying. mineKey: "seq:k" if it's my cast.
+  started(id: number, spell: SpellId, o: Vec3, d: Vec3, time: number, mineKey: string | null): void {
+    const local = mineKey !== null ? this.mine.get(mineKey) : undefined;
     if (local) {
-      this.mine.delete(mineSeq!);
+      this.mine.delete(mineKey!);
       this.byId.set(id, local);
       return;
     }

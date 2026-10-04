@@ -4,6 +4,7 @@
 
 import { WebSocket } from "ws";
 import type { ServerMsg } from "../../shared/src/protocol.ts";
+import type { Look } from "../../shared/src/unlocks.ts";
 import type { Account } from "./accounts.ts";
 import { TokenBucket } from "./limits.ts";
 import type { Room } from "./rooms/Room.ts";
@@ -13,6 +14,7 @@ export interface Peer {
   readonly isBot: boolean;
   readonly account: Account | null; // null for bots
   name: string;
+  look: Look; // hat and robe, shown to everyone
   room: Room | null;
   send(msg: ServerMsg): void;
   sendRaw(text: string): void; // an already-serialized message (broadcasts)
@@ -34,6 +36,7 @@ export class Connection implements Peer {
   readonly account: Account;
   readonly messageBudget = new TokenBucket(MESSAGE_BURST, MESSAGES_PER_SECOND);
   name = "";
+  look: Look;
   room: Room | null = null;
   alive = true; // flipped by the heartbeat in index.ts
 
@@ -43,6 +46,7 @@ export class Connection implements Peer {
     this.ip = ip;
     this.account = account;
     this.name = account.username;
+    this.look = { hat: account.loadout.hat, robe: account.loadout.robe };
   }
 
   send(msg: ServerMsg): void {
@@ -68,6 +72,7 @@ export class BotPeer implements Peer {
   readonly isBot = true;
   readonly account = null;
   name: string;
+  look: Look = { hat: "classic", robe: "auto" };
   room: Room | null = null;
 
   constructor(name: string) {

@@ -3,7 +3,7 @@
 // marker when your spell lands, and a purple haze while you're in the storm.
 // Like the other HUDs, it only shows what the server decided.
 
-import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
+import { MAX_HEALTH, type SpellId, SPELLS } from "../../../shared/src/combat.ts";
 import type { RoundState } from "../../../shared/src/protocol.ts";
 import type { ServerClock } from "../ServerClock.ts";
 import type { Storm } from "./Storm.ts";
@@ -46,12 +46,14 @@ export class RoyaleHud {
   private aliveCount = 0;
   private amAlive = false;
   private hp = MAX_HEALTH;
+  private primaryCooldown: number;
   private bannerTimer: number | undefined;
   private hitTimer: number | undefined;
   private hurtTimer: number | undefined;
 
-  constructor(hud: HTMLElement, clock: ServerClock, storm: Storm, roomName: string, onBots: (action: "add" | "remove") => void) {
+  constructor(hud: HTMLElement, clock: ServerClock, storm: Storm, roomName: string, primary: SpellId, onBots: (action: "add" | "remove") => void) {
     this.clock = clock;
+    this.primaryCooldown = SPELLS[primary].cooldownMs;
     this.storm = storm;
 
     // Bot controls live in the pause panel (press Esc), where the mouse is free.
@@ -83,7 +85,8 @@ export class RoyaleHud {
     const slots = el("div", "spell-slots", bottom);
     this.boltSlot = el("div", "", slots, "spell-slot bolt");
     el("div", "", this.boltSlot, "slot-key").textContent = "Click";
-    el("div", "", this.boltSlot, "slot-name").textContent = SPELLS.bolt.name;
+    el("div", "", this.boltSlot, "slot-name").textContent = SPELLS[primary].name;
+    this.boltSlot.style.borderColor = SPELLS[primary].color;
     this.boltCooldown = el("div", "", this.boltSlot, "slot-cooldown");
     this.fireSlot = el("div", "", slots, "spell-slot fire");
     el("div", "", this.fireSlot, "slot-key").textContent = "Right-click";
@@ -160,8 +163,8 @@ export class RoyaleHud {
     this.resultsEl.hidden = false;
   }
 
-  // boltReadyIn: ms until the bolt can be cast again. inStorm: outside the circle.
-  update(boltReadyIn: number, inStorm: boolean): void {
+  // primaryReadyIn: ms until the left-click spell is ready. inStorm: outside the circle.
+  update(primaryReadyIn: number, inStorm: boolean): void {
     const now = this.clock.now();
     const left = this.endsAt === null ? 0 : this.endsAt - now;
     switch (this.state) {
@@ -187,7 +190,7 @@ export class RoyaleHud {
         break;
     }
     this.stormEl.classList.toggle("show", inStorm && this.state === "playing" && this.amAlive);
-    const fraction = Math.min(1, Math.max(0, boltReadyIn / SPELLS.bolt.cooldownMs));
+    const fraction = Math.min(1, Math.max(0, primaryReadyIn / this.primaryCooldown));
     this.boltCooldown.style.height = `${fraction * 100}%`;
   }
 

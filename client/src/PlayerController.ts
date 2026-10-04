@@ -9,6 +9,9 @@
 // - "Coyote time": you can still jump for a moment after walking off a ledge.
 //   "Jump buffering": pressing jump just before landing still counts. Both
 //   make platforming feel fair instead of frame-perfect.
+// - Perks (unlocked by leveling): a second jump in mid-air, and a short dash.
+//   The server's movement check already allows short bursts (it's built for
+//   lag spikes), so a dash fits inside it.
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
@@ -25,6 +28,12 @@ import type { Input } from "./Input.ts";
 
 const COYOTE_TIME = 0.1; // seconds
 const JUMP_BUFFER_TIME = 0.12; // seconds
+const DOUBLE_JUMP_SPEED = JUMP_SPEED * 0.85;
+const DASH_SPEED = 22; // m/s, for DASH_TIME: about 3.5 m
+const DASH_TIME = 0.16;
+export const DASH_COOLDOWN = 2; // seconds
+
+export type Perks = { doubleJump: boolean; dash: boolean };
 
 export class PlayerController {
   // Interpolated position for rendering (see Game.ts for why).
@@ -39,6 +48,13 @@ export class PlayerController {
   private timeSinceGrounded = 0;
   private timeSinceJumpPressed = Infinity;
   private killY: number;
+  perks: Perks = { doubleJump: false, dash: false };
+  private airJumpUsed = false;
+  private dashLeft = 0; // seconds of dash remaining
+  private dashDir = { x: 0, z: 0 };
+  dashCooldown = 0; // seconds until the dash is ready
+  private slowLeft = 0; // seconds of Frost Shard slow remaining
+  private slowFactor = 1;
   private previous = new THREE.Vector3();
   private current = new THREE.Vector3();
 
@@ -80,12 +96,20 @@ export class PlayerController {
     this.velocityY = 0;
   }
 
+  // Hit by Frost Shard: move at `factor` speed for `seconds`.
+  slow(seconds: number, factor: number): void {
+    this.slowLeft = seconds;
+    this.slowFactor = factor;
+  }
+
   // Advance one fixed physics step of length dt seconds.
   step(dt: number, input: Input): void {
     this.previous.copy(this.current);
+    this.slowLeft = Math.max(0, this.slowLeft - dt);
+    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 
     // Horizontal movement relative to where the camera faces.
-    const speed = input.running ? RUN_SPEED : WALK_SPEED;
+    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * (this.slowLeft > 0 ? this.slowFactor : 1);
     const sin = Math.sin(input.yaw);
     const cos = Math.cos(input.yaw);
     let dx = -sin * input.forward + cos * input.strafe;
@@ -100,16 +124,39 @@ export class PlayerController {
     // Jumping, with coyote time and jump buffering.
     this.timeSinceJumpPressed = input.consumeJump() ? 0 : this.timeSinceJumpPressed + dt;
     this.timeSinceGrounded = this.grounded ? 0 : this.timeSinceGrounded + dt;
+    if (this.grounded) this.airJumpUsed = false;
     if (this.timeSinceJumpPressed <= JUMP_BUFFER_TIME && this.timeSinceGrounded <= COYOTE_TIME) {
       this.velocityY = JUMP_SPEED;
       this.timeSinceJumpPressed = Infinity;
       this.timeSinceGrounded = Infinity;
+    } else if (this.perks.doubleJump && this.timeSinceJumpPressed === 0 && !this.grounded && !this.airJumpUsed) {
+      // Double jump: once per time in the air.
+      this.velocityY = DOUBLE_JUMP_SPEED;
+      this.airJumpUsed = true;
+      this.timeSinceJumpPressed = Infinity;
+    }
+
+    // Dash: a short burst the way you're moving (or looking, if standing still).
+    if (this.perks.dash && input.consumeDash() && this.dashCooldown === 0) {
+      const moving = dx !== 0 || dz !== 0;
+      const len = moving ? Math.hypot(dx, dz) : 1;
+      this.dashDir = moving ? { x: dx / len, z: dz / len } : { x: -sin, z: -cos };
+      this.dashLeft = DASH_TIME;
+      this.dashCooldown = DASH_COOLDOWN;
+    }
+    let hx = dx * speed;
+    let hz = dz * speed;
+    if (this.dashLeft > 0) {
+      this.dashLeft -= dt;
+      hx = this.dashDir.x * DASH_SPEED;
+      hz = this.dashDir.z * DASH_SPEED;
+      this.velocityY = Math.max(this.velocityY, 0); // no falling mid-dash
     }
 
     // Gravity.
     this.velocityY = Math.max(this.velocityY - GRAVITY * dt, -TERMINAL_FALL_SPEED);
 
-    const desired = { x: dx * speed * dt, y: this.velocityY * dt, z: dz * speed * dt };
+    const desired = { x: hx * dt, y: this.velocityY * dt, z: hz * dt };
     this.controller.computeColliderMovement(this.collider, desired);
     const moved = this.controller.computedMovement();
     this.grounded = this.controller.computedGrounded();

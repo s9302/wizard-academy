@@ -9,7 +9,27 @@ export type Box = {
   size: Vec3; // full width, height, depth
   color: string;
   rot?: Vec3; // euler angles in radians
+  // A magic barrier: only there for players who don't have this unlock yet
+  // (e.g. "area:garden"). Movement is client-side, so each player's own
+  // world simply leaves out the barriers they've opened.
+  gate?: string;
 };
+
+// Something to walk up to and press E at (hub only).
+export type Station = {
+  id: string;
+  kind: "spellbook" | "wardrobe" | "chronicle" | "tablet";
+  pos: Vec3; // on the floor in front of it
+  label: string;
+  tablet?: string; // which lore text (shared/src/story.ts TABLETS)
+};
+
+// A floating sign. If `unlock` is set and the player doesn't have it, the
+// sign says how to get it.
+export type Label = { pos: Vec3; title: string; subtitle?: string; color: string; unlock?: string };
+
+// A warm light (indoors, where the sun doesn't reach).
+export type PointLightDef = { pos: Vec3; color: string; intensity: number; distance: number };
 
 // An axis-aligned box in space, used as a trigger area.
 export type Zone = { min: Vec3; max: Vec3 };
@@ -53,6 +73,9 @@ export type Level = {
   course?: Course; // parkour levels only
   portals?: Portal[]; // the hub only
   pickupSpots?: Vec3[]; // battle royale: where pickups appear
+  stations?: Station[]; // the hub only
+  labels?: Label[];
+  lights?: PointLightDef[];
 };
 
 // A point relative to a portal: `side` meters to its right (as seen walking

@@ -1,9 +1,11 @@
-// What other players look like: a capsule body, a pointy wizard hat, a pale
-// face patch so you can tell which way they're facing, and a floating name tag.
+// What other players look like: a capsule body (the robe), a wizard hat, a
+// pale face patch so you can tell which way they're facing, and a floating
+// name tag. Hat and robe come from the player's Wardrobe choices.
 // The group's origin is the capsule center, matching the networked position.
 
 import * as THREE from "three";
 import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../../shared/src/constants.ts";
+import { type Hat, type Look, ROBE_COLORS } from "../../shared/src/unlocks.ts";
 
 const TOP = PLAYER_HALF_HEIGHT + PLAYER_RADIUS; // top of the capsule
 
@@ -46,7 +48,6 @@ function makeNameTag(name: string): THREE.Sprite {
 // Tag / infection roles change how an avatar looks.
 export type AvatarStatus = "runner" | "it" | "cursed";
 
-const HAT_COLOR = new THREE.Color("#3b2a6b");
 const STATUS_LOOK = {
   it: { aura: new THREE.Color("#ff4a3d"), hat: new THREE.Color("#d8332a") },
   cursed: { aura: new THREE.Color("#8cff5a"), hat: new THREE.Color("#24361c") },
@@ -56,17 +57,21 @@ const CURSED_BODY = new THREE.Color("#3c5a2e");
 // The parts setAvatarStatus changes, kept on the group's userData.
 type AvatarParts = {
   bodyMat: THREE.MeshLambertMaterial;
-  hatMats: THREE.MeshLambertMaterial[];
+  hatMats: THREE.MeshLambertMaterial[]; // recolored for "It" and the cursed
+  hatColor: THREE.Color; // the hat's own color
+  hat: THREE.Group;
+  status: AvatarStatus;
   aura: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   baseColor: THREE.Color;
 };
 
 export function setAvatarStatus(group: THREE.Group, status: AvatarStatus): void {
   const parts = group.userData.parts as AvatarParts;
+  parts.status = status;
   if (status === "runner") {
     parts.aura.visible = false;
     parts.bodyMat.color.copy(parts.baseColor);
-    for (const m of parts.hatMats) m.color.copy(HAT_COLOR);
+    for (const m of parts.hatMats) m.color.copy(parts.hatColor);
     return;
   }
   const look = STATUS_LOOK[status];
@@ -77,10 +82,75 @@ export function setAvatarStatus(group: THREE.Group, status: AvatarStatus): void 
   else parts.bodyMat.color.copy(parts.baseColor);
 }
 
-export function createAvatar(id: number, name: string): THREE.Group {
+const HATS: Record<Hat, { color: string; build: (mat: THREE.MeshLambertMaterial, group: THREE.Group) => THREE.MeshLambertMaterial[] }> = {
+  // Brim and a floppy cone.
+  classic: { color: "#3b2a6b", build: (mat, g) => cone(mat, g, 0.75) },
+  tall: { color: "#3b2a6b", build: (mat, g) => cone(mat, g, 1.15) },
+  // Midnight blue with little gold stars.
+  starry: {
+    color: "#1f2a6b",
+    build: (mat, g) => {
+      const mats = cone(mat, g, 0.85);
+      for (const [y, a] of [
+        [0.15, 0.4],
+        [0.38, 2.3],
+        [0.6, 4.1],
+      ]) {
+        const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), flat("#ffe066"));
+        const r = 0.3 - y * 0.32;
+        star.position.set(Math.cos(a) * r, TOP + y, Math.sin(a) * r);
+        g.add(star);
+      }
+      return mats;
+    },
+  },
+  // A gold crown: a band and five points.
+  crown: {
+    color: "#e8c547",
+    build: (mat, g) => {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.16, 10, 1, true), mat);
+      band.material.side = THREE.DoubleSide;
+      band.position.y = TOP + 0.05;
+      g.add(band);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        const point = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 4), mat);
+        point.position.set(Math.cos(a) * 0.3, TOP + 0.21, Math.sin(a) * 0.3);
+        g.add(point);
+      }
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), flat("#ff5a8a"));
+      gem.position.set(0, TOP + 0.06, -0.31);
+      g.add(gem);
+      return [mat];
+    },
+  },
+};
+
+function cone(mat: THREE.MeshLambertMaterial, g: THREE.Group, height: number): THREE.MeshLambertMaterial[] {
+  const brimMat = mat.clone();
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 12), brimMat);
+  brim.position.y = TOP - 0.05;
+  brim.castShadow = true;
+  g.add(brim);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.32, height, 8), mat);
+  tip.position.y = TOP - 0.05 + height / 2;
+  tip.rotation.x = -0.15; // a little floppy tilt
+  tip.castShadow = true;
+  g.add(tip);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.35, 0.08, 8), flat("#e8c547"));
+  band.position.y = TOP + 0.02;
+  g.add(band);
+  return [brimMat, mat];
+}
+
+function robeColor(id: number, look: Look): THREE.Color {
+  return look.robe === "auto" ? playerColor(id) : new THREE.Color(ROBE_COLORS[look.robe]);
+}
+
+export function createAvatar(id: number, name: string, look: Look): THREE.Group {
   const group = new THREE.Group();
 
-  const baseColor = playerColor(id);
+  const baseColor = robeColor(id, look);
   const bodyMat = flat(baseColor);
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER_RADIUS, PLAYER_HALF_HEIGHT * 2, 3, 10), bodyMat);
   body.castShadow = true;
@@ -90,23 +160,6 @@ export function createAvatar(id: number, name: string): THREE.Group {
   const face = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.1), flat("#f3dcc4"));
   face.position.set(0, TOP - 0.38, -PLAYER_RADIUS + 0.02);
   group.add(face);
-
-  const brimMat = flat(HAT_COLOR);
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.05, 12), brimMat);
-  brim.position.y = TOP - 0.05;
-  brim.castShadow = true;
-  group.add(brim);
-
-  const coneMat = flat(HAT_COLOR);
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 8), coneMat);
-  cone.position.y = TOP + 0.33;
-  cone.rotation.x = -0.15; // a little floppy tilt
-  cone.castShadow = true;
-  group.add(cone);
-
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.35, 0.08, 8), flat("#e8c547"));
-  band.position.y = TOP + 0.02;
-  group.add(band);
 
   // A glowing shell around the body, shown for "It" and the cursed.
   const aura = new THREE.Mesh(
@@ -118,9 +171,32 @@ export function createAvatar(id: number, name: string): THREE.Group {
   group.add(aura);
 
   group.add(makeNameTag(name));
-  const parts: AvatarParts = { bodyMat, hatMats: [brimMat, coneMat], aura, baseColor };
+  const hat = new THREE.Group();
+  group.add(hat);
+  const parts: AvatarParts = { bodyMat, hatMats: [], hatColor: new THREE.Color(), hat, aura, baseColor, status: "runner" };
   group.userData.parts = parts;
+  setAvatarLook(group, id, look);
   return group;
+}
+
+// Change hat and robe (someone used the Wardrobe), keeping any role colors.
+export function setAvatarLook(group: THREE.Group, id: number, look: Look): void {
+  const parts = group.userData.parts as AvatarParts;
+  disposeTree(parts.hat);
+  parts.hat.clear();
+  const style = HATS[look.hat] ?? HATS.classic;
+  parts.hatColor = new THREE.Color(style.color);
+  parts.hatMats = style.build(flat(style.color), parts.hat);
+  parts.baseColor = robeColor(id, look);
+  setAvatarStatus(group, parts.status);
+}
+
+// Frosted (hit by Frost Shard): a pale blue tint for a moment.
+export function chillAvatar(group: THREE.Group, ms: number): void {
+  const parts = group.userData.parts as AvatarParts;
+  parts.bodyMat.emissive.set("#3a8fb0");
+  window.clearTimeout(group.userData.chillTimer);
+  group.userData.chillTimer = window.setTimeout(() => parts.bodyMat.emissive.set("#000000"), ms);
 }
 
 // ---- Battle royale: a health bar over the head, and a flash when hit ----
@@ -174,6 +250,11 @@ export function flashAvatar(group: THREE.Group): void {
 
 export function disposeAvatar(group: THREE.Group): void {
   window.clearTimeout(group.userData.flashTimer);
+  window.clearTimeout(group.userData.chillTimer);
+  disposeTree(group);
+}
+
+function disposeTree(group: THREE.Object3D): void {
   group.traverse((obj) => {
     if (obj instanceof THREE.Mesh || obj instanceof THREE.Sprite) {
       obj.geometry.dispose();

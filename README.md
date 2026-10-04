@@ -1,8 +1,8 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases; currently **Phase 7** done (combat
-and the wizard battle royale).
+first person with friends. Built in phases; all eight are done. **Phase 8**
+added the story chapters, more spells, and unlocks.
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -82,8 +82,10 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `royale-check`, `accounts-check` (run it last: it trips the login rate limit
-for your IP).
+`hub-check`, `royale-check`, `unlocks-check`, `accounts-check` (run it last:
+it trips the login rate limit for your IP). Each new test account starts with
+a failed login (try login, then register), so running everything back to
+back can trip the limit too: restart the test server between batches.
 
 
 - Open `http://game:8080` on a tailnet device, enter a name, click into the
@@ -143,7 +145,8 @@ no guest play: XP and best times need an owner.
 | Rounds with only you and bots | half XP (practice) |
 
 **Levels:** level 2 needs 100 XP, then each level needs 50 more than the last
-(`shared/src/progression.ts`). Unlocks arrive in Phase 8.
+(`shared/src/progression.ts`). Levels unlock things: see
+[Story, spells and unlocks](#story-spells-and-unlocks).
 
 **Database:** Postgres runs in its own container with no published port; only
 the game server can reach it. Data lives in the `pgdata` Docker volume, so
@@ -285,8 +288,14 @@ countdown, then play until one wizard is left.
 - **Health 100.** A **Ward** shield (up to 50) soaks damage first. Out of
   health and you're out of the round: you keep walking around as an invisible
   spectator (the screen goes grey) until the next round, or press Esc to leave.
-- **Arcane Bolt** (left click): always available, 20 damage, a fast glowing
-  projectile you can see coming and dodge. A 0.55 s cooldown.
+- **Left click** casts the spell you picked in the hub's Spellbook. They share
+  one cooldown, so switching can't fire faster:
+  - **Arcane Bolt** (everyone): 20 damage, a fast glowing projectile you can
+    see coming and dodge. 0.55 s cooldown.
+  - **Frost Shard** (Chapter I): 14 damage, and the target moves at 60% speed
+    for 1.5 s. 0.55 s cooldown.
+  - **Spark Volley** (Chapter II): three sparks in a 12-degree fan, 9 damage
+    each, but they only fly 20 m. 0.75 s cooldown.
 - **Fireball** (right click): needs charges from a **Fire Tome** pickup (3 per
   tome, up to 6). Slower, 40 on a direct hit, and it explodes: 25 down to 8
   damage to anyone within 3.5 m, unless a wall is between them and the blast.
@@ -328,6 +337,65 @@ node client/scripts/walk-arena.ts   # spell-vs-wall math vs Rapier; ramps walkab
 ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 GAME_PIN=... node server/scripts/royale-check.ts http://localhost:3000   # combat rules, round, XP
 GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000     # includes a bots-only royale round
+```
+
+## Story, spells and unlocks
+
+**The story** is told through the trials and the hub. Headmaster Orrin Vale
+vanished into the storm (the battle royale's), leaving three trials for a
+successor. Each trial is a chapter: its opening text appears when you
+arrive, and its ending (plus what it unlocked) the first time you clear it.
+A chapter is complete once you have a time on its trial. The text is in
+`shared/src/story.ts`.
+
+**In the hub:**
+- **Spellbook** (lectern, left of the arrival path): choose your left-click
+  spell; see your perks.
+- **Wardrobe** (right of the path): hat and robe. Everyone in the hub sees
+  the change right away.
+- **The Chronicle** (board on the far side of the plaza): the chapters so far.
+- **Hidden areas** behind magic barriers, opened by chapters: the **Spell
+  Garden** (southwest corner), the **Observatory** (southeast, with a tower),
+  and the **Headmaster's Sanctum** (the academy's great doors open). Each has a
+  lore tablet.
+
+Walk up to a station and press **E**; Esc or Close to leave it.
+
+**Unlocks** (`shared/src/unlocks.ts`). They add options, not power: the new
+spells are alternatives for the same slot, perks only move you, the rest is
+looks.
+
+| Unlock | How |
+|---|---|
+| Crimson robe | Level 2 |
+| **Double Jump** (Space again in mid-air) | Level 3 |
+| Emerald robe | Level 4 |
+| **Blink Dash** (Q: ~3.5 m burst, every 2 s) | Level 5 |
+| Tall hat | Level 6 |
+| Midnight robe | Level 7 |
+| Gold robe | Level 10 |
+| **Frost Shard**, the Spell Garden | Chapter I (clear Trial I) |
+| **Spark Volley**, the Observatory, Starry hat | Chapter II |
+| The Sanctum, Headmaster's crown, Ivory robe | Chapter III |
+
+**Perks are off in the trials**, so trial times stay comparable.
+
+**What the server checks:** your saved loadout (spell, hat, robe) lives in
+the `accounts.loadout` column (migration `002_loadout.sql`). Every time it's
+read or changed, each choice is checked against your unlocks, worked out
+fresh from your XP and best times; anything locked falls back to the
+default. Loadouts can only be changed in the hub (at most every 0.4 s, since
+each is a database write). In the arena, casting a spell you haven't
+unlocked is ignored. The barriers are the exception: movement is
+client-side, so each player's game just leaves out the barriers they've
+opened, and a modified client could walk through one. Behind them is only
+scenery and lore, so that's fine. Perks are the same: the server's movement
+check already allows short bursts (built for lag spikes), and a dash fits
+within it.
+
+```sh
+GAME_PIN=... node server/scripts/unlocks-check.ts http://localhost:3000   # clears Trial I for real, checks what unlocks
+node client/scripts/walk-hub.ts   # also: areas blocked when locked, reachable when open
 ```
 
 ## Access PIN
@@ -488,12 +556,16 @@ shared/src/levels/  level data (boxes, zones, portals) for client and server
 shared/src/rooms.ts room list: id, name, level, mode
 shared/src/progression.ts  XP -> level curve
 shared/src/combat.ts       spells, health, pickups, storm stages
+shared/src/story.ts        chapters and lore text
+shared/src/unlocks.ts      what unlocks when, loadouts, hats and robes
 shared/src/levels/geometry.ts  line-vs-box and line-vs-player tests (spell hits)
 server/src/bots/   server-side bots: NavGrid (walking map + A*), BotWalker
                    (path following), ChaseBot and RoyaleBot (brains)
-server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check, royale-check
+server/scripts/  test bot, security-check, parkour-check, chase-check, bots-check, hub-check, royale-check, unlocks-check
 client/scripts/  simulate-course, walk-hub, walk-arena (physics bots)
 client/src/royale/ battle royale client: spells, storm, pickups, HUD
+client/src/hub/    the Spellbook / Wardrobe / Chronicle window
+client/src/StoryCard.ts  chapter text in the trials
 client/src/      game client (Game.ts is the main loop)
 Caddyfile        static files, /ws proxy, security headers
 ```

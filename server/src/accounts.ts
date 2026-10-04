@@ -9,6 +9,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import argon2 from "argon2";
 import { levelInfo, type LevelInfo } from "../../shared/src/progression.ts";
+import { type Loadout, sanitizeLoadout, unlockedSet } from "../../shared/src/unlocks.ts";
 import { config } from "./config.ts";
 import { pool, transaction } from "./db.ts";
 
@@ -25,7 +26,9 @@ const HASH_OPTIONS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, pa
 // long as a wrong password and response times don't reveal which accounts exist.
 const DUMMY_HASH = await argon2.hash("not a real password", HASH_OPTIONS);
 
-export type Account = { id: number; username: string };
+// unlocked and loadout are as of when the account was loaded (each WebSocket
+// connection loads it fresh, and every room switch is a new connection).
+export type Account = { id: number; username: string; unlocked: Set<string>; loadout: Loadout };
 
 // ---- Registration and login ----
 
@@ -45,7 +48,7 @@ export async function register(username: string, password: string): Promise<Auth
        VALUES ($1, $2, $3, now()) RETURNING id, session_version`,
       [username, username.toLowerCase(), hash],
     );
-    return { ok: true, account: { id: rows[0].id, username }, sessionVersion: rows[0].session_version };
+    return { ok: true, account: await loadAccount(rows[0].id, username), sessionVersion: rows[0].session_version };
   } catch (err) {
     if ((err as { code?: string }).code === "23505") return { ok: false, error: "That username is taken." };
     throw err;
@@ -63,7 +66,7 @@ export async function login(username: string, password: string): Promise<AuthRes
   const valid = await argon2.verify(row?.password_hash ?? DUMMY_HASH, password);
   if (!row || !valid) return fail;
   await pool.query("UPDATE accounts SET last_login_at = now() WHERE id = $1", [row.id]);
-  return { ok: true, account: { id: row.id, username: row.username }, sessionVersion: row.session_version };
+  return { ok: true, account: await loadAccount(row.id, row.username), sessionVersion: row.session_version };
 }
 
 // ---- The account cookie ----
@@ -111,7 +114,37 @@ export async function accountFromRequest(req: IncomingMessage): Promise<Account 
     [Number(id)],
   );
   if (!rows[0] || rows[0].session_version !== Number(version)) return null;
-  return { id: Number(id), username: rows[0].username };
+  return loadAccount(Number(id), rows[0].username);
+}
+
+// XP, best times and the saved loadout -> what's unlocked and what's equipped.
+async function loadAccount(id: number, username: string): Promise<Account> {
+  const state = await progressOf(id);
+  const unlocked = unlockedSet(state.xp, state.bestTimes);
+  return { id, username, unlocked, loadout: sanitizeLoadout(state.loadout, unlocked) };
+}
+
+async function progressOf(accountId: number): Promise<{ xp: number; bestTimes: Record<string, number>; loadout: unknown }> {
+  const acc = await pool.query<{ xp: number; loadout: unknown }>("SELECT xp, loadout FROM accounts WHERE id = $1", [accountId]);
+  const times = await pool.query<{ course_id: string; time_ms: number }>(
+    "SELECT course_id, time_ms FROM best_times WHERE account_id = $1",
+    [accountId],
+  );
+  return {
+    xp: acc.rows[0]?.xp ?? 0,
+    bestTimes: Object.fromEntries(times.rows.map((r) => [r.course_id, r.time_ms])),
+    loadout: acc.rows[0]?.loadout ?? {},
+  };
+}
+
+// Save a loadout, keeping only choices that are unlocked right now (checked
+// against fresh XP and best times). Returns what was saved.
+export async function saveLoadout(accountId: number, wanted: unknown): Promise<{ loadout: Loadout; unlocked: Set<string> }> {
+  const state = await progressOf(accountId);
+  const unlocked = unlockedSet(state.xp, state.bestTimes);
+  const loadout = sanitizeLoadout(wanted, unlocked);
+  await pool.query("UPDATE accounts SET loadout = $2 WHERE id = $1", [accountId, JSON.stringify(loadout)]);
+  return { loadout, unlocked };
 }
 
 // ---- Profile, XP, best times ----
@@ -121,17 +154,14 @@ export type Profile = {
   xp: number;
   level: LevelInfo;
   bestTimes: Record<string, number>; // course id -> ms
+  loadout: Loadout;
 };
 
 export async function getProfile(accountId: number): Promise<Profile | null> {
-  const acc = await pool.query<{ username: string; xp: number }>("SELECT username, xp FROM accounts WHERE id = $1", [accountId]);
+  const acc = await pool.query<{ username: string }>("SELECT username FROM accounts WHERE id = $1", [accountId]);
   if (!acc.rows[0]) return null;
-  const times = await pool.query<{ course_id: string; time_ms: number }>(
-    "SELECT course_id, time_ms FROM best_times WHERE account_id = $1",
-    [accountId],
-  );
-  const { username, xp } = acc.rows[0];
-  return { username, xp, level: levelInfo(xp), bestTimes: Object.fromEntries(times.rows.map((r) => [r.course_id, r.time_ms])) };
+  const { xp, bestTimes, loadout } = await progressOf(accountId);
+  return { username: acc.rows[0].username, xp, level: levelInfo(xp), bestTimes, loadout: sanitizeLoadout(loadout, unlockedSet(xp, bestTimes)) };
 }
 
 // Adds XP and logs why. Returns the new total.

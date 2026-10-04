@@ -3,7 +3,7 @@
 // the player's clicks; this decides what to draw and what to send.
 
 import type * as THREE from "three";
-import { MAX_HEALTH, MAX_SHIELD, type SpellId, SPELLS } from "../../../shared/src/combat.ts";
+import { castDirections, MAX_HEALTH, MAX_SHIELD, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, RoundState, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RemotePlayers } from "../RemotePlayers.ts";
@@ -28,7 +28,9 @@ export class Royale {
   private health = new Map<number, { hp: number; shield: number }>();
   private myCasts = new Set<number>(); // server ids of my spells in flight
   private seq = 0;
-  private readyAt: Record<SpellId, number> = { bolt: 0, fireball: 0 }; // performance.now()
+  private readyAt: Record<SpellSlot, number> = { primary: 0, fireball: 0 }; // performance.now()
+  private primary: SpellId;
+  private onSlowed: (ms: number) => void;
   private fireballs = 0;
 
   constructor(
@@ -40,14 +42,18 @@ export class Royale {
     remotes: RemotePlayers,
     send: (msg: ClientMsg) => void,
     myId: () => number,
+    primary: SpellId, // the left-click spell chosen in the Spellbook
+    onSlowed: (ms: number) => void, // hit by Frost Shard: slow the player down
   ) {
+    this.primary = primary;
+    this.onSlowed = onSlowed;
     this.remotes = remotes;
     this.send = send;
     this.myId = myId;
     this.storm = new Storm(scene);
     this.spells = new Spells(scene, clock, level.boxes);
     this.pickups = new Pickups(scene);
-    this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, (action) => send({ t: "bots", action }));
+    this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, primary, (action) => send({ t: "bots", action }));
   }
 
   // Returns true if it was a royale message.
@@ -87,9 +93,13 @@ export class Royale {
       case "spell": {
         const mine = msg.caster === this.myId();
         if (mine) this.myCasts.add(msg.id);
-        this.spells.started(msg.id, msg.spell, msg.o, msg.d, msg.time, mine ? msg.seq : null);
+        this.spells.started(msg.id, msg.spell, msg.o, msg.d, msg.time, mine ? `${msg.seq}:${msg.k}` : null);
         return true;
       }
+      case "slowed":
+        if (msg.id === this.myId()) this.onSlowed(msg.ms);
+        else this.remotes.chill(msg.id, msg.ms);
+        return true;
       case "spellEnd":
         this.spells.ended(msg.id, msg.p);
         if (msg.hit !== null && msg.hit !== this.myId()) this.remotes.flash(msg.hit);
@@ -114,16 +124,19 @@ export class Royale {
     this.remotes.forEachId((id) => this.remotes.setVisible(id, !hide || this.alive.has(id)));
   }
 
-  // The player clicked: cast from their eyes along where they're looking.
-  cast(spell: SpellId, origin: THREE.Vector3, dir: THREE.Vector3): void {
+  // The player clicked (left: their chosen spell, right: fireball): cast from
+  // their eyes along where they're looking.
+  cast(button: "primary" | "fireball", origin: THREE.Vector3, dir: THREE.Vector3): void {
+    const spell: SpellId = button === "primary" ? this.primary : "fireball";
+    const slot = SPELLS[spell].slot;
     const now = performance.now();
-    if (!this.hud.canCast || now < this.readyAt[spell]) return;
+    if (!this.hud.canCast || now < this.readyAt[slot]) return;
     if (spell === "fireball" && this.fireballs <= 0) return;
-    this.readyAt[spell] = now + SPELLS[spell].cooldownMs;
+    this.readyAt[slot] = now + SPELLS[spell].cooldownMs;
     const o: Vec3 = [round3(origin.x), round3(origin.y), round3(origin.z)];
     const d: Vec3 = [dir.x, dir.y, dir.z];
     this.seq += 1;
-    this.spells.castLocal(this.seq, spell, o, d);
+    this.spells.castLocal(this.seq, spell, o, castDirections(spell, d));
     this.send({ t: "cast", spell, o, d, seq: this.seq });
   }
 
@@ -133,7 +146,7 @@ export class Royale {
     this.pickups.update(time);
     const c = this.storm.circle(serverNow);
     const inStorm = !!c && Math.hypot(me.x - c[0], me.z - c[1]) > c[2];
-    this.hud.update(Math.max(0, this.readyAt.bolt - performance.now()), inStorm);
+    this.hud.update(Math.max(0, this.readyAt.primary - performance.now()), inStorm);
   }
 
   dispose(): void {

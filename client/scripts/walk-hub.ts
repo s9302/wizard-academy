@@ -16,16 +16,23 @@ import { PlayerController } from "../src/PlayerController.ts";
 import type { Input } from "../src/Input.ts";
 
 await RAPIER.init();
-const world = new RAPIER.World({ x: 0, y: -20, z: 0 });
-for (const box of academy.boxes) {
-  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(box.rot ?? [0, 0, 0])));
-  world.createCollider(
-    RAPIER.ColliderDesc.cuboid(box.size[0] / 2, box.size[1] / 2, box.size[2] / 2)
-      .setTranslation(...box.pos)
-      .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
-  );
+
+// A world as a player sees it: with every barrier (new player), or with
+// the barriers they've opened left out.
+function makeWorld(openGates: boolean): RAPIER.World {
+  const world = new RAPIER.World({ x: 0, y: -20, z: 0 });
+  for (const box of academy.boxes) {
+    if (box.gate && openGates) continue;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(box.rot ?? [0, 0, 0])));
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(box.size[0] / 2, box.size[1] / 2, box.size[2] / 2)
+        .setTranslation(...box.pos)
+        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
+    );
+  }
+  world.step();
+  return world;
 }
-world.step();
 
 const input = {
   yaw: 0,
@@ -37,7 +44,7 @@ const input = {
   consumeRestart: () => false,
 };
 const DT = 1 / 60;
-const player = new PlayerController(world, academy.killY);
+let player = new PlayerController(makeWorld(false), academy.killY);
 const portals = academy.portals!;
 const pos = (): Vec3 => [player.position.x, player.position.y, player.position.z];
 const touching = () => portals.find((p) => inPortal(pos(), p))?.room ?? null;
@@ -110,6 +117,42 @@ function outOf(portal: Portal): number {
 // The spawn itself must not be inside a portal.
 player.teleport(...academy.spawn);
 check(touching() === null, "spawn is outside every portal");
+
+// ---- Story areas and stations ----
+// Routes from the spawn: the garden and observatory gates face the plaza
+// side of each corner; the sanctum is through the academy door (around the
+// battle royale portal, which stands on the path).
+const stations = new Map(academy.stations!.map((st) => [st.id, st]));
+const routes: Record<string, [number, number][]> = {
+  spellbook: [[0, 12]],
+  wardrobe: [[0, 12]],
+  chronicle: [[0, 12], [-9, 9], [-11, -2]],
+  garden: [[-6, 18], [-20, 27.5], [-27, 27.5]],
+  observatory: [[6, 18], [20, 27.5], [28, 27.5], [32, 22], [32, 29.5]],
+  sanctum: [[0, 12], [9, 9], [11, -6], [5, -21], [0, -24], [0, -30]],
+};
+const AREAS: Record<string, string> = { garden: "area:garden", observatory: "area:observatory", sanctum: "area:sanctum" };
+
+function reaches(id: string): number {
+  const st = stations.get(id)!;
+  player.teleport(...academy.spawn);
+  walk([...routes[id], [st.pos[0], st.pos[2]]]);
+  const p = player.position;
+  return Math.hypot(p.x - st.pos[0], p.z - st.pos[2]) + Math.max(0, Math.abs(p.y - 0.9 - st.pos[1]) - 0.3);
+}
+
+// A new player: plaza stations yes, story areas no.
+for (const id of stations.keys()) {
+  const miss = reaches(id);
+  if (AREAS[id]) check(miss > 2.5, `locked: ${id} can't be reached (stopped ${miss.toFixed(1)} m away)`);
+  else check(miss < 2.2, `${id} station can be reached (${miss.toFixed(2)} m)`);
+}
+// Everything opened.
+player = new PlayerController(makeWorld(true), academy.killY);
+for (const id of Object.keys(AREAS)) {
+  const miss = reaches(id);
+  check(miss < 2.2, `unlocked: ${id} tablet can be reached (${miss.toFixed(2)} m)`);
+}
 
 console.log(failures ? `${failures} FAILED` : "ALL PASSED");
 process.exit(failures ? 1 : 0);

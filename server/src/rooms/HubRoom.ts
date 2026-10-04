@@ -1,9 +1,11 @@
 // The academy hub: free movement, plus portals to every other room. Walking
 // into a portal is detected by the client (it can join any room anyway); the
 // hub's jobs are putting people who come back in front of the portal they
-// used, and keeping the portal signs' player counts up to date.
+// used, keeping the portal signs' player counts up to date, and saving
+// loadouts from the Spellbook and Wardrobe (only here, where they stand).
 
-import type { Vec3 } from "../../../shared/src/protocol.ts";
+import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
+import { saveLoadout } from "../accounts.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import { portalPoint } from "../../../shared/src/levels/types.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
@@ -11,6 +13,7 @@ import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../../../shared/src/constants
 import { type Player, Room } from "./Room.ts";
 
 const COUNTS_INTERVAL_MS = 2000;
+const LOADOUT_SAVE_MS = 400; // at most this often per player (each one is a database write)
 // How far in front of its portal someone coming back appears.
 const ARRIVAL_DISTANCE = 3.5;
 const CAPSULE_CENTER = PLAYER_HALF_HEIGHT + PLAYER_RADIUS; // above the floor
@@ -19,6 +22,7 @@ export class HubRoom extends Room {
   private counts: () => Record<string, number>;
   private lastCounts = "";
   private nextCountsAt = 0;
+  private lastSave = new Map<number, number>();
 
   constructor(info: RoomInfo, level: Level, counts: () => Record<string, number>) {
     super(info, level);
@@ -35,6 +39,29 @@ export class HubRoom extends Room {
 
   protected override onPlayerJoined(player: Player): void {
     player.conn.send({ t: "roomCounts", counts: this.counts() });
+  }
+
+  protected override onPlayerLeft(player: Player): void {
+    this.lastSave.delete(player.conn.id);
+  }
+
+  protected override onMessage(player: Player, msg: ClientMsg): void {
+    if (msg.t !== "loadout") return;
+    const conn = player.conn;
+    const account = conn.account;
+    const now = Date.now();
+    if (!account || now - (this.lastSave.get(conn.id) ?? 0) < LOADOUT_SAVE_MS) return;
+    this.lastSave.set(conn.id, now);
+    // Checked against fresh unlocks: anything locked falls back to the default.
+    saveLoadout(account.id, msg)
+      .then(({ loadout, unlocked }) => {
+        account.loadout = loadout;
+        account.unlocked = unlocked;
+        conn.look = { hat: loadout.hat, robe: loadout.robe };
+        conn.send({ t: "loadoutSaved", ...loadout });
+        if (conn.room === this) this.broadcast({ t: "look", id: conn.id, look: conn.look }, conn.id);
+      })
+      .catch((err) => console.error(`saving loadout for ${account.username} failed:`, err));
   }
 
   protected override onTick(now: number): void {
