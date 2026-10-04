@@ -135,6 +135,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   protected override onRoundEnded(): void {
     this.setZone(null);
     this.projectiles.clear();
+    // Class changes picked during the round take effect now, at the results
+    // screen, rather than waiting for the next countdown.
+    for (const player of this.players.values()) {
+      const f = this.fighters.get(player.conn.id);
+      if (f && f.cls !== this.classOf(player)) this.resetFighter(player);
+    }
   }
 
   protected results(): { title: string; lines: string[] } {

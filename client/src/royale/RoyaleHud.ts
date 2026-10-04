@@ -40,6 +40,7 @@ export class RoyaleHud {
   private picker: HTMLElement;
   private cls: ClassId = "wizard";
   private hand: Hand = "main";
+  private pendingCls: ClassId | null = null;
   private spellCooldown = SPELLS.bolt.cooldownMs;
   private fireCount: HTMLElement;
   private hurtEl: HTMLElement;
@@ -137,13 +138,32 @@ export class RoyaleHud {
     this.cls = cls;
     this.spellCooldown = spellCooldownMs;
     this.hand = hand;
-    this.classEl.textContent = CLASSES[cls].name;
+    this.showClass();
     for (const h of ["main", "backup"] as Hand[]) {
       const w = weaponOf(cls, h);
       this.slots[h].name.textContent = w === "spell" ? spellName : WEAPONS[w].name;
       this.slots[h].el.classList.toggle("active", h === hand);
     }
-    for (const b of this.picker.querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("on", b.dataset.cls === cls);
+    this.showPicker();
+  }
+
+  // A class picked mid-round, waiting for the round to end (null: none).
+  pending(cls: ClassId | null): void {
+    this.pendingCls = cls;
+    this.showClass();
+    this.showPicker();
+  }
+
+  private showClass(): void {
+    const next = this.pendingCls && this.pendingCls !== this.cls ? ` \u2192 ${CLASSES[this.pendingCls].name} next round` : "";
+    this.classEl.textContent = CLASSES[this.cls].name + next;
+  }
+
+  private showPicker(): void {
+    for (const b of this.picker.querySelectorAll<HTMLButtonElement>("button")) {
+      b.classList.toggle("on", b.dataset.cls === this.cls);
+      b.classList.toggle("next", b.dataset.cls === this.pendingCls && this.pendingCls !== this.cls);
+    }
   }
 
   // "Blocked!", "Backstab!" near the crosshair.

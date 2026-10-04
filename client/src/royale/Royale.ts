@@ -45,6 +45,7 @@ export class Royale {
   private cls: ClassId;
   private hand: Hand = "main";
   private handReadyAt = 0;
+  private pendingCls: ClassId | null = null; // picked mid-round
 
   constructor(scene: THREE.Scene, camera: THREE.Camera, hudEl: HTMLElement, clock: ServerClock, level: Level, roomName: string, remotes: RemotePlayers, primary: SpellId, cls: ClassId, hooks: RoyaleHooks) {
     this.primary = primary;
@@ -57,7 +58,7 @@ export class Royale {
     this.viewmodel = new Viewmodel(camera);
     this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, {
       onBots: (action) => hooks.send({ t: "bots", action }),
-      onClass: (c) => hooks.send({ t: "class", cls: c }),
+      onClass: (c) => this.pickClass(c),
     });
     this.applyLoadout();
   }
@@ -104,6 +105,10 @@ export class Royale {
           // The server's word on our class and hand.
           this.cls = msg.cls;
           this.hand = msg.hand;
+          if (this.pendingCls === msg.cls) {
+            this.pendingCls = null;
+            this.hud.pending(null);
+          }
           this.applyLoadout();
         } else this.remotes.setWeapon(msg.id, weaponOf(msg.cls, msg.hand));
         return true;
@@ -159,6 +164,15 @@ export class Royale {
   private refreshVisibility(): void {
     const hide = this.state === "playing";
     this.remotes.forEachId((id) => this.remotes.setVisible(id, !hide || this.alive.has(id)));
+  }
+
+  // The class picker. Mid-round (while still in it) the change waits for the
+  // round to end; the HUD shows it's coming.
+  private pickClass(cls: ClassId): void {
+    const fighting = this.state === "playing" && this.alive.has(this.hooks.myId());
+    this.pendingCls = fighting && cls !== this.cls ? cls : null;
+    this.hud.pending(this.pendingCls);
+    this.hooks.send({ t: "class", cls });
   }
 
   // 1 / 2 / mouse wheel. The server confirms with an "equip" message.
