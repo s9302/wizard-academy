@@ -15,6 +15,8 @@ export class Input {
   private dashQueued = false;
   private interactQueued = false;
   private flyQueued = false;
+  private handQueued: "main" | "backup" | "toggle" | null = null;
+  private lastWheel = 0;
   private element: HTMLElement;
 
   constructor(element: HTMLElement) {
@@ -25,6 +27,8 @@ export class Input {
       if (e.code === "KeyQ" && !e.repeat && this.locked) this.dashQueued = true;
       if (e.code === "KeyE" && !e.repeat && this.locked) this.interactQueued = true;
       if (e.code === "KeyF" && !e.repeat && this.locked) this.flyQueued = true;
+      if (e.code === "Digit1" && this.locked) this.handQueued = "main";
+      if (e.code === "Digit2" && this.locked) this.handQueued = "backup";
       this.keys.add(e.code);
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
@@ -38,6 +42,14 @@ export class Input {
     // Right-click is a spell while playing, not the browser menu.
     document.addEventListener("contextmenu", (e) => {
       if (this.locked) e.preventDefault();
+    });
+
+    // The mouse wheel swaps hands. Trackpads send a stream of wheel events
+    // per gesture, so at most one swap every 350 ms.
+    document.addEventListener("wheel", (e) => {
+      if (!this.locked || Math.abs(e.deltaY) < 1 || e.timeStamp - this.lastWheel < 350) return;
+      this.lastWheel = e.timeStamp;
+      this.handQueued = "toggle";
     });
 
     document.addEventListener("mousemove", (e) => {
@@ -102,6 +114,13 @@ export class Input {
 
   get descend(): boolean {
     return this.down("KeyC");
+  }
+
+  // Battle royale: which hand to switch to, once per press.
+  consumeHand(): "main" | "backup" | "toggle" | null {
+    const queued = this.handQueued;
+    this.handQueued = null;
+    return queued;
   }
 
   // Returns true once per F press (admins: toggle flying).

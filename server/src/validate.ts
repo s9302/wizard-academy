@@ -3,6 +3,7 @@
 
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { CLASS_IDS, type ClassId } from "../../shared/src/classes.ts";
 import { type Hat, HATS, type PrimarySpell, PRIMARY_SPELLS, type Robe, ROBES } from "../../shared/src/unlocks.ts";
 
 // The world is small; anything outside this box is garbage or an attack.
@@ -52,8 +53,21 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case "bots":
       if (msg.action !== "add" && msg.action !== "remove") return null;
       return { t: "bots", action: msg.action };
+    case "attack": {
+      if (!isVec3(msg.o) || !isVec3(msg.d) || !Number.isSafeInteger(msg.seq) || (msg.seq as number) < 0) return null;
+      const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
+      if (len < 0.9 || len > 1.1) return null;
+      return { t: "attack", o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len], seq: msg.seq as number };
+    }
+    case "hand":
+      if (msg.hand !== "main" && msg.hand !== "backup") return null;
+      return { t: "hand", hand: msg.hand };
+    case "class":
+      if (!CLASS_IDS.includes(msg.cls as ClassId)) return null;
+      return { t: "class", cls: msg.cls as ClassId };
     case "cast": {
-      if (!SPELL_IDS.includes(msg.spell as SpellId) || !isVec3(msg.o) || !isVec3(msg.d)) return null;
+      // Arrows only come from the bow ("attack"), never cast directly.
+      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
       if (!Number.isSafeInteger(msg.seq) || (msg.seq as number) < 0) return null;
       // Direction must be (roughly) a unit vector; the server renormalizes it.
       const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);

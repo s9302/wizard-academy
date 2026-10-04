@@ -51,6 +51,7 @@ class Client {
   spellKinds = new Map<string, number>(); // spell -> projectiles
   sparkCasts = new Map<string, number>(); // "caster:seq" -> projectiles (Spark Volley fires 3)
   slowed = 0;
+  swings = 0;
   spellHits = 0;
   announcements: string[] = [];
   results: string[] = [];
@@ -77,6 +78,7 @@ class Client {
         this.spellKinds.set(msg.spell, (this.spellKinds.get(msg.spell) ?? 0) + 1);
         if (msg.spell === "spark") this.sparkCasts.set(`${msg.caster}:${msg.time}`, (this.sparkCasts.get(`${msg.caster}:${msg.time}`) ?? 0) + 1);
       } else if (msg.t === "slowed") this.slowed++;
+      else if (msg.t === "melee") this.swings++;
       else if (msg.t === "spellEnd" && msg.hit !== null) this.spellHits++;
       else if (msg.t === "announce") this.announcements.push(msg.text);
       else if (msg.t === "roundResult") this.results.push(msg.title);
@@ -102,6 +104,8 @@ for (const room of ["tag", "infection", "royale"]) {
   a.send({ t: "bots", action: "remove" });
   a.send({ t: "bots", action: "remove" });
   check(`${room}: removing bots`, await waitFor(() => a.botCount === 4, 2000), `count=${a.botCount}`);
+  // The royale plays with six: two of each class.
+  if (room === "royale") for (let i = 0; i < 2; i++) a.send({ t: "bots", action: "add" });
 
   // Let a round play out. The watcher stands still near a spawn point.
   if (room === "royale") {
@@ -138,7 +142,11 @@ for (const room of ["tag", "infection", "royale"]) {
     check("royale: bots take each other out", blasts >= 1, `${blasts} blasted, ${a.announcements.filter((t) => t.includes("storm")).length} storm`);
     console.log(`      (result: ${a.results.find((r) => r !== "Round cancelled")})`);
     const kinds = Object.fromEntries(a.spellKinds);
-    check("royale: bots use all three left-click spells", ["bolt", "frost", "spark"].every((k) => (kinds[k] ?? 0) > 0), JSON.stringify(kinds));
+    check(
+      "royale: all three classes fight (sword swings, arrows, spells)",
+      a.swings > 0 && (kinds.arrow ?? 0) > 0 && ((kinds.frost ?? 0) > 0 || (kinds.spark ?? 0) > 0),
+      `${a.swings} swings, ${JSON.stringify(kinds)}`,
+    );
     check("royale: each Spark Volley is 3 projectiles", [...a.sparkCasts.values()].every((n) => n === 3), `${a.sparkCasts.size} volleys`);
     check("royale: Frost Shard hits slow people", a.slowed > 0, `${a.slowed} slowed`);
   } else if (room === "tag") {

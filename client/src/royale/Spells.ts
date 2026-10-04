@@ -9,7 +9,7 @@
 // server thinks it is.
 
 import * as THREE from "three";
-import { type SpellId, SPELLS } from "../../../shared/src/combat.ts";
+import { projectileAt, type SpellId, SPELLS } from "../../../shared/src/combat.ts";
 import { segmentHitsLevel } from "../../../shared/src/levels/geometry.ts";
 import type { Box } from "../../../shared/src/levels/types.ts";
 import type { Vec3 } from "../../../shared/src/protocol.ts";
@@ -23,9 +23,37 @@ type Flying = {
   o: Vec3;
   d: Vec3;
   start: number; // server time
-  maxDist: number; // where it meets a wall (or runs out of range)
+  maxT: number; // seconds until it meets a wall (or runs out of range)
   group: THREE.Group;
 };
+
+// How long a projectile flies before it hits a wall, walking its path (which
+// curves, for arrows) in short straight pieces.
+function flightTime(spell: SpellId, o: Vec3, d: Vec3, boxes: Box[]): number {
+  const def = SPELLS[spell];
+  const end = def.range / def.speed;
+  const dt = def.gravity ? 0.05 : end;
+  for (let t = 0; t < end; t += dt) {
+    const a = projectileAt(spell, o, d, t);
+    const b = projectileAt(spell, o, d, Math.min(end, t + dt));
+    const hit = segmentHitsLevel(a, b, boxes, 0.05);
+    if (hit !== null) return t + hit * (Math.min(end, t + dt) - t);
+  }
+  return end;
+}
+
+// An arrow: a shaft, a tip and fletching, pointing along -Z.
+function makeArrow(): THREE.Group {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.75), new THREE.MeshLambertMaterial({ color: "#c9a36b" }));
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.12, 4), new THREE.MeshLambertMaterial({ color: "#c9cdd6" }));
+  tip.rotation.x = -Math.PI / 2;
+  tip.position.z = -0.43;
+  const feathers = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.01, 0.14), new THREE.MeshLambertMaterial({ color: "#e86f6f" }));
+  feathers.position.z = 0.33;
+  g.add(shaft, tip, feathers);
+  return g;
+}
 
 type Blast = { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; start: number; size: number };
 
@@ -45,6 +73,7 @@ export class Spells {
     this.boxes = boxes;
     const glow = (color: string) => new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     this.materials = {
+      arrow: glow(SPELLS.arrow.color),
       bolt: glow(SPELLS.bolt.color),
       frost: glow(SPELLS.frost.color),
       spark: glow(SPELLS.spark.color),
@@ -54,17 +83,19 @@ export class Spells {
 
   private create(spell: SpellId, o: Vec3, d: Vec3, start: number): Flying {
     const def = SPELLS[spell];
-    const end: Vec3 = [o[0] + d[0] * def.range, o[1] + d[1] * def.range, o[2] + d[2] * def.range];
-    const t = segmentHitsLevel(o, end, this.boxes, 0.05);
     const group = new THREE.Group();
-    for (let i = 0; i <= TRAIL; i++) {
-      const mesh = new THREE.Mesh(this.geometry, this.materials[spell]);
-      const size = def.radius * (i === 0 ? 1 : 0.8 - i * 0.12);
-      mesh.scale.setScalar(size);
-      group.add(mesh);
+    if (spell === "arrow") {
+      group.add(makeArrow());
+    } else {
+      for (let i = 0; i <= TRAIL; i++) {
+        const mesh = new THREE.Mesh(this.geometry, this.materials[spell]);
+        const size = def.radius * (i === 0 ? 1 : 0.8 - i * 0.12);
+        mesh.scale.setScalar(size);
+        group.add(mesh);
+      }
     }
     this.scene.add(group);
-    const flying: Flying = { spell, o, d, start, maxDist: (t ?? 1) * def.range, group };
+    const flying: Flying = { spell, o, d, start, maxT: flightTime(spell, o, d, this.boxes), group };
     this.place(flying, this.clock.now());
     return flying;
   }
@@ -104,16 +135,22 @@ export class Spells {
     this.scene.remove(flying.group);
   }
 
-  // Position along the line at server time `now`; hidden once past a wall.
+  // Position along its path at server time `now`; hidden once past a wall.
   private place(flying: Flying, now: number): boolean {
     const def = SPELLS[flying.spell];
-    const dist = def.speed * Math.max(0, (now - flying.start) / 1000);
+    const t = Math.max(0, (now - flying.start) / 1000);
     flying.group.children.forEach((mesh, i) => {
-      const along = Math.max(0, dist - i * def.radius * 1.4);
-      mesh.visible = along <= flying.maxDist;
-      mesh.position.set(flying.o[0] + flying.d[0] * along, flying.o[1] + flying.d[1] * along, flying.o[2] + flying.d[2] * along);
+      const ti = Math.max(0, t - (i * def.radius * 1.4) / def.speed);
+      mesh.visible = ti <= flying.maxT;
+      mesh.position.set(...projectileAt(flying.spell, flying.o, flying.d, Math.min(ti, flying.maxT)));
+      if (flying.spell === "arrow") {
+        // Point along the direction of travel (it tips down as it falls).
+        const ahead = projectileAt(flying.spell, flying.o, flying.d, Math.min(ti, flying.maxT) + 0.01);
+        mesh.lookAt(...ahead);
+        mesh.rotateY(Math.PI); // the model points along -Z; lookAt aims +Z
+      }
     });
-    return dist <= def.range + def.speed * 0.5; // keep briefly for the server's verdict
+    return t <= def.range / def.speed + 0.5; // keep briefly for the server's verdict
   }
 
   update(): void {

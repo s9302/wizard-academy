@@ -43,7 +43,7 @@ check("level 3 unlocks Double Jump", unlockedSet(250, {}).has("perk:doubleJump")
 check("Chapter I unlocks Frost Shard and the garden", unlockedSet(0, { trial1: 30000 }).has("spell:frost") && unlockedSet(0, { trial1: 30000 }).has("area:garden"));
 check(
   "a loadout with locked or made-up choices falls back to defaults",
-  JSON.stringify(sanitizeLoadout({ primary: "frost", hat: "crown", robe: "<script>" }, fresh)) === JSON.stringify({ primary: "bolt", hat: "classic", robe: "auto" }),
+  JSON.stringify(sanitizeLoadout({ primary: "frost", hat: "crown", robe: "<script>" }, fresh)) === JSON.stringify({ primary: "bolt", hat: "classic", robe: "auto", cls: "wizard" }),
 );
 
 // ---- Against the server ----

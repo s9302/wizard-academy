@@ -47,7 +47,7 @@ const HELP: Record<string, string> = {
   parkour: "R restart run",
   tag: "Click tag",
   infection: "Click curse",
-  royale: "Click spell \u00b7 Right-click Fireball",
+  royale: "Click attack \u00b7 1/2 swap \u00b7 Right-click Fireball",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
 
@@ -161,9 +161,14 @@ export class Game {
     } else if (room.mode === "royale") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
-      this.royale = new Royale(this.scene, hud, this.clock, level, room.name, this.remotes, send, () => this.myId, this.profile.loadout.primary, (ms) =>
-        this.player.slow(ms / 1000, slowFactor),
-      );
+      this.scene.add(this.camera); // the weapon in view is a child of the camera
+      this.royale = new Royale(this.scene, this.camera, hud, this.clock, level, room.name, this.remotes, this.profile.loadout.primary, this.profile.loadout.cls, {
+        send,
+        myId: () => this.myId,
+        onSlowed: (ms) => this.player.slow(ms / 1000, slowFactor),
+        onSpeed: (m) => (this.player.speedMul = m),
+        feed: (text) => this.addFeed(text),
+      });
     }
     if (level.stations) {
       this.hubPanel = new HubPanel(
@@ -316,7 +321,7 @@ export class Game {
         this.remotes.setLook(msg.id, msg.look);
         break;
       case "loadoutSaved":
-        this.profile.loadout = { primary: msg.primary, hat: msg.hat, robe: msg.robe };
+        this.profile.loadout = { primary: msg.primary, hat: msg.hat, robe: msg.robe, cls: msg.cls };
         this.hubPanel?.update(this.profile);
         this.onProfile(this.profile);
         break;
@@ -485,7 +490,7 @@ export class Game {
     const rightClicked = this.input.consumeRightClick();
     if (this.royale && (clicked || rightClicked)) {
       const dir = this.camera.getWorldDirection(new THREE.Vector3());
-      this.royale.cast(clicked ? "primary" : "fireball", this.camera.position, dir);
+      this.royale.attack(clicked ? "primary" : "fireball", this.camera.position, dir);
     }
 
     // Fell off the level: freeze and ask the server to respawn us (retrying
@@ -524,7 +529,10 @@ export class Game {
     this.remotes.update();
     this.markers.update(now / 1000);
     this.portals?.update(now / 1000);
-    this.royale?.update(now / 1000, this.player.position, this.clock.now());
+    this.royale?.update(now / 1000, this.player.position, this.clock.now(), this.input.forward !== 0 || this.input.strafe !== 0);
+    // 1 / 2 / mouse wheel: switch hands (battle royale).
+    const hand = this.input.consumeHand();
+    if (hand && this.royale) this.royale.switchHand(hand);
     this.updateStations();
     if (this.perkEl) this.perkEl.classList.toggle("cooling", this.player.dashCooldown > 0);
     if (this.portals) {

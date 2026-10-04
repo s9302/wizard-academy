@@ -1,9 +1,9 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases. **Phase 9** added an admin account, a real
-sky, and more graphics detail; next up are classes, more arenas, and wizard
-spells that reshape the arena.
+first person with friends. Built in phases. **Phase 10** added battle royale classes
+(Knight, Rogue, Wizard); next up are more arenas with heights and fall
+damage, then wizard spells that reshape the arena.
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -83,7 +83,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `royale-check`, `unlocks-check`, `admin-check`, `accounts-check` (run it last:
+`hub-check`, `royale-check`, `classes-check`, `unlocks-check`, `admin-check`, `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
 back can trip the limit too: restart the test server between batches.
@@ -338,6 +338,44 @@ node client/scripts/walk-arena.ts   # spell-vs-wall math vs Rapier; ramps walkab
 ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 GAME_PIN=... node server/scripts/royale-check.ts http://localhost:3000   # combat rules, round, XP
 GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000     # includes a bots-only royale round
+```
+
+## Classes (battle royale)
+
+Pick a class in the arena's pause panel (Esc). It's saved to your account;
+picked mid-round, it applies from the next round. Classes only exist in the
+battle royale.
+
+| | Knight | Rogue | Wizard |
+|---|---|---|---|
+| Health | 140 | 85 | 100 |
+| Speed | 92% | 112% | 100% |
+| Defense | takes 15% less damage | none | none |
+| Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** |
+| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range |
+
+- **1 / 2 / mouse wheel** switch hands. Switching takes 0.4 s (no attacking
+  meanwhile), so it can't be used to skip a cooldown; both hands share one
+  cooldown.
+- **Right click** is still a Fireball, for every class (Fire Tome pickups).
+- **Bots** take turns: Knight, Rogue, Wizard (six bots = two of each).
+  Knights charge in and raise the shield when hurt at range, Rogues keep
+  their distance and pull daggers up close, Wizards cast and use the staff
+  up close. Rogue bots aim their arrows with the arc in mind.
+
+**What the server checks:** your class and the hand you hold live on the
+server. A click sends only "attack, from here, this way"; the server picks
+the weapon. Swings are judged like tags (who was within reach and in front
+of you over the last 0.3 s, with no wall in between); the shield, defense
+and backstabs are worked out from where the hit came from and where the
+target is facing. Arrows fly like spells, with gravity, on the server.
+Casting a spell directly is refused unless you're a Wizard holding your
+spell; "arrow" can't be cast at all.
+
+Class numbers: `shared/src/classes.ts`; the arrow: `shared/src/combat.ts`.
+
+```sh
+GAME_PIN=... node server/scripts/classes-check.ts http://localhost:3000   # health, hands, reach, walls, shield, backstab, arrows
 ```
 
 ## Story, spells and unlocks

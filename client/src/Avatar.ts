@@ -5,7 +5,9 @@
 
 import * as THREE from "three";
 import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../../shared/src/constants.ts";
+import type { WeaponId } from "../../shared/src/classes.ts";
 import { type Hat, type Look, ROBE_COLORS } from "../../shared/src/unlocks.ts";
+import { disposeWeapon, makeWeapon } from "./royale/WeaponModels.ts";
 
 const TOP = PLAYER_HALF_HEIGHT + PLAYER_RADIUS; // top of the capsule
 
@@ -191,6 +193,44 @@ export function setAvatarLook(group: THREE.Group, id: number, look: Look): void 
   parts.hatMats = style.build(flat(style.color), parts.hat);
   parts.baseColor = robeColor(id, look);
   setAvatarStatus(group, parts.status);
+}
+
+// ---- Battle royale: the weapon in hand ----
+
+const SWING_MS = 260;
+
+export function setAvatarWeapon(group: THREE.Group, weapon: WeaponId | null): void {
+  let hand = group.userData.hand as THREE.Group | undefined;
+  if (!hand) {
+    hand = new THREE.Group();
+    hand.position.set(0.42, -0.1, -0.12); // right side, a little forward
+    group.add(hand);
+    group.userData.hand = hand;
+  }
+  if (group.userData.weapon === weapon) return;
+  group.userData.weapon = weapon;
+  for (const child of [...hand.children]) {
+    hand.remove(child);
+    disposeWeapon(child);
+  }
+  if (!weapon) return;
+  const model = makeWeapon(weapon);
+  model.scale.setScalar(0.75);
+  if (weapon === "shield") model.position.set(-0.75, 0.05, -0.25); // held in front, on the left
+  model.rotation.x = weapon === "shield" ? 0 : -0.35;
+  hand.add(model);
+}
+
+export function swingAvatar(group: THREE.Group): void {
+  group.userData.swingAt = performance.now();
+}
+
+// Called every frame: play any swing.
+export function animateAvatar(group: THREE.Group, now: number): void {
+  const hand = group.userData.hand as THREE.Group | undefined;
+  if (!hand) return;
+  const k = (now - (group.userData.swingAt ?? -Infinity)) / SWING_MS;
+  hand.rotation.x = k >= 0 && k < 1 ? -Math.sin(k * Math.PI) * 1.4 : 0;
 }
 
 // Frosted (hit by Frost Shard): a pale blue tint for a moment.

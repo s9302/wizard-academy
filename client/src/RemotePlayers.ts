@@ -9,7 +9,20 @@
 import * as THREE from "three";
 import type { PlayerInfo, Vec3 } from "../../shared/src/protocol.ts";
 import type { Look } from "../../shared/src/unlocks.ts";
-import { type AvatarStatus, chillAvatar, createAvatar, disposeAvatar, flashAvatar, setAvatarHealth, setAvatarLook, setAvatarStatus } from "./Avatar.ts";
+import type { WeaponId } from "../../shared/src/classes.ts";
+import {
+  animateAvatar,
+  type AvatarStatus,
+  chillAvatar,
+  createAvatar,
+  disposeAvatar,
+  flashAvatar,
+  setAvatarHealth,
+  setAvatarLook,
+  setAvatarStatus,
+  setAvatarWeapon,
+  swingAvatar,
+} from "./Avatar.ts";
 import type { ServerClock } from "./ServerClock.ts";
 
 const INTERP_DELAY_MS = 120;
@@ -87,6 +100,16 @@ export class RemotePlayers {
   setHealth(id: number, hp: number, shield: number): void {
     const remote = this.remotes.get(id);
     if (remote) setAvatarHealth(remote.avatar, hp, shield);
+  }
+
+  setWeapon(id: number, weapon: WeaponId | null): void {
+    const remote = this.remotes.get(id);
+    if (remote) setAvatarWeapon(remote.avatar, weapon);
+  }
+
+  swing(id: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) swingAvatar(remote.avatar);
   }
 
   chill(id: number, ms: number): void {
@@ -170,6 +193,7 @@ export class RemotePlayers {
         from.p[2] + (to.p[2] - from.p[2]) * t,
       );
       remote.avatar.rotation.y = lerpAngle(from.ry, to.ry, t);
+      animateAvatar(remote.avatar, performance.now());
     }
   }
 }

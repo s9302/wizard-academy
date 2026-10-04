@@ -3,7 +3,8 @@
 // marker when your spell lands, and a purple haze while you're in the storm.
 // Like the other HUDs, it only shows what the server decided.
 
-import { MAX_HEALTH, type SpellId, SPELLS } from "../../../shared/src/combat.ts";
+import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
+import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import type { RoundState } from "../../../shared/src/protocol.ts";
 import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
@@ -32,9 +33,14 @@ export class RoyaleHud {
   private hpFill: HTMLElement;
   private shieldFill: HTMLElement;
   private hpText: HTMLElement;
-  private boltSlot: HTMLElement;
-  private boltCooldown: HTMLElement;
+  private classEl: HTMLElement;
+  private slots: Record<Hand, { el: HTMLElement; name: HTMLElement; cooldown: HTMLElement }>;
   private fireSlot: HTMLElement;
+  private calloutEl: HTMLElement;
+  private picker: HTMLElement;
+  private cls: ClassId = "wizard";
+  private hand: Hand = "main";
+  private spellCooldown = SPELLS.bolt.cooldownMs;
   private fireCount: HTMLElement;
   private hurtEl: HTMLElement;
   private stormEl: HTMLElement;
@@ -45,18 +51,25 @@ export class RoyaleHud {
   private aliveCount = 0;
   private amAlive = false;
   private hp = MAX_HEALTH;
-  private primaryCooldown: number;
   private bannerTimer: number | undefined;
   private hitTimer: number | undefined;
   private hurtTimer: number | undefined;
+  private calloutTimer: number | undefined;
 
-  constructor(hud: HTMLElement, clock: ServerClock, storm: Storm, roomName: string, primary: SpellId, onBots: (action: "add" | "remove") => void) {
+  constructor(
+    hud: HTMLElement,
+    clock: ServerClock,
+    storm: Storm,
+    roomName: string,
+    actions: { onBots: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void },
+  ) {
     this.clock = clock;
-    this.primaryCooldown = SPELLS[primary].cooldownMs;
     this.storm = storm;
 
-    // Bot controls live in the pause panel (press Esc), where the mouse is free.
-    this.bots = new BotControls(onBots);
+    // Bot controls and the class picker live in the pause panel (press Esc),
+    // where the mouse is free.
+    this.bots = new BotControls(actions.onBots);
+    this.picker = this.makePicker(actions.onClass);
 
     this.crosshairEl = document.getElementById("crosshair")!;
     this.stormEl = el("div", "storm-haze", hud);
@@ -70,23 +83,75 @@ export class RoyaleHud {
     this.resultsEl = el("div", "results", hud);
     this.resultsEl.hidden = true;
 
+    this.calloutEl = el("div", "callout", hud);
     const bottom = el("div", "royale-bottom", hud);
+    this.classEl = el("div", "", bottom, "class-badge");
     const bar = el("div", "", bottom, "hp-bar");
     this.hpFill = el("div", "hp-fill", bar);
     this.shieldFill = el("div", "shield-fill", bar);
     this.hpText = el("div", "hp-text", bar);
     const slots = el("div", "spell-slots", bottom);
-    this.boltSlot = el("div", "", slots, "spell-slot bolt");
-    el("div", "", this.boltSlot, "slot-key").textContent = "Click";
-    el("div", "", this.boltSlot, "slot-name").textContent = SPELLS[primary].name;
-    this.boltSlot.style.borderColor = SPELLS[primary].color;
-    this.boltCooldown = el("div", "", this.boltSlot, "slot-cooldown");
+    const slot = (key: string): { el: HTMLElement; name: HTMLElement; cooldown: HTMLElement } => {
+      const box = el("div", "", slots, "spell-slot");
+      el("div", "", box, "slot-key").textContent = key;
+      const name = el("div", "", box, "slot-name");
+      return { el: box, name, cooldown: el("div", "", box, "slot-cooldown") };
+    };
+    this.slots = { main: slot("1 · Main"), backup: slot("2 · Backup") };
     this.fireSlot = el("div", "", slots, "spell-slot fire");
     el("div", "", this.fireSlot, "slot-key").textContent = "Right-click";
     el("div", "", this.fireSlot, "slot-name").textContent = SPELLS.fireball.name;
     this.fireCount = el("div", "", this.fireSlot, "slot-count");
-    this.health(MAX_HEALTH, 0);
+    this.health(MAX_HEALTH, MAX_HEALTH, 0);
     this.charges(0);
+  }
+
+  // Esc panel: pick a class (sent to the server, which confirms with "equip").
+  private makePicker(onClass: (cls: ClassId) => void): HTMLElement {
+    const box = document.createElement("div");
+    box.id = "class-picker";
+    box.onclick = (e) => e.stopPropagation(); // not "click to resume"
+    const title = document.createElement("div");
+    title.className = "picker-title";
+    title.textContent = "Class";
+    box.appendChild(title);
+    for (const id of CLASS_IDS) {
+      const def = CLASSES[id];
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.cls = id;
+      const name = document.createElement("strong");
+      name.textContent = def.name;
+      const blurb = document.createElement("span");
+      blurb.textContent = `${def.maxHealth} health · ${def.blurb}`;
+      button.append(name, blurb);
+      button.onclick = () => onClass(id);
+      box.appendChild(button);
+    }
+    document.querySelector("#overlay .panel")!.insertBefore(box, document.getElementById("bot-controls"));
+    return box;
+  }
+
+  // What we're playing as and holding.
+  loadout(cls: ClassId, hand: Hand, spellName: string, spellCooldownMs: number): void {
+    this.cls = cls;
+    this.spellCooldown = spellCooldownMs;
+    this.hand = hand;
+    this.classEl.textContent = CLASSES[cls].name;
+    for (const h of ["main", "backup"] as Hand[]) {
+      const w = weaponOf(cls, h);
+      this.slots[h].name.textContent = w === "spell" ? spellName : WEAPONS[w].name;
+      this.slots[h].el.classList.toggle("active", h === hand);
+    }
+    for (const b of this.picker.querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("on", b.dataset.cls === cls);
+  }
+
+  // "Blocked!", "Backstab!" near the crosshair.
+  callout(text: string): void {
+    this.calloutEl.textContent = text;
+    this.calloutEl.classList.add("show");
+    window.clearTimeout(this.calloutTimer);
+    this.calloutTimer = window.setTimeout(() => this.calloutEl.classList.remove("show"), 700);
   }
 
   round(state: RoundState, endsAt: number | null): void {
@@ -105,16 +170,16 @@ export class RoyaleHud {
     document.body.classList.toggle("spectating", this.state === "playing" && !amAlive);
   }
 
-  get canCast(): boolean {
+  get canAct(): boolean {
     return this.state !== "countdown" && (this.state !== "playing" || this.amAlive);
   }
 
-  health(hp: number, shield: number): void {
+  health(hp: number, max: number, shield: number): void {
     if (hp < this.hp) this.hurt();
     this.hp = hp;
-    this.hpFill.style.width = `${(100 * hp) / MAX_HEALTH}%`;
-    this.hpFill.className = hp > 50 ? "" : hp > 25 ? "mid" : "low";
-    this.shieldFill.style.width = `${(100 * shield) / MAX_HEALTH}%`;
+    this.hpFill.style.width = `${(100 * hp) / max}%`;
+    this.hpFill.className = hp > max / 2 ? "" : hp > max / 4 ? "mid" : "low";
+    this.shieldFill.style.width = `${(100 * shield) / max}%`;
     this.shieldFill.hidden = shield <= 0;
     this.hpText.textContent = shield > 0 ? `${hp} + ${shield} ward` : `${hp}`;
   }
@@ -154,8 +219,9 @@ export class RoyaleHud {
     this.resultsEl.hidden = false;
   }
 
-  // primaryReadyIn: ms until the left-click spell is ready. inStorm: outside the circle.
-  update(primaryReadyIn: number, inStorm: boolean): void {
+  // readyIn: ms until the hand in use can attack again; swapIn: ms of hand
+  // swap left. inStorm: outside the circle.
+  update(readyIn: number, swapIn: number, inStorm: boolean): void {
     const now = this.clock.now();
     const left = this.endsAt === null ? 0 : this.endsAt - now;
     switch (this.state) {
@@ -181,8 +247,11 @@ export class RoyaleHud {
         break;
     }
     this.stormEl.classList.toggle("show", inStorm && this.state === "playing" && this.amAlive);
-    const fraction = Math.min(1, Math.max(0, primaryReadyIn / this.primaryCooldown));
-    this.boltCooldown.style.height = `${fraction * 100}%`;
+    const w = WEAPONS[weaponOf(this.cls, this.hand)];
+    const full = w.kind === "spell" ? this.spellCooldown : w.kind === "projectile" ? SPELLS.arrow.cooldownMs : w.melee!.cooldownMs;
+    const fraction = Math.min(1, Math.max(readyIn / full, swapIn / SWAP_MS));
+    this.slots[this.hand].cooldown.style.height = `${fraction * 100}%`;
+    this.slots[this.hand === "main" ? "backup" : "main"].cooldown.style.height = "0%";
   }
 
   private banner(text: string, ms: number): void {
@@ -193,6 +262,8 @@ export class RoyaleHud {
   }
 
   dispose(): void {
+    this.picker.remove();
+    window.clearTimeout(this.calloutTimer);
     window.clearTimeout(this.bannerTimer);
     window.clearTimeout(this.hitTimer);
     window.clearTimeout(this.hurtTimer);

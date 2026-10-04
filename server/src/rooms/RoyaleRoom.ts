@@ -14,9 +14,11 @@
 // for spells (unlike tags): they fly against where players are *now* on the
 // server, which is what dodging needs.
 
+import { CLASSES, type ClassId, type Hand, inFront, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
 import {
   CAST_ORIGIN_SLACK,
   castDirections,
+  projectileAt,
   MAX_FIREBALL_CHARGES,
   MAX_HEALTH,
   MAX_SHIELD,
@@ -35,9 +37,10 @@ import {
   TOME_CHARGES,
   WARD_SHIELD,
 } from "../../../shared/src/combat.ts";
-import { EYE_HEIGHT } from "../../../shared/src/constants.ts";
+import { EYE_HEIGHT, PLAYER_RADIUS } from "../../../shared/src/constants.ts";
 import { lerp3, lineOfSight, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
 import type { CastMsg, ClientMsg, PickupInfo, Vec3, ZoneState } from "../../../shared/src/protocol.ts";
+import { saveLoadout } from "../accounts.ts";
 import { RoyaleBot } from "../bots/RoyaleBot.ts";
 import type { BotPeer } from "../Connection.ts";
 import { XP } from "../xp.ts";
@@ -47,9 +50,16 @@ import { navGridFor, RoundRoom, SCALE } from "./RoundRoom.ts";
 const STORM_TICK_MS = 1000; // storm damage is dealt once a second
 const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle
 const COOLDOWN_SLACK = 0.85; // accept casts a bit early: messages arrive unevenly
+const MELEE_HISTORY_MS = 300; // lag compensation for swings, like tag's
+const MELEE_HEIGHT = 1.8; // how far above or below you a swing reaches
+const BACKSTAB_ARC = 120; // degrees: hitting someone from within this arc behind them
 const ROUND_MS = (STORM_STAGES.reduce((ms, s) => ms + s.holdMs + s.shrinkMs, 0) + 30_000) * SCALE;
 
 type Fighter = {
+  cls: ClassId;
+  hand: Hand;
+  handReadyAt: number; // swapping takes SWAP_MS
+  maxHp: number;
   hp: number;
   shield: number;
   fireball: number; // charges
@@ -58,7 +68,8 @@ type Fighter = {
   slowedUntil: number; // Frost Shard (bots read this; players slow themselves)
 };
 
-type Projectile = { id: number; caster: number; spell: SpellId; p: Vec3; d: Vec3; travelled: number };
+// Flown by time since launch, so arrows can arc (see projectileAt).
+type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3 };
 type Pickup = PickupInfo & { spot: number };
 
 let nextSpellId = 1;
@@ -79,6 +90,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private stage = 0;
   private nextStormTick = 0;
   private lastStep = Date.now();
+  // Each player's chosen class (used from their next round), and recent
+  // positions for melee lag compensation.
+  private chosen = new Map<number, ClassId>();
+  private history = new Map<number, { time: number; p: Vec3 }[]>();
 
   // ---- Round cycle (RoundRoom hooks) ----
 
@@ -160,29 +175,65 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // ---- Players coming and going ----
 
   protected override onJoinedRound(player: Player): void {
-    // Joining mid-round: you watch until the next one.
-    this.resetFighter(player, false);
+    // Joining mid-round: you watch until the next one. Everyone hears what
+    // you're playing as (and holding).
+    this.resetFighter(player);
     const conn = player.conn;
     conn.send({ t: "alive", ids: [...this.alive] });
     conn.send({ t: "zone", zone: this.zone });
     conn.send({ t: "pickups", items: this.pickupList() });
-    for (const [id, f] of this.fighters) conn.send({ t: "health", id, hp: f.hp, shield: f.shield });
+    for (const [id, f] of this.fighters) {
+      conn.send({ t: "health", id, hp: f.hp, max: f.maxHp, shield: f.shield });
+      conn.send({ t: "equip", id, cls: f.cls, hand: f.hand });
+    }
   }
 
   protected override onLeftRound(player: Player): void {
     const id = player.conn.id;
     this.fighters.delete(id);
     this.inRound.delete(id);
+    this.chosen.delete(id);
+    this.history.delete(id);
     if (this.alive.delete(id)) {
       this.broadcast({ t: "alive", ids: [...this.alive] });
       if (this.state === "playing") this.announceLeft(`${player.conn.name} left the arena.`);
     }
   }
 
+  private classOf(player: Player): ClassId {
+    const id = player.conn.id;
+    let cls = this.chosen.get(id);
+    if (!cls) {
+      cls = player.conn.account?.loadout.cls ?? this.bots.get(id)?.cls ?? "wizard";
+      this.chosen.set(id, cls);
+    }
+    return cls;
+  }
+
   private resetFighter(player: Player, tell = true): void {
-    const f: Fighter = { hp: MAX_HEALTH, shield: 0, fireball: 0, nextCast: { primary: 0, fireball: 0 }, eliminations: 0, slowedUntil: 0 };
-    this.fighters.set(player.conn.id, f);
-    if (tell) this.broadcast({ t: "health", id: player.conn.id, hp: f.hp, shield: f.shield });
+    const cls = this.classOf(player);
+    const maxHp = CLASSES[cls].maxHealth;
+    const f: Fighter = {
+      cls,
+      hand: "main",
+      handReadyAt: 0,
+      maxHp,
+      hp: maxHp,
+      shield: 0,
+      fireball: 0,
+      nextCast: { primary: 0, fireball: 0 },
+      eliminations: 0,
+      slowedUntil: 0,
+    };
+    const id = player.conn.id;
+    this.fighters.set(id, f);
+    if (tell) {
+      this.broadcast({ t: "health", id, hp: f.hp, max: maxHp, shield: f.shield });
+      this.broadcast({ t: "equip", id, cls, hand: f.hand });
+    } else {
+      player.conn.send({ t: "health", id, hp: f.hp, max: maxHp, shield: f.shield });
+      player.conn.send({ t: "equip", id, cls, hand: f.hand });
+    }
     player.conn.send({ t: "charges", fireball: 0 });
   }
 
@@ -206,19 +257,112 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   protected override onRoundMessage(player: Player, msg: ClientMsg): void {
     if (msg.t === "cast") this.cast(player, msg);
+    else if (msg.t === "attack") this.attack(player, msg.o, msg.d, msg.seq);
+    else if (msg.t === "hand") this.setHand(player, msg.hand);
+    else if (msg.t === "class") this.setClass(player, msg.cls);
   }
 
-  // Also used by bots (with their own eye position as the origin).
+  // ---- Classes and hands ----
+
+  // Pick a class: right away between rounds (or while watching), otherwise
+  // from the next round. Saved to the account.
+  setClass(player: Player, cls: ClassId): void {
+    const id = player.conn.id;
+    if (this.chosen.get(id) === cls) return;
+    this.chosen.set(id, cls);
+    const account = player.conn.account;
+    if (account) {
+      account.loadout = { ...account.loadout, cls };
+      saveLoadout(account.id, account.loadout).catch((err) => console.error(`saving class for ${account.username} failed:`, err));
+    }
+    const fighting = this.state === "playing" && this.alive.has(id);
+    if (!fighting) this.resetFighter(player);
+    player.conn.send({ t: "announce", text: fighting ? `You'll be a ${CLASSES[cls].name} next round.` : `You're a ${CLASSES[cls].name}.` });
+  }
+
+  setHand(player: Player, hand: Hand): void {
+    const f = this.fighters.get(player.conn.id);
+    if (!f || f.hand === hand) return;
+    f.hand = hand;
+    f.handReadyAt = Date.now() + SWAP_MS;
+    this.broadcast({ t: "equip", id: player.conn.id, cls: f.cls, hand });
+  }
+
+  private canAct(player: Player, f: Fighter | undefined): f is Fighter {
+    if (!f || this.state === "countdown") return false;
+    return !(this.state === "playing" && !this.alive.has(player.conn.id)); // spectators can't
+  }
+
+  // Left click with whatever is in your hand.
+  attack(player: Player, o: Vec3, d: Vec3, seq: number): void {
+    const now = Date.now();
+    const f = this.fighters.get(player.conn.id);
+    if (!this.canAct(player, f) || now < f.handReadyAt) return;
+    const weapon = weaponOf(f.cls, f.hand);
+    const def = WEAPONS[weapon];
+    if (def.kind === "spell") {
+      const primary = player.conn.account?.loadout.primary ?? this.bots.get(player.conn.id)?.primary ?? "bolt";
+      this.cast(player, { spell: primary, o, d, seq });
+    } else if (def.kind === "projectile") {
+      if (now < f.nextCast.primary) return;
+      f.nextCast.primary = now + SPELLS.arrow.cooldownMs * COOLDOWN_SLACK;
+      this.launch(player, "arrow", o, d, seq, now);
+    } else if (def.melee) {
+      if (now < f.nextCast.primary) return;
+      f.nextCast.primary = now + def.melee.cooldownMs * COOLDOWN_SLACK;
+      this.swing(player, weapon, d, now);
+    }
+  }
+
+  // A melee swing. The server finds who's in reach and in front of you,
+  // using where they were over the last moment (you see others slightly in
+  // the past, like in tag).
+  private swing(attacker: Player, weapon: WeaponId, d: Vec3, now: number): void {
+    const m = WEAPONS[weapon].melee!;
+    const from = eye(attacker.p);
+    const yaw = Math.atan2(-d[0], -d[2]);
+    const candidates: { target: Player; dist: number }[] = [];
+    for (const target of this.players.values()) {
+      if (target === attacker || !this.canBeHit(target.conn.id)) continue;
+      const recent = [target.p, ...(this.history.get(target.conn.id) ?? []).filter((h) => now - h.time <= MELEE_HISTORY_MS).map((h) => h.p)];
+      let best = Infinity;
+      for (const p of recent) {
+        const flat = Math.hypot(p[0] - from[0], p[2] - from[2]) - PLAYER_RADIUS;
+        if (flat > m.reach || Math.abs(p[1] - attacker.p[1]) > MELEE_HEIGHT) continue;
+        if (!inFront(yaw, [p[0] - from[0], p[2] - from[2]], m.arcDeg) && flat > 0.4) continue;
+        if (!lineOfSight(from, p, this.level.boxes)) continue;
+        best = Math.min(best, flat);
+      }
+      if (best < Infinity) candidates.push({ target, dist: best });
+    }
+    candidates.sort((a, b) => a.dist - b.dist);
+    const struck = m.cleave ? candidates : candidates.slice(0, 1);
+    const hits: number[] = [];
+    const blocked: number[] = [];
+    const backstabs: number[] = [];
+    for (const { target } of struck) {
+      // Backstab: the attacker is behind the target.
+      const behind = !!m.backstab && inFront(target.ry + Math.PI, [attacker.p[0] - target.p[0], attacker.p[2] - target.p[2]], BACKSTAB_ARC);
+      if (behind) backstabs.push(target.conn.id);
+      hits.push(target.conn.id);
+      if (this.state === "playing" && this.damage(target, m.damage * (behind ? m.backstab! : 1), attacker, attacker.p)) blocked.push(target.conn.id);
+    }
+    this.broadcast({ t: "melee", id: attacker.conn.id, weapon, hits, blocked, backstabs });
+  }
+
+  // A spell: a Wizard's Spellbook spell (spell in hand), or a Fireball
+  // (anyone with charges). Also used by bots.
   cast(player: Player, msg: Pick<CastMsg, "spell" | "o" | "d" | "seq">): void {
     const now = Date.now();
-    const id = player.conn.id;
-    const f = this.fighters.get(id);
-    if (!f || this.state === "countdown") return;
-    if (this.state === "playing" && !this.alive.has(id)) return; // spectators can't cast
+    const f = this.fighters.get(player.conn.id);
+    if (!this.canAct(player, f)) return;
     const def = SPELLS[msg.spell];
-    // Left-click spells must be unlocked (bots have them all).
-    const account = player.conn.account;
-    if (def.slot === "primary" && account && !account.unlocked.has(`spell:${msg.spell}`)) return;
+    if (def.slot === "primary") {
+      // Only a Wizard holding their spell, and only spells they've unlocked.
+      if (weaponOf(f.cls, f.hand) !== "spell" || now < f.handReadyAt) return;
+      const account = player.conn.account;
+      if (account && !account.unlocked.has(`spell:${msg.spell}`)) return;
+    }
     if (now < f.nextCast[def.slot]) return; // too soon: ignore quietly
     if (msg.spell === "fireball") {
       if (f.fireball <= 0) return;
@@ -226,23 +370,28 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       player.conn.send({ t: "charges", fireball: f.fireball });
     }
     f.nextCast[def.slot] = now + def.cooldownMs * COOLDOWN_SLACK;
+    this.launch(player, msg.spell, msg.o, msg.d, msg.seq, now);
+  }
 
+  // Send projectiles flying (checks done by the caller).
+  private launch(player: Player, spell: SpellId, clientO: Vec3, aim: Vec3, seq: number, now: number): void {
     // Start from where the client says its eyes are, if that's believable:
     // close to where we think they are, and not through a wall.
     const expected = eye(player.p);
-    const o = dist3(msg.o, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, msg.o, this.level.boxes) ? msg.o : expected;
-    castDirections(msg.spell, msg.d).forEach((d, k) => {
-      const spell: Projectile = { id: nextSpellId++, caster: id, spell: msg.spell, p: o, d, travelled: 0 };
-      this.projectiles.set(spell.id, spell);
-      this.broadcast({ t: "spell", id: spell.id, caster: id, seq: msg.seq, k, spell: msg.spell, o, d, time: now });
+    const o = dist3(clientO, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, clientO, this.level.boxes) ? clientO : expected;
+    const caster = player.conn.id;
+    castDirections(spell, aim).forEach((d, k) => {
+      const p: Projectile = { id: nextSpellId++, caster, spell, o, d, t: 0, p: o };
+      this.projectiles.set(p.id, p);
+      this.broadcast({ t: "spell", id: p.id, caster, seq, k, spell, o, d, time: now });
     });
   }
 
   private stepProjectiles(dt: number): void {
     for (const spell of [...this.projectiles.values()]) {
       const def = SPELLS[spell.spell];
-      const len = Math.min(def.speed * dt, def.range - spell.travelled);
-      const to: Vec3 = [spell.p[0] + spell.d[0] * len, spell.p[1] + spell.d[1] * len, spell.p[2] + spell.d[2] * len];
+      const t = Math.min(spell.t + dt, def.range / def.speed);
+      const to = projectileAt(spell.spell, spell.o, spell.d, t);
 
       // First thing along this tick's path: a wall, or a player.
       let hitT = segmentHitsLevel(spell.p, to, this.level.boxes, 0.05);
@@ -258,8 +407,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
       if (hitT === null) {
         spell.p = to;
-        spell.travelled += len;
-        if (spell.travelled >= def.range - 1e-6) this.endSpell(spell, to, null); // fizzled out
+        spell.t = t;
+        if (t >= def.range / def.speed - 1e-6 || to[1] < this.level.killY) this.endSpell(spell, to, null); // fizzled out
         continue;
       }
       const at = lerp3(spell.p, to, hitT);
@@ -280,7 +429,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const def = SPELLS[spell.spell];
     const attacker = this.players.get(spell.caster) ?? null;
     if (hit) {
-      this.damage(hit, def.damage, attacker);
+      this.damage(hit, def.damage, attacker, spell.p);
       if (def.slowMs && this.alive.has(hit.conn.id)) {
         const f = this.fighters.get(hit.conn.id);
         if (f) f.slowedUntil = Date.now() + def.slowMs;
@@ -297,20 +446,28 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const d = dist3(at, target.p);
       if (d > def.splashRadius || !lineOfSight(from, target.p, this.level.boxes)) continue;
       const amount = def.splashMax! - (def.splashMax! - def.splashMin!) * (d / def.splashRadius);
-      this.damage(target, Math.round(amount), attacker);
+      this.damage(target, Math.round(amount), attacker, at);
     }
   }
 
-  // attacker null = the storm.
-  private damage(target: Player, amount: number, attacker: Player | null): void {
+  // attacker null = the storm. source: where the hit came from (a swing, a
+  // projectile, a blast), for the Knight's shield. Returns true if a shield
+  // blocked most of it.
+  private damage(target: Player, raw: number, attacker: Player | null, source?: Vec3): boolean {
     const id = target.conn.id;
     const f = this.fighters.get(id);
-    if (!f || !this.alive.has(id) || amount <= 0 || target.conn.isAdmin) return; // admins can't be hurt
+    if (!f || !this.alive.has(id) || raw <= 0 || target.conn.isAdmin) return false; // admins can't be hurt
+    let amount = raw * (1 - CLASSES[f.cls].defense);
+    const held = WEAPONS[weaponOf(f.cls, f.hand)];
+    const blocked =
+      !!source && !!held.block && Date.now() >= f.handReadyAt && inFront(target.ry, [source[0] - target.p[0], source[2] - target.p[2]], held.blockArcDeg!);
+    if (blocked) amount *= 1 - held.block!;
+    amount = Math.max(1, Math.round(amount));
     const absorbed = Math.min(f.shield, amount);
     f.shield -= absorbed;
     f.hp = Math.max(0, f.hp - (amount - absorbed));
-    this.broadcast({ t: "health", id, hp: f.hp, shield: f.shield });
-    if (f.hp > 0) return;
+    this.broadcast({ t: "health", id, hp: f.hp, max: f.maxHp, shield: f.shield });
+    if (f.hp > 0) return blocked;
 
     this.alive.delete(id);
     this.outOrder.push(id);
@@ -321,6 +478,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     }
     this.broadcast({ t: "alive", ids: [...this.alive] });
     this.announceLeft(byOther ? `${attacker.conn.name} blasted ${target.conn.name}!` : `${target.conn.name} was swallowed by the storm.`);
+    return blocked;
   }
 
   private announceLeft(first: string): void {
@@ -404,6 +562,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   protected override onPlayerMoved(player: Player, _from: Vec3, to: Vec3, now: number): void {
+    const list = this.history.get(player.conn.id) ?? [];
+    list.push({ time: now, p: to });
+    while (list.length && now - list[0].time > MELEE_HISTORY_MS) list.shift();
+    this.history.set(player.conn.id, list);
     if (this.state !== "playing" || !this.alive.has(player.conn.id)) return;
     for (const item of this.pickups.values()) {
       if (Math.hypot(item.p[0] - to[0], item.p[2] - to[2]) > PICKUP_REACH || Math.abs(item.p[1] - to[1]) > 1.6) continue;
@@ -429,20 +591,20 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       return true;
     }
     if (kind === "potion") {
-      if (f.hp >= MAX_HEALTH) return false;
-      f.hp = Math.min(MAX_HEALTH, f.hp + POTION_HEAL);
+      if (f.hp >= f.maxHp) return false;
+      f.hp = Math.min(f.maxHp, f.hp + POTION_HEAL);
     } else {
       if (f.shield >= MAX_SHIELD) return false;
       f.shield = Math.min(MAX_SHIELD, f.shield + WARD_SHIELD);
     }
-    this.broadcast({ t: "health", id, hp: f.hp, shield: f.shield });
+    this.broadcast({ t: "health", id, hp: f.hp, max: f.maxHp, shield: f.shield });
     return true;
   }
 
   // ---- Bots ----
 
   protected createBot(peer: BotPeer): RoyaleBot {
-    return new RoyaleBot(peer, navGridFor(this.level), this.level.boxes);
+    return new RoyaleBot(peer, navGridFor(this.level), this.level.boxes, this.bots.size);
   }
 
   protected runBot(bot: RoyaleBot, me: Player, now: number, dt: number): void {
@@ -455,13 +617,17 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       practice: this.state === "waiting" || this.state === "ended",
       enemies: [...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id)),
       hp: f?.hp ?? MAX_HEALTH,
+      maxHp: f?.maxHp ?? MAX_HEALTH,
+      hand: f?.hand ?? "main",
       fireballs: f?.fireball ?? 0,
       slowed: (f?.slowedUntil ?? 0) > now,
       circles: this.safeCircles(now),
       pickups: this.pickupList(),
     });
     this.moveBot(me, action.p, action.ry, now);
+    if (action.hand) this.setHand(me, action.hand);
     if (action.cast) this.cast(me, { ...action.cast, o: eye(me.p), seq: 0 });
+    if (action.attack) this.attack(me, eye(me.p), action.attack, 0);
   }
 }
 

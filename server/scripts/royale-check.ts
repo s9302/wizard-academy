@@ -71,7 +71,8 @@ class Wizard {
         this.pos = msg.p;
       } else if (msg.t === "round") this.state = msg.state;
       else if (msg.t === "alive") this.alive = msg.ids;
-      else if (msg.t === "health") this.hp.set(msg.id, msg.hp);
+      // Health plus any Ward shield (a Ward picked up on the way absorbs damage first).
+      else if (msg.t === "health") this.hp.set(msg.id, msg.hp + msg.shield);
       else if (msg.t === "pickups") this.pickups = msg.items;
       else if (msg.t === "zone") this.zone = msg.zone;
       else if (msg.t === "charges") this.charges = msg.fireball;
@@ -190,11 +191,12 @@ check("...and does no damage", a.hp.get(b.id) === 100);
 await b.walkTo(...polar(13, 37.5)); // out from behind the wall, in plain sight of A
 await sleep(COOLDOWN);
 mark = a.msgs.length;
+const bBeforeBolt = a.hp.get(b.id) ?? 100;
 a.castAt("bolt", b.pos);
 await waitFor(() => a.since(mark).some((m) => m.t === "spellEnd"), 2000);
 const hit = a.since(mark).find((m) => m.t === "spellEnd");
 check("a bolt at someone in the open hits them", hit?.t === "spellEnd" && hit.hit === b.id);
-check(`...for ${SPELLS.bolt.damage} damage`, await waitFor(() => a.hp.get(b.id) === 100 - SPELLS.bolt.damage, 1000), `hp=${a.hp.get(b.id)}`);
+check(`...for ${SPELLS.bolt.damage} damage`, await waitFor(() => a.hp.get(b.id) === bBeforeBolt - SPELLS.bolt.damage, 1000), `${bBeforeBolt} -> ${a.hp.get(b.id)}`);
 
 // ---- Elimination and spectating ----
 for (let i = 0; i < 4; i++) {

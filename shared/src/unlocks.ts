@@ -6,6 +6,7 @@
 // Shared so the client can show what's unlocked and the server can check it
 // (an equipped spell or hat must really be unlocked).
 
+import { CLASS_IDS, type ClassId } from "./classes.ts";
 import { levelInfo } from "./progression.ts";
 import { type ChapterId, chaptersDone } from "./story.ts";
 
@@ -80,8 +81,9 @@ export function unlocksForChapter(chapter: ChapterId): Unlock[] {
 
 // ---- Loadout: what you've chosen to use and wear ----
 
-export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe };
-export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto" };
+// cls: battle royale class (all three are available to everyone).
+export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId };
+export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard" };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
 export const HATS: Hat[] = ["classic", "tall", "starry", "crown"];
@@ -113,6 +115,7 @@ export function sanitizeLoadout(raw: unknown, unlocked: Set<string>): Loadout {
     primary: pick(r.primary, PRIMARY_SPELLS, "spell", DEFAULT_LOADOUT.primary),
     hat: pick(r.hat, HATS, "hat", DEFAULT_LOADOUT.hat),
     robe: pick(r.robe, ROBES, "robe", DEFAULT_LOADOUT.robe),
+    cls: typeof r.cls === "string" && (CLASS_IDS as string[]).includes(r.cls) ? (r.cls as ClassId) : DEFAULT_LOADOUT.cls,
   };
 }
 

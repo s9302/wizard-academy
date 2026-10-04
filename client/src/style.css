@@ -434,3 +434,37 @@ body.spectating #royale-bottom { opacity: 0.4; }
 }
 #perk-hud[hidden] { display: none; }
 #perk-hud.cooling { opacity: 0.5; }
+
+/* ---- Phase 10: classes ---- */
+
+.class-badge { font-weight: 800; letter-spacing: 0.04em; text-shadow: 0 1px 3px #000; }
+.spell-slot.active { box-shadow: 0 0 0 2px #fff inset; background: rgba(40, 30, 70, 0.8); }
+.spell-slot:not(.active) { opacity: 0.65; }
+
+#callout {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffe58a;
+  text-shadow: 0 2px 4px #000;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#callout.show { opacity: 1; }
+
+#class-picker { display: grid; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #3d3263; text-align: left; }
+.picker-title { font-weight: 700; text-align: center; }
+#class-picker button {
+  display: grid;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  text-align: left;
+  font-weight: 400;
+}
+#class-picker button strong { font-size: 15px; }
+#class-picker button span { font-size: 12px; opacity: 0.8; }
+#class-picker button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; }

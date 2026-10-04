@@ -1,6 +1,7 @@
 // Every WebSocket message is a small JSON object with a "t" (type) field.
 // Client and server import these types so both sides agree on the shape.
 
+import type { ClassId, Hand, WeaponId } from "./classes.ts";
 import type { PickupKind, SpellId } from "./combat.ts";
 import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 
@@ -38,7 +39,13 @@ export type CastMsg = { t: "cast"; spell: SpellId; o: Vec3; d: Vec3; seq: number
 // server checks each choice is unlocked, saves it, and shows others your look.
 export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: Robe };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg;
+// Battle royale classes: use the weapon in your hand (a swing, or a bow
+// shot from o along d), switch hands, or pick a class.
+export type AttackMsg = { t: "attack"; o: Vec3; d: Vec3; seq: number };
+export type HandMsg = { t: "hand"; hand: Hand };
+export type ClassMsg = { t: "class"; cls: ClassId };
+
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg;
 
 // ---- Server -> Client ----
 
@@ -90,7 +97,12 @@ export type RoomCountsMsg = { t: "roomCounts"; counts: Record<string, number> };
 export type SpellMsg = { t: "spell"; id: number; caster: number; seq: number; k: number; spell: SpellId; o: Vec3; d: Vec3; time: number };
 // It hit something at p (hit = the player it struck directly, if any).
 export type SpellEndMsg = { t: "spellEnd"; id: number; p: Vec3; hit: number | null };
-export type HealthMsg = { t: "health"; id: number; hp: number; shield: number };
+// max: that player's class health. shield: the Ward pickup's extra.
+export type HealthMsg = { t: "health"; id: number; hp: number; max: number; shield: number };
+// What someone is fighting as and holding (sent to everyone when it changes).
+export type EquipMsg = { t: "equip"; id: number; cls: ClassId; hand: Hand };
+// A melee swing: who swung what, who got hit, and whose shield blocked it.
+export type MeleeMsg = { t: "melee"; id: number; weapon: WeaponId; hits: number[]; blocked: number[]; backstabs: number[] };
 // Who is still in the round (everyone else is spectating). Sent in full on change.
 export type AliveMsg = { t: "alive"; ids: number[] };
 // The storm's current stage: the safe circle is `from` until shrinkAt, then
@@ -108,7 +120,7 @@ export type ChargesMsg = { t: "charges"; fireball: number };
 // Someone changed their hat or robe.
 export type LookMsg = { t: "look"; id: number; look: Look };
 // To one player: your saved loadout (after a "loadout" request).
-export type LoadoutSavedMsg = { t: "loadoutSaved"; primary: PrimarySpell; hat: Hat; robe: Robe };
+export type LoadoutSavedMsg = { t: "loadoutSaved"; primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId };
 
 // ---- Progression (server -> one player) ----
 // total = your XP after this award. The client works out the level from it.
@@ -143,4 +155,6 @@ export type ServerMsg =
   | SlowedMsg
   | LookMsg
   | LoadoutSavedMsg
+  | EquipMsg
+  | MeleeMsg
   | XpMsg;

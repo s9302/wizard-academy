@@ -51,6 +51,7 @@ export class PlayerController {
   private killY: number;
   perks: Perks = { doubleJump: false, dash: false };
   flying = false; // admins only: no gravity, no walls
+  speedMul = 1; // battle royale class (and the Knight's raised shield)
   private airJumpUsed = false;
   private dashLeft = 0; // seconds of dash remaining
   private dashDir = { x: 0, z: 0 };
@@ -129,7 +130,7 @@ export class PlayerController {
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 
     // Horizontal movement relative to where the camera faces.
-    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * (this.slowLeft > 0 ? this.slowFactor : 1);
+    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1);
     const sin = Math.sin(input.yaw);
     const cos = Math.cos(input.yaw);
     let dx = -sin * input.forward + cos * input.strafe;

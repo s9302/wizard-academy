@@ -7,7 +7,8 @@ import type { Vec3, ZoneState } from "./protocol.ts";
 export const MAX_HEALTH = 100;
 export const MAX_SHIELD = 50;
 
-export type SpellId = "bolt" | "frost" | "spark" | "fireball";
+// "arrow" is the Rogue's bow: not a spell, but it flies through the same system.
+export type SpellId = "bolt" | "frost" | "spark" | "fireball" | "arrow";
 
 // Which button, and whose cooldown: the three left-click spells share one
 // cooldown (you pick one in the Spellbook), so swapping can't fire faster.
@@ -32,6 +33,7 @@ export type SpellDef = {
   // Frost Shard: slows whoever it hits.
   slowMs?: number;
   slowFactor?: number; // movement speed multiplier while slowed
+  gravity?: number; // m/s^2 pulling it down (arrows arc)
   color: string;
 };
 
@@ -64,6 +66,8 @@ export const SPELLS: Record<SpellId, SpellDef> = {
     spreadDeg: 6,
     color: "#ffe066",
   },
+  // The Rogue's longbow: hits hard and far, but the arrow drops over distance.
+  arrow: { name: "Arrow", slot: "primary", speed: 55, range: 90, radius: 0.15, damage: 34, cooldownMs: 900, gravity: 9, color: "#e6d3a3" },
   // From a Fire Tome pickup (3 charges): slower, but it explodes.
   fireball: {
     name: "Fireball",
@@ -81,6 +85,14 @@ export const SPELLS: Record<SpellId, SpellDef> = {
 };
 
 export const SPELL_IDS = Object.keys(SPELLS) as SpellId[];
+
+// Where a projectile is t seconds after launch from o along unit vector d
+// (straight, or arcing if it has gravity). Shared so client and server agree.
+export function projectileAt(spell: SpellId, o: Vec3, d: Vec3, t: number): Vec3 {
+  const def = SPELLS[spell];
+  const drop = 0.5 * (def.gravity ?? 0) * t * t;
+  return [o[0] + d[0] * def.speed * t, o[1] + d[1] * def.speed * t - drop, o[2] + d[2] * def.speed * t];
+}
 
 // The direction of each projectile a cast makes (Spark Volley fans out
 // sideways around the aim; everything else is one projectile straight ahead).
