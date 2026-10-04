@@ -15,7 +15,7 @@ import { type ChapterId, chaptersDone } from "./story.ts";
 export type Requirement = { level: number } | { chapter: ChapterId };
 
 export type PrimarySpell = "bolt" | "frost" | "spark";
-export type Hat = "classic" | "tall" | "starry" | "crown" | "storm" | "tyrant";
+export type Hat = "none" | "classic" | "tall" | "starry" | "crown" | "storm" | "tyrant" | "tophat" | "beret" | "hood" | "feathered" | "horned";
 export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold" | "storm" | "ember";
 
 export type Unlock = {
@@ -58,7 +58,7 @@ export const UNLOCKS: Unlock[] = [
 ];
 
 // Always available.
-const DEFAULTS = ["spell:bolt", "hat:classic", "robe:auto"];
+const DEFAULTS = ["spell:bolt", "hat:classic", "robe:auto", "hat:none", "hat:tophat", "hat:beret", "hat:hood", "hat:feathered", "hat:horned"];
 
 export function requirementText(r: Requirement): string {
   return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III", "IV", "V", "VI", "VII"][r.chapter - 1]}`;
@@ -103,7 +103,7 @@ export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassI
 export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard", ...DEFAULT_APPEARANCE };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
-export const HATS: Hat[] = ["classic", "tall", "starry", "crown", "storm", "tyrant"];
+export const HATS: Hat[] = ["none", "classic", "tophat", "beret", "hood", "feathered", "horned", "tall", "starry", "crown", "storm", "tyrant"];
 export const ROBES: Robe[] = ["auto", "crimson", "emerald", "midnight", "ivory", "gold", "storm", "ember"];
 export const ROBE_COLORS: Record<Exclude<Robe, "auto">, string> = {
   crimson: "#a8283a",
@@ -115,7 +115,13 @@ export const ROBE_COLORS: Record<Exclude<Robe, "auto">, string> = {
   ember: "#b8502a",
 };
 export const HAT_NAMES: Record<Hat, string> = {
+  none: "No hat",
   classic: "Classic hat",
+  tophat: "Top hat",
+  beret: "Beret",
+  hood: "Hood",
+  feathered: "Feathered cap",
+  horned: "Horned helm",
   tall: "Tall hat",
   starry: "Starry hat",
   crown: "Headmaster's crown",
@@ -177,5 +183,5 @@ export type Look = { hat: Hat; robe: Robe } & Appearance;
 export const DEFAULT_LOOK: Look = { hat: "classic", robe: "auto", ...DEFAULT_APPEARANCE };
 
 export function lookOf(l: Loadout): Look {
-  return { hat: l.hat, robe: l.robe, skin: l.skin, hair: l.hair, hairColor: l.hairColor, face: l.face, outfit: l.outfit };
+  return { hat: l.hat, robe: l.robe, skin: l.skin, hair: l.hair, hairColor: l.hairColor, face: l.face, features: l.features, acc: l.acc, outfit: l.outfit };
 }

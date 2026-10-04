@@ -18,6 +18,10 @@ import {
   OUTFITS,
   SKIN_COLORS,
   SKINS,
+  ACCESSORIES,
+  ACCESSORY_NAMES,
+  FEATURES,
+  FEATURE_NAMES,
 } from "../../../shared/src/appearance.ts";
 import { WardrobePreview } from "./WardrobePreview.ts";
 import type { Station } from "../../../shared/src/levels/types.ts";
@@ -231,6 +235,8 @@ export class HubPanel {
       ["hairColor", "Hair color"],
       ["skin", "Skin"],
       ["face", "Face"],
+      ["features", "Features"],
+      ["acc", "Accessory"],
     ];
     for (const [id, name] of TABS) {
       const t = el("button", tabs, name, id === this.tab ? "tab on" : "tab");
@@ -273,10 +279,19 @@ export class HubPanel {
         for (const c of HAIR_COLORS) chip(c[0].toUpperCase() + c.slice(1), look.hairColor === c, () => this.save({ ...look, hairColor: c }), HAIR_COLOR_VALUES[c]);
         break;
       case "skin":
-        SKINS.forEach((sk, i) => chip(`Tone ${i + 1}`, look.skin === sk, () => this.save({ ...look, skin: sk }), SKIN_COLORS[sk]));
+        for (const sk of SKINS) chip(sk[0].toUpperCase() + sk.slice(1), look.skin === sk, () => this.save({ ...look, skin: sk }), SKIN_COLORS[sk]);
         break;
       case "face":
         for (const f of FACES) chip(FACE_NAMES[f], look.face === f, () => this.save({ ...look, face: f }));
+        break;
+      case "features": {
+        // Any number at once: each chip turns one on or off.
+        const on = look.features ?? [];
+        for (const f of FEATURES) chip(FEATURE_NAMES[f], on.includes(f), () => this.save({ ...look, features: on.includes(f) ? on.filter((x) => x !== f) : [...on, f] }));
+        break;
+      }
+      case "acc":
+        for (const a of ACCESSORIES) chip(ACCESSORY_NAMES[a], (look.acc ?? "none") === a, () => this.save({ ...look, acc: a }));
         break;
     }
     el("p", right, "Changes save automatically. Everyone sees your new look right away.", "panel-hint");

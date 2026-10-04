@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { particles } from "../graphics/Particles.ts";
 import { PORTAL_HEIGHT, PORTAL_STEP, PORTAL_WIDTH, inPortal, portalPoint, type Portal } from "../../../shared/src/levels/types.ts";
 import type { Vec3 } from "../../../shared/src/protocol.ts";
-import { findRoom } from "../../../shared/src/rooms.ts";
+import { findRoom, HUB_ROOM } from "../../../shared/src/rooms.ts";
 import { formatTime } from "../ParkourHud.ts";
 import { Sign } from "./Sign.ts";
 
@@ -87,6 +87,8 @@ export class Portals {
     // "Trial I: The Floating Steps" -> a title and a subtitle.
     const [title, subtitle] = (room?.name ?? view.portal.room).split(": ");
     const count = this.counts[view.portal.room] ?? 0;
+    // A trial's way home (see Game.showExitPortal).
+    if (view.portal.room === HUB_ROOM) return view.sign.draw({ title: "The Academy", subtitle: "Back to", lines: ["Walk through to return"], color: view.portal.color });
     const lines = [count === 1 ? "1 wizard playing" : `${count} wizards playing`];
     if (room?.mode === "parkour") {
       const best = this.bestTimes[room.id];

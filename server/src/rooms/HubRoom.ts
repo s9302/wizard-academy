@@ -54,8 +54,8 @@ export class HubRoom extends Room {
     if (!account || now - (this.lastSave.get(conn.id) ?? 0) < LOADOUT_SAVE_MS) return;
     this.lastSave.set(conn.id, now);
     // Checked against fresh unlocks: anything locked falls back to the default.
-    // The class isn't part of this message: keep the saved one.
-    saveLoadout(account.id, { ...msg, cls: account.loadout.cls })
+    // The class and arena abilities aren't part of this message: keep the saved ones.
+    saveLoadout(account.id, { ...msg, cls: account.loadout.cls, abil: account.loadout.abil })
       .then(({ loadout, unlocked }) => {
         account.loadout = loadout;
         account.unlocked = unlocked;

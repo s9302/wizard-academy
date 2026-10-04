@@ -117,9 +117,10 @@ export const CAST_ORIGIN_SLACK = 1.5;
 export type PickupKind = "tome" | "potion" | "ward";
 
 export const PICKUPS: Record<PickupKind, { name: string; color: string; weight: number }> = {
-  tome: { name: "Fire Tome", color: "#ff7a2e", weight: 4 }, // +3 fireball charges
-  potion: { name: "Healing Draught", color: "#ff5a8a", weight: 3 }, // +40 health
-  ward: { name: "Ward", color: "#5ac8ff", weight: 3 }, // +50 shield (absorbs damage first)
+  // Weights: healing is rare (about 3 in 10 pickups), so health matters.
+  tome: { name: "Fire Tome", color: "#ff7a2e", weight: 7 }, // +3 fireball charges
+  potion: { name: "Healing Draught", color: "#ff5a8a", weight: 1.5 }, // +40 health
+  ward: { name: "Ward", color: "#5ac8ff", weight: 1.5 }, // +50 shield (absorbs damage first)
 };
 export const TOME_CHARGES = 3;
 export const MAX_FIREBALL_CHARGES = 6;

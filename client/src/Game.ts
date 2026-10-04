@@ -13,7 +13,7 @@ import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { Box, Level } from "../../shared/src/levels/types.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
-import type { RoomInfo } from "../../shared/src/rooms.ts";
+import { HUB_ROOM, type RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
 import type { Input } from "./Input.ts";
 import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
@@ -455,6 +455,7 @@ export class Game {
         this.markers.setReached(msg.reached);
         break;
       case "finish": {
+        this.showExitPortal();
         this.parkour?.finish(msg.time, msg.best, msg.newBest);
         sound.fx(msg.newBest ? "victory" : "finish");
         this.profile.bestTimes[this.room.id] = msg.best;
@@ -687,6 +688,35 @@ export class Game {
     // Wait for the server to drop us from this room before anyone joins the
     // next one (otherwise it looks like a second tab and kicks this one).
     await closed;
+  }
+
+  // ---- The way home ----
+
+  // Finished a trial (or beat the Tyrant): a portal back to the Academy
+  // appears in the middle of the finish (or on the Tyrant's dais), facing
+  // the way you came. You're standing in it, so it works once you've stepped
+  // out and back in (Portals only arms after you've been outside).
+  private showExitPortal(): void {
+    if (this.portals) return;
+    const course = this.level.course;
+    let pos: Vec3;
+    let from: Vec3;
+    if (course) {
+      const f = course.finish;
+      pos = [(f.min[0] + f.max[0]) / 2, f.min[1], (f.min[2] + f.max[2]) / 2];
+      from = course.checkpoints.at(-1)?.respawn ?? this.level.spawn;
+    } else if (this.level.bossFight) {
+      const home = this.level.bossFight.home;
+      pos = [home[0], home[1] - 3, home[2] + 0.5];
+      from = this.level.spawn;
+    } else return;
+    const dx = from[0] - pos[0];
+    const dz = from[2] - pos[2];
+    const len = Math.hypot(dx, dz) || 1;
+    // A portal's front is (-sin yaw, -cos yaw): point it back toward `from`.
+    const yaw = Math.atan2(-dx / len, -dz / len);
+    this.portals = new Portals(this.scene, [{ room: HUB_ROOM, pos, yaw, color: "#ffd25a" }], this.profile.bestTimes);
+    this.addFeed("A portal home has opened. Walk through it to return to the Academy.");
   }
 
   // ---- Third person ----

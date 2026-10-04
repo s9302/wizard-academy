@@ -6,13 +6,13 @@ import type { Look } from "./unlocks.ts";
 
 export type Npc = { name: string; look: Look; lines: string[] };
 
-const L = (l: Partial<Look>): Look => ({ hat: "classic", robe: "midnight", skin: "light", hair: "short", hairColor: "brown", face: "smile", outfit: "robe", ...l });
+const L = (l: Partial<Look>): Look => ({ hat: "classic", robe: "midnight", skin: "light", hair: "short", hairColor: "brown", face: "smile", features: [], acc: "none", outfit: "robe", ...l });
 
 export const NPCS: Record<string, Npc> = {
   // ---- The academy ----
   thistle: {
     name: "Professor Thistle",
-    look: L({ hat: "tall", robe: "emerald", skin: "fair", hair: "bun", hairColor: "silver", face: "spectacled", outfit: "scholar" }),
+    look: L({ hat: "tall", robe: "emerald", skin: "fair", hair: "bun", hairColor: "silver", face: "calm", acc: "spectacles", outfit: "scholar" }),
     lines: [
       "Ah, a student who actually stops to listen. Rare.",
       "The Spellbook behind me holds every spell you've earned. Arcane Bolt is honest work. Frost Shard slows. Spark Volley is rude up close.",
@@ -22,7 +22,7 @@ export const NPCS: Record<string, Npc> = {
   },
   bram: {
     name: "Groundskeeper Bram",
-    look: L({ hat: "classic", robe: "auto", skin: "tan", hair: "curly", hairColor: "black", face: "bearded", outfit: "tunic" }),
+    look: L({ hat: "classic", robe: "auto", skin: "tan", hair: "curly", hairColor: "black", face: "grin", features: ["beard"], outfit: "tunic" }),
     lines: [
       "Mind the hedges, I only just trimmed 'em.",
       "Those trial portals on the west side are the Headmaster's. Each one you clear opens a bit more of the grounds.",
@@ -32,7 +32,7 @@ export const NPCS: Record<string, Npc> = {
   },
   rook: {
     name: "Captain Rook",
-    look: L({ hat: "crown", robe: "crimson", skin: "brown", hair: "mohawk", hairColor: "black", face: "fierce", outfit: "battlemage" }),
+    look: L({ hat: "crown", robe: "crimson", skin: "brown", hair: "mohawk", hairColor: "black", face: "fierce", features: ["scar"], acc: "earrings", outfit: "battlemage" }),
     lines: [
       "Looking for a fight? The arena portal's right there.",
       "Watch the ground in there. Lava burns, the void swallows, and green pads will throw you sky-high.",
@@ -72,7 +72,7 @@ export const NPCS: Record<string, Npc> = {
   },
   mara: {
     name: "Old Mara",
-    look: L({ hat: "classic", robe: "storm", skin: "olive", hair: "braids", hairColor: "white", face: "freckled", outfit: "cloak" }),
+    look: L({ hat: "classic", robe: "storm", skin: "olive", hair: "braids", hairColor: "white", face: "smile", features: ["freckles", "blush"], outfit: "cloak" }),
     lines: [
       "Still in one piece? Good. Past the rope, the bridge's guardian wakes. A golem, older than the academy.",
       "Click to throw bolts at it. Keep moving: its boulders fly straight, and you can jump its shockwave if you time it.",
@@ -99,7 +99,7 @@ export const NPCS: Record<string, Npc> = {
   },
   shade: {
     name: "The Headmaster's Shade",
-    look: L({ hat: "crown", robe: "ivory", skin: "fair", hair: "long", hairColor: "silver", face: "bearded", outfit: "archmage" }),
+    look: L({ hat: "crown", robe: "ivory", skin: "fair", hair: "long", hairColor: "silver", face: "calm", features: ["beard", "mustache"], acc: "monocle", outfit: "archmage" }),
     lines: [
       "You found me. Well, the part of me the storm let go of.",
       "The rest of me is held by the Storm Wraith, past the ring. Break it, and I can come home.",

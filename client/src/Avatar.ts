@@ -16,7 +16,7 @@
 import * as THREE from "three";
 import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../../shared/src/constants.ts";
 import type { WeaponId } from "../../shared/src/classes.ts";
-import { type Face, HAIR_COLOR_VALUES, type Hair, type Outfit, SKIN_COLORS } from "../../shared/src/appearance.ts";
+import { type Accessory, type Face, type Feature, HAIR_COLOR_VALUES, type Hair, type Outfit, SKIN_COLORS } from "../../shared/src/appearance.ts";
 import { DEFAULT_LOOK, type Hat, type Look, ROBE_COLORS } from "../../shared/src/unlocks.ts";
 import { disposeWeapon, makeWeapon } from "./royale/WeaponModels.ts";
 
@@ -78,7 +78,8 @@ function makeNameTag(rawName: string, admin = false, color?: string): THREE.Spri
 const FACE_X = 192;
 const FACE_Y = 62;
 
-function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTexture {
+function faceTexture(skin: string, face: Face, features: Feature[], acc: Accessory, hair: string): THREE.CanvasTexture {
+  const has = (f: Feature) => features.includes(f);
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 128;
@@ -88,7 +89,7 @@ function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTextur
   const x = FACE_X;
   const y = FACE_Y;
   // Cheeks.
-  g.fillStyle = "rgba(230, 110, 110, 0.22)";
+  g.fillStyle = has("blush") ? "rgba(235, 90, 100, 0.5)" : "rgba(230, 110, 110, 0.22)";
   for (const s of [-1, 1]) {
     g.beginPath();
     g.ellipse(x + s * 22, y + 14, 8, 5, 0, 0, Math.PI * 2);
@@ -115,8 +116,8 @@ function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTextur
     g.fillStyle = "#ffffff";
     g.fillRect(ex + 0.5, y - 2, 1.6, 1.6);
   };
-  eye(x - 15, false, face === "surprised");
-  eye(x + 15, face === "wink", face === "surprised");
+  eye(x - 15, face === "sleepy", face === "surprised");
+  eye(x + 15, face === "wink" || face === "sleepy", face === "surprised");
   // Brows (in hair color): angled for fierce, raised for surprised.
   g.strokeStyle = hair;
   g.lineWidth = 3;
@@ -153,7 +154,13 @@ function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTextur
       g.ellipse(x, my + 2, 4, 5.5, 0, 0, Math.PI * 2);
       g.fill();
       break;
+    case "smirk":
+      g.moveTo(x - 7, my + 1);
+      g.quadraticCurveTo(x + 3, my + 3, x + 9, my - 4);
+      g.stroke();
+      break;
     case "calm":
+    case "sleepy":
     case "fierce":
       g.moveTo(x - 7, my + 1);
       g.lineTo(x + 7, my + (face === "fierce" ? 2 : 1));
@@ -163,7 +170,8 @@ function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTextur
       g.arc(x, my - 4, 9, Math.PI * 0.2, Math.PI * 0.8);
       g.stroke();
   }
-  if (face === "freckled") {
+  // ---- Features (any number) ----
+  if (has("freckles")) {
     g.fillStyle = "rgba(140, 70, 40, 0.55)";
     for (let i = 0; i < 14; i++) {
       const s = i % 2 ? 1 : -1;
@@ -172,20 +180,38 @@ function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTextur
       g.fill();
     }
   }
-  if (face === "spectacled") {
-    g.strokeStyle = "#c9a227";
+  if (has("mole")) {
+    g.fillStyle = "#3a2216";
+    g.beginPath();
+    g.arc(x + 13, my - 4, 1.6, 0, Math.PI * 2);
+    g.fill();
+  }
+  if (has("scar")) {
+    // Down through the left eyebrow.
+    g.strokeStyle = "rgba(150, 60, 60, 0.75)";
     g.lineWidth = 2;
-    for (const s of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(x - 20, y - 16);
+    g.lineTo(x - 11, y + 10);
+    g.stroke();
+    for (let k = 0; k < 3; k++) {
       g.beginPath();
-      g.arc(x + s * 15, y, 9, 0, Math.PI * 2);
+      g.moveTo(x - 19 + k * 3.5, y - 9 + k * 7);
+      g.lineTo(x - 13 + k * 3.5, y - 11 + k * 7);
       g.stroke();
     }
-    g.beginPath();
-    g.moveTo(x - 6, y - 1);
-    g.lineTo(x + 6, y - 1);
-    g.stroke();
   }
-  if (face === "bearded") {
+  if (has("stubble") && !has("beard")) {
+    g.fillStyle = hair;
+    g.globalAlpha = 0.45;
+    for (let i = 0; i < 70; i++) {
+      const a = Math.PI * (0.1 + 0.8 * ((i * 37) % 70) / 70);
+      const r = 22 + ((i * 13) % 9);
+      g.fillRect(x + Math.cos(a) * r - 0.6, y + 8 + Math.sin(a) * r * 0.9 - 0.6, 1.3, 1.3);
+    }
+    g.globalAlpha = 1;
+  }
+  if (has("beard")) {
     g.fillStyle = hair;
     g.beginPath();
     g.moveTo(x - 30, y + 6);
@@ -198,6 +224,80 @@ function faceTexture(skin: string, face: Face, hair: string): THREE.CanvasTextur
     // The mouth shows through.
     g.fillStyle = "#7a2f2a";
     g.fillRect(x - 6, my - 1, 12, 3);
+  }
+  if (has("mustache")) {
+    g.fillStyle = hair;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(x, my - 6);
+      g.quadraticCurveTo(x + s * 8, my - 10, x + s * 15, my - 2);
+      g.quadraticCurveTo(x + s * 8, my - 4, x, my - 2);
+      g.fill();
+    }
+  }
+
+  // ---- The accessory (one) ----
+  const frames = (color: string, width: number, shape: "rect" | "round", fill?: string) => {
+    g.strokeStyle = color;
+    g.lineWidth = width;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      if (shape === "round") g.arc(x + s * 15, y, 9, 0, Math.PI * 2);
+      else g.roundRect(x + s * 15 - 10, y - 7, 20, 14, 3);
+      if (fill) {
+        g.fillStyle = fill;
+        g.fill();
+      }
+      g.stroke();
+    }
+    g.beginPath();
+    g.moveTo(x - 5, y - 1);
+    g.lineTo(x + 5, y - 1);
+    g.stroke();
+    // Arms back to the ears.
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(x + s * 25, y - 1);
+      g.lineTo(x + s * 46, y - 3);
+      g.stroke();
+    }
+  };
+  switch (acc) {
+    case "spectacles":
+      frames("#2a2a30", 2, "rect");
+      break;
+    case "round":
+      frames("#c9a227", 2, "round");
+      break;
+    case "sunglasses":
+      frames("#111114", 2.5, "rect", "rgba(15, 15, 22, 0.92)");
+      break;
+    case "goggles":
+      frames("#6b4a30", 4, "round", "rgba(120, 200, 230, 0.45)");
+      break;
+    case "monocle":
+      g.strokeStyle = "#c9a227";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(x + 15, y, 9, 0, Math.PI * 2);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(x + 22, y + 6);
+      g.quadraticCurveTo(x + 26, y + 30, x + 18, y + 50);
+      g.stroke();
+      break;
+    case "eyepatch":
+      g.fillStyle = "#141216";
+      g.beginPath();
+      g.ellipse(x - 15, y + 1, 9, 8, 0, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "#141216";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(x - 60, y - 14);
+      g.lineTo(x + 50, y - 20);
+      g.stroke();
+      break;
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -310,8 +410,13 @@ function addOutfit(body: THREE.Group, rig: Rig, outfit: Outfit, c: Clothes): voi
       break;
     case "cloak": {
       skirt(body, torsoMat, 0.24, 0.04);
-      const cape = mesh(new THREE.BoxGeometry(0.5, 1.12, 0.03), c.main, 0, -0.08, 0.16, true);
-      cape.rotation.x = 0.08;
+      // The cape wraps around the back and sides (a half cylinder, wider at
+      // the hem), outside the shirt and skirt so nothing pokes through it.
+      // In a cylinder, angle 0 is +z (the back); this spans the back half.
+      const capeMat = c.main.clone();
+      capeMat.side = THREE.DoubleSide;
+      const cape = mesh(new THREE.CylinderGeometry(0.235, 0.33, 1.14, 14, 1, true, -Math.PI / 2, Math.PI), capeMat, 0, -0.08, 0.01, true);
+      cape.scale.z = 1.05;
       body.add(cape);
       // The hood, folded down around the neck and shoulders.
       const hood = mesh(new THREE.CylinderGeometry(0.15, 0.24, 0.14, 12, 1, true), c.main, 0, 0.53, 0.03, true);
@@ -447,36 +552,192 @@ export function setAvatarStatus(group: THREE.Group, status: AvatarStatus): void 
 // ---- Hats (positions are relative to the capsule center; see addHat) ----
 
 const HATS: Record<Hat, { color: string; build: (mat: THREE.MeshLambertMaterial, group: THREE.Group) => THREE.MeshLambertMaterial[] }> = {
-  // Brim and a floppy cone.
+  none: { color: "#000000", build: () => [] },
+  // The classic: a brim and a straight point.
   classic: { color: "#3b2a6b", build: (mat, g) => cone(mat, g, 0.75) },
-  tall: { color: "#3b2a6b", build: (mat, g) => cone(mat, g, 1.15) },
-  // Midnight blue with little gold stars.
+  // Towering and crooked: a stack of cones, each leaning further back.
+  tall: {
+    color: "#1f3a6b",
+    build: (mat, g) => {
+      const brimMat = mat.clone();
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.035, 14), brimMat);
+      brim.position.y = TOP - 0.06;
+      g.add(brim);
+      let y = TOP - 0.06;
+      let z = 0;
+      let r = 0.19;
+      for (let i = 0; i < 4; i++) {
+        const h = 0.34 - i * 0.04;
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r, h, 9), mat);
+        const lean = 0.25 + i * 0.3;
+        seg.position.set(0, y + (h / 2) * Math.cos(lean), z + (h / 2) * Math.sin(lean));
+        seg.rotation.x = lean;
+        seg.castShadow = true;
+        g.add(seg);
+        y += h * Math.cos(lean);
+        z += h * Math.sin(lean);
+        r *= 0.7;
+      }
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.21, 0.06, 9), flat("#c0c8d8"));
+      band.position.y = TOP - 0.02;
+      g.add(band);
+      return [brimMat, mat];
+    },
+  },
+  // A witch's hat: a huge floppy brim, a short point, little gold stars.
   starry: {
     color: "#1f2a6b",
     build: (mat, g) => {
-      const mats = cone(mat, g, 0.85);
+      const brimMat = mat.clone();
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.6, 0.03, 18), brimMat);
+      brim.position.y = TOP - 0.07;
+      brim.rotation.x = 0.12; // drooping at the back
+      brim.castShadow = true;
+      g.add(brim);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.21, 0.55, 9), mat);
+      tip.position.set(0, TOP + 0.2, 0.03);
+      tip.rotation.x = -0.25;
+      tip.castShadow = true;
+      g.add(tip);
       for (const [y, a] of [
-        [0.15, 0.4],
-        [0.38, 2.3],
-        [0.6, 4.1],
+        [0.05, 0.4],
+        [0.2, 2.3],
+        [0.32, 4.1],
+        [0.0, 5.3],
       ]) {
-        const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), flat("#ffe066"));
-        const r = 0.26 - y * 0.28;
-        star.position.set(Math.cos(a) * r, TOP + y, Math.sin(a) * r);
+        const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.045), flat("#ffe066"));
+        const rr = 0.19 - y * 0.4;
+        star.position.set(Math.cos(a) * rr, TOP + y, Math.sin(a) * rr);
         g.add(star);
       }
-      return mats;
+      return [brimMat, mat];
     },
   },
-  // Storm-violet, with a crackling tip.
+  // Storm-violet with a lightning bolt badge and a crackling, bent tip.
   storm: {
     color: "#3a2f6b",
     build: (mat, g) => {
-      const mats = cone(mat, g, 1.0);
-      const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), new THREE.MeshBasicMaterial({ color: "#8fe3ff", toneMapped: false }));
-      tip.position.set(0, TOP + 0.85, 0.12);
+      const mats = cone(mat, g, 0.6);
+      const bend = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.32, 8), mat);
+      bend.position.set(0, TOP + 0.6, 0.12);
+      bend.rotation.x = 1.3;
+      g.add(bend);
+      const glow = new THREE.MeshBasicMaterial({ color: "#8fe3ff", toneMapped: false });
+      const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), glow);
+      tip.position.set(0, TOP + 0.62, 0.3);
       g.add(tip);
+      // A zigzag bolt on the front.
+      const bolt = new THREE.Shape();
+      bolt.moveTo(0.02, 0.12);
+      bolt.lineTo(-0.04, 0.0);
+      bolt.lineTo(0.005, 0.0);
+      bolt.lineTo(-0.025, -0.12);
+      bolt.lineTo(0.05, 0.03);
+      bolt.lineTo(0.0, 0.03);
+      bolt.closePath();
+      const badge = new THREE.Mesh(new THREE.ShapeGeometry(bolt), glow);
+      badge.position.set(0, TOP + 0.12, -0.165);
+      badge.rotation.set(-0.27, Math.PI, 0);
+      g.add(badge);
       return mats;
+    },
+  },
+  // A tall black top hat with a purple band.
+  tophat: {
+    color: "#1c1820",
+    build: (mat, g) => {
+      const brimMat = mat.clone();
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 16), brimMat);
+      brim.position.y = TOP - 0.05;
+      g.add(brim);
+      const crownPart = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.34, 14), mat);
+      crownPart.position.y = TOP + 0.12;
+      crownPart.castShadow = true;
+      g.add(crownPart);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.152, 0.152, 0.06, 14), flat("#7a4fd0"));
+      band.position.y = TOP - 0.0;
+      g.add(band);
+      return [brimMat, mat];
+    },
+  },
+  // A soft beret, pulled to one side.
+  beret: {
+    color: "#8c2a3c",
+    build: (mat, g) => {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 8), mat);
+      b.scale.set(1, 0.35, 1);
+      b.position.set(0.03, TOP - 0.02, 0.01);
+      b.rotation.z = -0.25;
+      b.castShadow = true;
+      g.add(b);
+      const nub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.04, 5), mat);
+      nub.position.set(0.02, TOP + 0.05, 0.01);
+      g.add(nub);
+      return [mat];
+    },
+  },
+  // A hood up over the head, open at the face, with a point at the back.
+  hood: {
+    color: "#5a4636",
+    build: (mat, g) => {
+      const hoodMat = mat.clone();
+      hoodMat.side = THREE.DoubleSide;
+      const h = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 10, Math.PI * 1.82, Math.PI * 1.36, 0, Math.PI * 0.66), hoodMat);
+      h.position.y = HEAD_Y + 0.01;
+      h.scale.set(1, 1.1, 1.05);
+      h.castShadow = true;
+      g.add(h);
+      const point = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 6), hoodMat);
+      point.position.set(0, HEAD_Y + 0.14, 0.17);
+      point.rotation.x = 1.1;
+      g.add(point);
+      return [hoodMat];
+    },
+  },
+  // A cavalier's cap: a wide brim turned up on one side, and a long feather.
+  feathered: {
+    color: "#2f6b4a",
+    build: (mat, g) => {
+      const brimMat = mat.clone();
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.33, 0.025, 16), brimMat);
+      brim.position.y = TOP - 0.05;
+      brim.rotation.z = 0.28; // turned up on the left
+      g.add(brim);
+      const crownPart = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+      crownPart.position.y = TOP - 0.05;
+      crownPart.scale.y = 0.9;
+      crownPart.castShadow = true;
+      g.add(crownPart);
+      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.55, 5), flat("#f2e6c8"));
+      feather.position.set(-0.17, TOP + 0.14, 0.12);
+      feather.rotation.set(0.6, 0, 0.55);
+      g.add(feather);
+      return [brimMat, mat];
+    },
+  },
+  // A steel helm with two curved horns.
+  horned: {
+    color: "#9aa0ae",
+    build: (mat, g) => {
+      const helm = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
+      helm.position.y = HEAD_Y + 0.0;
+      helm.castShadow = true;
+      g.add(helm);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.185, 0.04, 14), flat("#6e6a5a"));
+      rim.position.y = HEAD_Y + 0.03;
+      g.add(rim);
+      const horn = flat("#efe6d2");
+      for (const s of [-1, 1]) {
+        const base = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 7), horn);
+        base.position.set(s * 0.2, HEAD_Y + 0.12, 0);
+        base.rotation.z = -s * 1.0;
+        g.add(base);
+        const tipPart = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.14, 6), horn);
+        tipPart.position.set(s * 0.26, HEAD_Y + 0.23, 0);
+        tipPart.rotation.z = -s * 0.25;
+        g.add(tipPart);
+      }
+      return [mat];
     },
   },
   // A gold crown: a band and five points.
@@ -586,15 +847,18 @@ export function setAvatarLook(group: THREE.Group, id: number, rawLook: Look): vo
   parts.bodyMat = main;
 
   // Head and neck.
-  const head = mesh(new THREE.SphereGeometry(HEAD_R, 18, 12), new THREE.MeshLambertMaterial({ map: faceTexture(skinColor, look.face, hairColor) }), 0, 0, 0, true);
+  const head = mesh(new THREE.SphereGeometry(HEAD_R, 18, 12), new THREE.MeshLambertMaterial({ map: faceTexture(skinColor, look.face, look.features ?? [], look.acc ?? "none", hairColor) }), 0, 0, 0, true);
   head.scale.set(1, 1.08, 1);
   rig.head.add(head);
   for (const s of [-1, 1]) rig.head.add(mesh(new THREE.SphereGeometry(0.03, 6, 4), clothes.skin, s * HEAD_R, -0.01, 0)); // ears
   rig.body.add(mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 6), clothes.skin, 0, 0.53, 0));
-  if (look.face === "bearded") {
+  if (look.features?.includes("beard")) {
     const beard = mesh(new THREE.ConeGeometry(0.09, 0.16, 6), flat(hairColor), 0, -0.13, -0.08, true);
     beard.rotation.x = Math.PI - 0.3;
     rig.head.add(beard);
+  }
+  if (look.acc === "earrings") {
+    for (const s of [-1, 1]) rig.head.add(mesh(new THREE.SphereGeometry(0.018, 6, 4), new THREE.MeshBasicMaterial({ color: "#ffd25a" }), s * (HEAD_R + 0.01), -0.05, 0));
   }
   addHair(rig.head, look.hair, hairColor);
   addOutfit(rig.body, rig, look.outfit, clothes);
