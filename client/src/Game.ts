@@ -29,6 +29,8 @@ import { PostFX } from "./graphics/PostFX.ts";
 import { Particles, particles } from "./graphics/Particles.ts";
 import { addProps } from "./levels/Props.ts";
 import { addFeatures, type Features } from "./levels/Features.ts";
+import { Trial } from "./trials/Trial.ts";
+import { Npcs } from "./npcs/Npcs.ts";
 import { Sky } from "./Sky.ts";
 import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
@@ -89,6 +91,9 @@ export class Game {
   private particleSystem: Particles;
   private props: { update(time: number, dt: number): void } | null = null;
   private features: Features | null = null;
+  private trial: Trial | null = null;
+  private npcs: Npcs | null = null;
+  private talkHint: HTMLElement | null = null;
   // Third person (V): your own body, and a camera over your shoulder.
   private thirdPerson = false;
   private selfAvatar: THREE.Group | null = null;
@@ -205,6 +210,10 @@ export class Game {
         },
       });
     }
+    if (room.mode === "parkour" && level.course?.tasks?.length) {
+      this.trial = new Trial(this.scene, hud, this.clock, level, { send: (msg) => this.net.send(msg), feed: (text) => this.addFeed(text) });
+    }
+    if (level.props?.some((p) => p.kind === "npc" || p.kind === "student")) this.npcs = new Npcs(this.scene, level);
     if (level.stations) {
       this.hubPanel = new HubPanel(
         this.profile,
@@ -371,6 +380,7 @@ export class Game {
   private onServerMessage(msg: ServerMsg): void {
     if (this.disposed) return; // still in flight when we left
     if (this.royale?.onMessage(msg)) return;
+    if (this.trial?.onMessage(msg, this.myId)) return;
     switch (msg.t) {
       case "welcome":
         this.myId = msg.id;
@@ -435,6 +445,7 @@ export class Game {
         break;
       }
       case "runReset":
+        this.trial?.reset();
         this.parkour?.reset();
         this.markers.setReached(0);
         break;
@@ -572,6 +583,18 @@ export class Game {
 
   // Hub stations: show "E: Spellbook" when close enough, open on E.
   private updateStations(): void {
+    // People to talk to come first (in the hub, and in the trials).
+    if (this.npcs) {
+      const who = this.npcs.nearest(this.player.position);
+      if (who || this.npcs.isTalking) {
+        this.talkHint ??= this.stationHint ?? this.makeHint();
+        this.talkHint.textContent = this.npcs.isTalking ? "" : `E \u00b7 Talk to ${who}`;
+        this.talkHint.classList.toggle("show", !this.npcs.isTalking);
+        if (!this.royale && this.input.consumeInteract()) this.npcs.interact(this.player.position);
+        return;
+      }
+      if (this.talkHint && !this.hubPanel) this.talkHint.classList.remove("show");
+    }
     if (!this.hubPanel || !this.stationHint) return;
     const p = this.player.position;
     const near = this.level.stations?.find((s) => Math.hypot(s.pos[0] - p.x, s.pos[2] - p.z) < STATION_REACH && Math.abs(p.y - 0.9 - s.pos[1]) < 1.5);
@@ -582,6 +605,13 @@ export class Game {
       sound.play("bookOpen");
       document.exitPointerLock(); // free the mouse to click in the window
     }
+  }
+
+  private makeHint(): HTMLElement {
+    const el = document.createElement("div");
+    el.id = "station-hint";
+    document.getElementById("hud")!.appendChild(el);
+    return el;
   }
 
   // Room-wide messages, bottom right, fading after a few seconds.
@@ -605,6 +635,8 @@ export class Game {
     window.clearTimeout(this.levelUpTimer);
 
     this.royale?.dispose();
+    this.trial?.dispose();
+    this.npcs?.dispose();
     this.story?.dispose();
     this.postfx?.dispose();
     this.particleSystem.dispose();
@@ -758,6 +790,10 @@ export class Game {
     // Battle royale: click casts a bolt, right-click a fireball, from your eyes
     // along where you're looking.
     const rightClicked = this.input.consumeRightClick();
+    if (this.trial && clicked) {
+      const { origin, dir } = this.aim();
+      this.trial.attack(origin, dir, this.player.position);
+    }
     if (this.royale && (clicked || rightClicked)) {
       const { origin, dir } = this.aim();
       this.royale.attack(clicked ? "primary" : "fireball", origin, dir);
@@ -831,6 +867,8 @@ export class Game {
     }
 
     this.props?.update(now / 1000, dt);
+    this.trial?.update(now / 1000);
+    this.npcs?.update(now / 1000, dt, this.player.position);
     this.features?.update(now / 1000, dt);
     this.particleSystem.update(dt);
     if (this.postfx) this.postfx.render(dt);

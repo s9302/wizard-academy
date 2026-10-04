@@ -56,5 +56,8 @@ export const trial1: Level = {
     start: k.above(0, 0, 0, 8, 8),
     checkpoints: [cp1, cp2, cp3],
     finish,
+    // Phase 16: three star orbs over the path seal the finish until found.
+    tasks: [{ id: "stars", kind: "orbs", label: "Gather the 3 star orbs", points: [[-1, 2.4, -23], [14, 3.9, -51], [14, 6.0, -94]] }],
   },
+  props: [{ kind: "npc", talk: "pip", pos: [2.8, 0, -2.2], yaw: 2.4 }],
 };

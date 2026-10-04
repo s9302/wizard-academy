@@ -63,5 +63,20 @@ export const trial4: Level = {
   sky: "#c9a0dc",
   skyStyle: "dusk",
   boxes: k.boxes,
-  course: { start: k.above(0, 2, 0, 6, 6), checkpoints: [cp1, cp2, cp3], finish },
+  course: {
+    start: k.above(0, 2, 0, 6, 6),
+    checkpoints: [cp1, cp2, cp3],
+    finish,
+    // Phase 16: four storm shards caught in the wind along the way.
+    tasks: [
+      {
+        id: "shards",
+        kind: "orbs",
+        label: "Gather the 4 storm shards",
+        color: "#8fe3ff",
+        points: [[2.5, 4.5, -10.5], [10, 6.3, -33.5], [0, 6.3, -63.5], [0, 5.9, -89]],
+      },
+    ],
+  },
+  props: [{ kind: "npc", talk: "ash", pos: [2.6, 2, -2.2], yaw: 2.4 }],
 };

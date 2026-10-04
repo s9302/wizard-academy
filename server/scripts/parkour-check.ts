@@ -10,6 +10,7 @@
 
 import WebSocket from "ws";
 import { trial1 } from "../../shared/src/levels/trial1.ts";
+import { taskStops } from "./courseTasks.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { signIn } from "./signIn.ts";
 
@@ -109,6 +110,11 @@ check("falling respawns you at the last checkpoint", JSON.stringify(respawned?.p
 send(pos);
 await sleep(100);
 await walkTo(cps[2].respawn);
+// Phase 16: the finish is sealed until the star orbs are found.
+await walkTo(finish);
+check("the finish is sealed until the task is done", !since(mark).some((m) => m.t === "finish") && since(mark).some((m) => m.t === "announce" && m.text.startsWith("The way is sealed")));
+for (const stop of taskStops(course)) await walkTo(stop);
+check("flying through the three orbs completes the task", since(mark).some((m) => m.t === "task" && m.done));
 await walkTo(finish);
 
 const run = since(mark);

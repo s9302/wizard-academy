@@ -11,6 +11,7 @@ import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { unlockedSet } from "../../shared/src/unlocks.ts";
 import { signIn } from "./signIn.ts";
+import { taskStops } from "./courseTasks.ts";
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const pin = process.env.GAME_PIN;
@@ -55,7 +56,7 @@ async function clear(room: string): Promise<ServerMsg[]> {
   // checkpoint in order, then the finish.
   const course = LEVELS[room].course!;
   const center = (z: { min: Vec3; max: Vec3 }): Vec3 => [(z.min[0] + z.max[0]) / 2, z.min[1] + 0.9, (z.min[2] + z.max[2]) / 2];
-  for (const target of [...course.checkpoints.map((c) => c.respawn), center(course.finish), center(course.finish)]) {
+  for (const target of [...course.checkpoints.map((c) => c.respawn), ...taskStops(course), center(course.finish), center(course.finish)]) {
     const from = pos;
     const steps = Math.max(1, Math.ceil(Math.hypot(target[0] - from[0], target[2] - from[2]) / 0.35));
     for (let i = 1; i <= steps; i++) {
@@ -65,6 +66,27 @@ async function clear(room: string): Promise<ServerMsg[]> {
       await sleep(50);
     }
     await sleep(100);
+  }
+  // A boss (start the server with BOSS_HP_SCALE=0.05): bolts until it falls.
+  const boss = course.tasks?.find((t) => t.kind === "boss");
+  if (boss && boss.kind === "boss") {
+    for (let i = 0; i < 60 && !msgs.some((m) => m.t === "task" && m.done); i++) {
+      const b = msgs.filter((m) => m.t === "boss").at(-1);
+      const at = b?.t === "boss" ? b.p : boss.home;
+      const o: Vec3 = [pos[0], pos[1] + 0.7, pos[2]];
+      const d: Vec3 = [at[0] - o[0], at[1] - o[1], at[2] - o[2]];
+      const l = Math.hypot(...d);
+      ws.send(JSON.stringify({ t: "cast", spell: "bolt", o, d: [d[0] / l, d[1] / l, d[2] / l], seq: i + 1 }));
+      ws.send(JSON.stringify({ t: "move", p: pos, ry: 0, tp }));
+      await sleep(500);
+    }
+    const target = center(course.finish);
+    const from = pos;
+    for (let i = 1; i <= 30; i++) {
+      pos = [from[0] + (target[0] - from[0]) * (i / 30), from[1] + (target[1] - from[1]) * (i / 30), from[2] + (target[2] - from[2]) * (i / 30)];
+      ws.send(JSON.stringify({ t: "move", p: pos, ry: 0, tp }));
+      await sleep(50);
+    }
   }
   await waitFor(() => msgs.some((m) => m.t === "xp"), 3000);
   ws.close();

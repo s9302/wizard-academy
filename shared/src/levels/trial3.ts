@@ -41,7 +41,23 @@ const cp3 = k.checkpoint(21.5, 8.2, -63.5, 4);
 // climb onto a small block and a last jump to the finish.
 k.plat(21.5, 8.2, -74.5, 0.4, 14, stone);
 k.plat(21.5, 9.3, -84, 1.2, 1.2, violet);
-const finish = k.finish(21.5, 9.8, -90);
+
+// Phase 16: the Bridge Golem's arena, where the finish used to be. Its near
+// edge is where the old finish platform's was (z -87); the finish arch is at
+// the far end, sealed until the golem falls. Low walls along the sides.
+const ARENA = 9.8;
+k.plat(21.5, ARENA, -98, 16, 22, stone);
+for (const x of [13.7, 29.3]) k.deco([x, ARENA + 0.4, -99], [0.4, 0.8, 18], stoneDark);
+const cp4 = {
+  zone: k.above(21.5, ARENA, -88.5, 16, 3),
+  respawn: [21.5, ARENA + 1, -88.6] as [number, number, number],
+  marker: [28.5, ARENA + 1.6, -88.5] as [number, number, number],
+};
+const gold = COLORS.gold;
+k.deco([18.9, ARENA + 1.5, -108.6], [0.6, 3, 0.6], gold);
+k.deco([24.1, ARENA + 1.5, -108.6], [0.6, 3, 0.6], gold);
+k.deco([21.5, ARENA + 3.2, -108.6], [5.8, 0.4, 0.6], gold);
+const finish = k.above(21.5, ARENA, -105.5, 6, 5);
 
 // Scenery: the stumps of the old bridge below section 2.
 for (const z of [-36.5, -45.5, -54.5]) k.deco([3.5, -2, z], [1.4, 8, 1.4], stoneDark);
@@ -56,7 +72,18 @@ export const trial3: Level = {
   boxes: k.boxes,
   course: {
     start: k.above(0, START_TOP, 0, 6, 6),
-    checkpoints: [cp1, cp2, cp3],
+    checkpoints: [cp1, cp2, cp3, cp4],
     finish,
+    tasks: [
+      {
+        id: "golem",
+        kind: "boss",
+        label: "Defeat the Bridge Golem",
+        boss: "golem",
+        arena: { min: [13.5, ARENA - 0.5, -109], max: [29.5, ARENA + 9, -87] },
+        home: [21.5, ARENA + 2.1, -100],
+      },
+    ],
   },
+  props: [{ kind: "npc", talk: "mara", pos: [22.9, 8.2, -62.3], yaw: Math.PI }],
 };

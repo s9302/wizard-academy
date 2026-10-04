@@ -358,6 +358,27 @@ for (const x of [-3, 3]) {
   for (const z of [16, 22, 28]) boxes.push({ pos: [x, 0.5, z], size: [0.8, 1, 4], color: HEDGE });
 }
 
+// ---- People (Phase 16): teachers to talk to, students wandering about ----
+// (Drawn and moved by your own browser only; see client/src/npcs/Npcs.ts.)
+props.push(
+  { kind: "npc", talk: "thistle", pos: [-7.4, 0, 9.4], yaw: 2.4 },
+  { kind: "npc", talk: "rook", pos: [4.4, 0, -12.8], yaw: -0.4 },
+  { kind: "npc", talk: "quill", pos: [-7.8, 0, -7.4], yaw: 0.9 },
+  { kind: "npc", talk: "bram", pos: [-20.5, 0, 25], yaw: -1.2 },
+);
+for (const [x, z, r] of [
+  [8, 20, 4],
+  [-9, 22, 4],
+  [12, -6, 4],
+  [-13, -3, 3],
+  [9, -21, 3],
+  [-10, -20, 3],
+  [20, 20, 5],
+  [-15, 10, 3],
+]) {
+  props.push({ kind: "student", pos: [x, 0, z], scale: r });
+}
+
 export const academy: Level = {
   id: "academy",
   name: "The Academy",

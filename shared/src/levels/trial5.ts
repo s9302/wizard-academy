@@ -42,6 +42,14 @@ k.plat(48, 12.4, -28, 0.5, 6, rust);
 k.plat(48, 12.4, -32, 1, 1, violet);
 k.plat(52, 12.4, -32, 6, 0.5, rust);
 const finish = k.finish(59, 12.8, -32, "x");
+// Phase 16: four rune plates on the finish platform; the Echo knows the
+// order (flame, stars, moon, sun).
+const RUNES: [number, number, string][] = [
+  [-1.6, -1.6, "sun"],
+  [1.6, -1.6, "star"],
+  [-1.6, 1.6, "flame"],
+  [1.6, 1.6, "moon"],
+];
 
 // Scenery: the hollow's walls, deep below.
 for (const [x, z, h] of [
@@ -63,5 +71,20 @@ export const trial5: Level = {
   sky: "#a98fc9",
   skyStyle: "dusk",
   boxes: k.boxes,
-  course: { start: k.above(0, START, 0, 6, 6), checkpoints: [cp1, cp2, cp3], finish },
+  course: {
+    start: k.above(0, START, 0, 6, 6),
+    checkpoints: [cp1, cp2, cp3],
+    finish,
+    tasks: [
+      {
+        id: "runes",
+        kind: "runes",
+        label: "Wake the four runes in order",
+        points: RUNES.map(([dx, dz]) => [59 + dx, 12.8, -32 + dz]),
+        symbols: RUNES.map((r) => r[2]),
+        order: [2, 1, 3, 0], // flame, star, moon, sun
+      },
+    ],
+  },
+  props: [{ kind: "npc", talk: "echo", pos: [59.2, 12.8, -34.6], yaw: 0 }],
 };

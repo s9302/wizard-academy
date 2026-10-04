@@ -623,3 +623,39 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
   .wardrobe { grid-template-columns: 1fr; }
   .wardrobe-preview { width: 220px; height: 282px; }
 }
+
+/* ---- Phase 16: dialogue, trial tasks, hearts, boss bar ---- */
+#dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 32px));
+  padding: 14px 20px 26px;
+  border-radius: 12px;
+  background: rgba(20, 14, 38, 0.92);
+  border: 1px solid rgba(232, 197, 71, 0.5);
+  line-height: 1.55;
+  box-sizing: border-box;
+}
+#dialogue[hidden] { display: none; }
+#dialogue-name { color: #ffe58a; font-weight: 800; margin-bottom: 4px; }
+#dialogue::after { content: attr(data-more); position: absolute; right: 16px; bottom: 8px; font-size: 12px; opacity: 0.7; }
+#trial-tasks {
+  position: absolute;
+  left: 12px;
+  top: 48px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  line-height: 1.6;
+}
+#trial-tasks[hidden] { display: none; }
+#trial-tasks .done { color: #7dffb0; }
+#trial-hearts { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); font-size: 30px; color: #ff4a6a; text-shadow: 0 2px 4px #000; letter-spacing: 4px; }
+#trial-hearts[hidden], #boss-bar[hidden] { display: none; }
+#boss-bar { position: absolute; left: 50%; top: 110px; transform: translateX(-50%); width: min(520px, calc(100vw - 40px)); text-align: center; }
+.boss-name { font-weight: 800; color: #ffd0a8; text-shadow: 0 2px 4px #000; margin-bottom: 4px; letter-spacing: 0.05em; }
+.boss-track { height: 14px; border-radius: 7px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.25); overflow: hidden; }
+.boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff3c0a, #ffb347); transition: width 0.2s; }

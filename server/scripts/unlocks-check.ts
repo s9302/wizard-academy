@@ -14,6 +14,7 @@ import { trial1 } from "../../shared/src/levels/trial1.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { DEFAULT_LOADOUT, sanitizeLoadout, unlockedSet } from "../../shared/src/unlocks.ts";
 import { signIn } from "./signIn.ts";
+import { taskStops } from "./courseTasks.ts";
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const pin = process.env.GAME_PIN;
@@ -150,6 +151,7 @@ mark = me.msgs.length;
 const course = trial1.course!;
 const center = (z: { min: Vec3; max: Vec3 }): Vec3 => [(z.min[0] + z.max[0]) / 2, z.min[1] + 0.9, (z.min[2] + z.max[2]) / 2];
 for (const cp of course.checkpoints) await me.walkTo(cp.respawn);
+for (const stop of taskStops(course)) await me.walkTo(stop); // Phase 16: the star orbs
 await me.walkTo(center(course.finish));
 await waitFor(() => !!me.find("finish", mark) && !!me.find("xp", mark), 3000);
 const fin = me.find("finish", mark);

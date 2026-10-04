@@ -3,6 +3,7 @@
 // (checkpoints, finish...) and spawn points to judge the rules.
 
 import type { Vec3 } from "../protocol.ts";
+import type { BossKind } from "../bosses.ts";
 
 export type Box = {
   pos: Vec3; // center
@@ -127,10 +128,22 @@ export type Checkpoint = {
   marker: Vec3; // where the checkpoint crystal floats (client decoration)
 };
 
+// Something a trial asks of you besides reaching the finish (Phase 16).
+// All of a course's tasks must be done before its finish counts.
+export type Task =
+  // Fly through every one of these glowing orbs (any order).
+  | { id: string; kind: "orbs"; label: string; points: Vec3[]; color?: string }
+  // Step on these rune plates (pos = plate center, on the floor) in `order`
+  // (indexes into points); a wrong one resets the sequence.
+  | { id: string; kind: "runes"; label: string; points: Vec3[]; symbols: string[]; order: number[] }
+  // Beat this boss (shared/src/bosses.ts) in its arena.
+  | { id: string; kind: "boss"; label: string; boss: BossKind; arena: Zone; home: Vec3 };
+
 export type Course = {
   start: Zone; // leaving this starts the timer; walking back in resets it
   checkpoints: Checkpoint[]; // must be reached in order
   finish: Zone;
+  tasks?: Task[];
 };
 
 // A doorway to another room (hub only). Walking into the opening takes you

@@ -42,6 +42,17 @@ const finish = k.finish(fx, ftop, fz, "x");
 k.deco([0, ftop / 2 - 2, 0], [3, ftop + 8, 3], COLORS.stone);
 k.deco([0, ftop + 6.5, 0], [4.2, 0.6, 4.2], COLORS.gold);
 
+// Phase 16: the finish is sealed by four rune plates, one in each corner of
+// the finish platform. The Archivist tells you the order: sun, moon, stars,
+// flame.
+const RUNES: [number, number, string][] = [
+  [-1.6, -1.6, "moon"],
+  [1.6, -1.6, "flame"],
+  [-1.6, 1.6, "sun"],
+  [1.6, 1.6, "star"],
+];
+const runePoints: Vec3[] = RUNES.map(([dx, dz]) => [fx + dx, ftop, fz + dz]);
+
 export const trial2: Level = {
   id: "trial2",
   name: "Trial II: The Spiral Spire",
@@ -55,5 +66,16 @@ export const trial2: Level = {
     start: k.above(RADIUS + 2, 0, 0, 6, 6),
     checkpoints,
     finish,
+    tasks: [
+      {
+        id: "runes",
+        kind: "runes",
+        label: "Wake the four runes in order",
+        points: runePoints,
+        symbols: RUNES.map((r) => r[2]),
+        order: [2, 0, 3, 1], // sun, moon, star, flame
+      },
+    ],
   },
+  props: [{ kind: "npc", talk: "archivist", pos: [fx + 2.6, ftop, fz + 0.2], yaw: Math.PI / 2 }],
 };
