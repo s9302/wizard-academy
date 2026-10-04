@@ -125,7 +125,17 @@ class TestClient {
   c.ws.close();
 }
 
-// 8. Message flood.
+// 8. A burst over the normal rate (fast clicking) is dropped, not kicked.
+{
+  const c = new TestClient("Clicker");
+  const spawn = await c.ready();
+  for (let i = 0; i < 100; i++) c.move(spawn);
+  await sleep(300);
+  check("100 messages at once: extras dropped, still connected", !c.closed, c.closed ?? "still open");
+  c.ws.close();
+}
+
+// 9. Message flood.
 {
   const c = new TestClient("Flooder");
   const spawn = await c.ready();

@@ -4,6 +4,7 @@
 
 import type { RoundState } from "../../shared/src/protocol.ts";
 import type { RoomMode } from "../../shared/src/rooms.ts";
+import { BotControls } from "./BotControls.ts";
 import type { ServerClock } from "./ServerClock.ts";
 
 function el(tag: string, id: string, parent: HTMLElement): HTMLElement {
@@ -25,15 +26,13 @@ export class ChaseHud {
   private roleEl: HTMLElement;
   private bannerEl: HTMLElement;
   private resultsEl: HTMLElement;
+  private bots: BotControls;
   private state: RoundState = "waiting";
   private endsAt: number | null = null;
   private chaser = false;
   private chaserCount = 0;
   private total = 0;
   private bannerTimer: number | undefined;
-  private botCountEl: HTMLElement;
-  private botAddEl: HTMLButtonElement;
-  private botRemoveEl: HTMLButtonElement;
 
   // onBots: ask the server to add or remove a bot.
   constructor(hud: HTMLElement, clock: ServerClock, mode: RoomMode, roomName: string, onBots: (action: "add" | "remove") => void) {
@@ -41,16 +40,7 @@ export class ChaseHud {
     this.mode = mode;
 
     // Bot controls live in the pause panel (press Esc), where the mouse is free.
-    const controls = document.getElementById("bot-controls")!;
-    this.botCountEl = document.getElementById("bot-count")!;
-    this.botAddEl = document.getElementById("bot-add") as HTMLButtonElement;
-    this.botRemoveEl = document.getElementById("bot-remove") as HTMLButtonElement;
-    controls.hidden = false;
-    // Clicks here shouldn't fall through to "click to resume". Assigned with
-    // onclick (not addEventListener) so the next room's HUD replaces them.
-    controls.onclick = (e) => e.stopPropagation();
-    this.botAddEl.onclick = () => onBots("add");
-    this.botRemoveEl.onclick = () => onBots("remove");
+    this.bots = new BotControls(onBots);
     const panel = el("div", "run", hud); // same look as the parkour panel
     el("div", "run-name", panel).textContent = roomName;
     this.timerEl = el("div", "run-timer", panel);
@@ -91,9 +81,7 @@ export class ChaseHud {
   }
 
   botCount(count: number, max: number): void {
-    this.botCountEl.textContent = String(count);
-    this.botAddEl.disabled = count >= max;
-    this.botRemoveEl.disabled = count === 0;
+    this.bots.update(count, max);
   }
 
   result(title: string, lines: string[]): void {

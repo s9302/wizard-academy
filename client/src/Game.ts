@@ -57,7 +57,7 @@ export type GameOptions = {
   room: RoomInfo;
   level: Level;
   from?: string; // the room we just came from (the hub puts us at its portal)
-  onDisconnect: (reason: string) => void;
+  onDisconnect: (reason: string, kicked: boolean) => void;
   onPortal: (roomId: string) => void; // walked into a portal in the hub
   onProfile: (profile: PanelProfile) => void; // XP, a best time or the loadout changed
 };
@@ -185,11 +185,11 @@ export class Game {
 
     this.net = new Net({
       onMessage: (msg) => this.onServerMessage(msg),
-      onClose: (reason) => {
+      onClose: (reason, kicked) => {
         this.running = false;
         this.remotes.clear();
         this.resolveReady(); // nobody is waiting for a welcome that won't come
-        onDisconnect(reason);
+        onDisconnect(reason, kicked);
       },
     });
     this.net.opened().then(
@@ -376,6 +376,11 @@ export class Game {
       this.perkEl.textContent = names.join(" \u00b7 ");
       this.perkEl.hidden = names.length === 0;
     }
+  }
+
+  // Did the server welcome us into the room?
+  get connected(): boolean {
+    return this.myId > 0;
   }
 
   // Is a station's window open? (main.ts keeps the pause panel hidden then.)

@@ -5,7 +5,9 @@ import type { ClientMsg, ServerMsg } from "../../shared/src/protocol.ts";
 
 export type NetHandlers = {
   onMessage: (msg: ServerMsg) => void;
-  onClose: (reason: string) => void;
+  // kicked: the server hung up on purpose (code 4000, with a reason);
+  // otherwise the connection just dropped and trying again may work.
+  onClose: (reason: string, kicked: boolean) => void;
 };
 
 export class Net {
@@ -34,7 +36,7 @@ export class Net {
       if (this.closedByUs) return; // leaving on purpose isn't a disconnect
       // A refused handshake (e.g. the session cookie expired) never opens.
       const fallback = this.wasOpen ? "Lost connection to the server." : "Could not connect. Your session may have expired.";
-      handlers.onClose(this.lastError || event.reason || fallback);
+      handlers.onClose(this.lastError || event.reason || fallback, event.code === 4000);
     });
   }
 

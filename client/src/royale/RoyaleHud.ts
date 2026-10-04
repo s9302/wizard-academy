@@ -5,6 +5,7 @@
 
 import { MAX_HEALTH, type SpellId, SPELLS } from "../../../shared/src/combat.ts";
 import type { RoundState } from "../../../shared/src/protocol.ts";
+import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
 import type { Storm } from "./Storm.ts";
 
@@ -38,9 +39,7 @@ export class RoyaleHud {
   private hurtEl: HTMLElement;
   private stormEl: HTMLElement;
   private crosshairEl: HTMLElement;
-  private botCountEl: HTMLElement;
-  private botAddEl: HTMLButtonElement;
-  private botRemoveEl: HTMLButtonElement;
+  private bots: BotControls;
   private state: RoundState = "waiting";
   private endsAt: number | null = null;
   private aliveCount = 0;
@@ -57,13 +56,7 @@ export class RoyaleHud {
     this.storm = storm;
 
     // Bot controls live in the pause panel (press Esc), where the mouse is free.
-    document.getElementById("bot-controls")!.hidden = false;
-    document.getElementById("bot-controls")!.onclick = (e) => e.stopPropagation();
-    this.botCountEl = document.getElementById("bot-count")!;
-    this.botAddEl = document.getElementById("bot-add") as HTMLButtonElement;
-    this.botRemoveEl = document.getElementById("bot-remove") as HTMLButtonElement;
-    this.botAddEl.onclick = () => onBots("add");
-    this.botRemoveEl.onclick = () => onBots("remove");
+    this.bots = new BotControls(onBots);
 
     this.crosshairEl = document.getElementById("crosshair")!;
     this.stormEl = el("div", "storm-haze", hud);
@@ -145,9 +138,7 @@ export class RoyaleHud {
   }
 
   botCount(count: number, max: number): void {
-    this.botCountEl.textContent = String(count);
-    this.botAddEl.disabled = count >= max;
-    this.botRemoveEl.disabled = count === 0;
+    this.bots.update(count, max);
   }
 
   result(title: string, lines: string[]): void {

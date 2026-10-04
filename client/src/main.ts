@@ -185,7 +185,7 @@ function startGame(room: RoomInfo, from?: string): Game | null {
     onProfile: (p) => {
       if (profile) profile = { ...profile, xp: p.xp, bestTimes: { ...p.bestTimes }, loadout: p.loadout };
     },
-    onDisconnect: (reason) => backToMenu(reason),
+    onDisconnect: (reason, kicked) => onDrop(reason, kicked),
     onPortal: (roomId) => switchRoom(roomId),
   });
   return game;
@@ -210,6 +210,41 @@ async function switchRoom(roomId: string): Promise<void> {
   // The mouse may have been captured (or released) while no game was running.
   if (game) overlay.hidden = input.locked;
   switching = false;
+}
+
+// The connection dropped. Unless the server kicked us on purpose, try to
+// rejoin the same room a few times (wifi blips, server updates) before
+// giving up and going back to the menu.
+const MAX_RECONNECTS = 5;
+let reconnects = 0;
+async function onDrop(reason: string, kicked: boolean): Promise<void> {
+  const room = current;
+  if (kicked || !room || reconnects >= MAX_RECONNECTS) {
+    const gaveUp = !kicked && reconnects >= MAX_RECONNECTS;
+    reconnects = 0;
+    await backToMenu(gaveUp ? `${reason} (gave up reconnecting)` : reason);
+    return;
+  }
+  reconnects += 1;
+  const attempt = reconnects;
+  const leaving = game;
+  game = null;
+  await leaving?.dispose();
+  hud.hidden = true;
+  overlay.hidden = false;
+  resumeHint.hidden = true;
+  message.textContent = `Connection lost. Reconnecting (try ${attempt} of ${MAX_RECONNECTS})...`;
+  await sleep(500 * 2 ** (attempt - 1)); // 0.5 s, 1 s, 2 s, 4 s, 8 s
+  if (current !== room || game) return; // they left in the meantime
+  const next = startGame(room);
+  if (!next) return;
+  await next.ready;
+  if ((game as Game | null) === next && next.connected) {
+    reconnects = 0;
+    message.textContent = "";
+    resumeHint.hidden = false;
+    overlay.hidden = input.locked;
+  }
 }
 
 // Leave the game and go back to the profile screen. Used by Exit (in the hub)

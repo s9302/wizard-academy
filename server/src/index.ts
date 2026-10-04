@@ -179,7 +179,12 @@ function onConnection(conn: Connection): void {
   socket.on("pong", () => (conn.alive = true));
 
   socket.on("message", (data, isBinary) => {
-    if (!conn.messageBudget.take()) return conn.kick("Too many messages.");
+    if (!conn.floodBudget.take()) return conn.kick("Too many messages.");
+    if (!conn.messageBudget.take()) {
+      // Over the normal rate: drop it, don't disconnect (see Connection.ts).
+      if (conn.droppedMessages++ % 100 === 0) console.warn(`dropping messages from #${conn.id} ${conn.name} (over the rate limit)`);
+      return;
+    }
     if (isBinary) return conn.kick("Binary messages are not accepted.");
     const msg = parseClientMsg(data.toString());
     if (!msg) return conn.kick("Malformed message.");

@@ -22,10 +22,14 @@ export interface Peer {
   kick(message: string): void;
 }
 
-// Clients send ~20 moves per second. Allow bursts (e.g. after a lag spike)
-// but nothing close to a flood.
+// Clients send ~20 moves per second. Two limits:
+// - Normal: bursts (a lag spike, clicking a button fast) are fine; past this
+//   rate, extra messages are dropped quietly and the player stays connected.
+// - Flood: several times that rate means a broken or hostile client: kicked.
 const MESSAGE_BURST = 60;
 const MESSAGES_PER_SECOND = 30;
+const FLOOD_BURST = 150;
+const FLOOD_PER_SECOND = 60;
 
 let nextId = 1;
 
@@ -36,6 +40,8 @@ export class Connection implements Peer {
   readonly ip: string; // rate-limit key, see limits.ts
   readonly account: Account;
   readonly messageBudget = new TokenBucket(MESSAGE_BURST, MESSAGES_PER_SECOND);
+  readonly floodBudget = new TokenBucket(FLOOD_BURST, FLOOD_PER_SECOND);
+  droppedMessages = 0;
   name = "";
   look: Look;
   readonly isAdmin: boolean;
