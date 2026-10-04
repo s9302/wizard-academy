@@ -10,7 +10,7 @@
 //   GAME_PIN=... node server/scripts/abilities-check.ts http://localhost:3000
 
 import WebSocket from "ws";
-import { ABILITIES, BLINK_RANGE, CHARGE_DAMAGE, PILLAR_HEIGHT } from "../../shared/src/abilities.ts";
+import { ABILITIES, BLINK_RANGE, CHARGE_DAMAGE, FORTIFY_FACTOR, PILLAR_HEIGHT } from "../../shared/src/abilities.ts";
 import { CLASSES } from "../../shared/src/classes.ts";
 import { SPELLS } from "../../shared/src/combat.ts";
 import { EYE_HEIGHT } from "../../shared/src/constants.ts";
@@ -199,7 +199,7 @@ k.ability(1, [1, 0, 0]);
 await waitFor(() => w.since("effect", mark).some((e) => e.id === k.id && e.kind === "fortify"), 2000);
 const kBefore = w.hp.get(k.id)!;
 w.cast(norm([k.pos[0] - w.pos[0], k.pos[1] - w.pos[1], k.pos[2] - w.pos[2]]));
-const fortified = Math.round(SPELLS.bolt.damage * (1 - CLASSES.knight.defense) * 0.5);
+const fortified = Math.round(SPELLS.bolt.damage * (1 - CLASSES.knight.defense) * FORTIFY_FACTOR);
 check(`Fortify: a bolt does only ${fortified} to a fortified Knight`, await waitFor(() => w.hp.get(k.id) === kBefore - fortified, 2000), `${kBefore} -> ${w.hp.get(k.id)}`);
 
 // ---- Charge ----

@@ -35,6 +35,9 @@ import {
   SMOKE_RADIUS,
   TORNADO,
   CHARGE_DAMAGE,
+  CHARGE_KNOCK,
+  CHARGE_SLOW_MS,
+  FORTIFY_HEAL,
   CHARGE_SPEED,
   CHARGE_TIME,
   CLASS_ABILITIES,
@@ -118,7 +121,7 @@ type Fighter = {
   stealthUntil: number; // Vanish
   fortifyUntil: number; // Fortify
   chargeUntil: number; // Charge: moving fast, the first enemy touched is hit
-  chargeHit: boolean;
+  chargeHits: Set<number>; // who this charge already plowed through
   giantUntil: number; // Giant Form
 };
 
@@ -443,7 +446,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       stealthUntil: 0,
       fortifyUntil: 0,
       chargeUntil: 0,
-      chargeHit: false,
+      chargeHits: new Set(),
       giantUntil: 0,
     };
     const id = player.conn.id;
@@ -751,7 +754,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const attacker = this.players.get(spell.caster) ?? null;
     if (hit) {
       this.damage(hit, def.damage, attacker, spell.p);
-      if (def.slowMs && this.alive.has(hit.conn.id)) {
+      if (def.slowMs && this.alive.has(hit.conn.id) && !this.unstoppable(hit)) {
         const f = this.fighters.get(hit.conn.id);
         if (f) f.slowedUntil = Date.now() + def.slowMs;
         this.broadcast({ t: "slowed", id: hit.conn.id, ms: def.slowMs });
@@ -1023,13 +1026,17 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       case "fortify":
         f.fortifyUntil = now + ABILITIES.fortify.durationMs!;
+        if (this.state === "playing" && f.hp > 0) {
+          f.hp = Math.min(f.maxHp, f.hp + FORTIFY_HEAL);
+          this.broadcast({ t: "health", id: pid, hp: f.hp, max: f.maxHp, shield: f.shield });
+        }
         this.broadcast({ t: "effect", id: pid, kind: "fortify", ms: ABILITIES.fortify.durationMs! });
         return null;
       case "charge":
         // The player rushes forward themselves (their own movement); the
         // server allows the extra distance and watches for who they hit.
         f.chargeUntil = now + CHARGE_TIME * 1000 + 300;
-        f.chargeHit = false;
+        f.chargeHits = new Set();
         player.moveCheck.grant(CHARGE_SPEED * CHARGE_TIME + 1);
         this.broadcast({ t: "effect", id: pid, kind: "charge", ms: CHARGE_TIME * 1000 });
         return null;
@@ -1160,7 +1167,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Throw a player: horizontal (vx, vz) for `seconds`, and vy up. Their own
   // client moves them; the server allows the distance.
   private knock(target: Player, vx: number, vz: number, vy: number, seconds: number): void {
-    if (target.conn.isBot || target.conn.isAdmin) return;
+    if (target.conn.isBot || target.conn.isAdmin || this.unstoppable(target)) return;
     target.moveCheck.grant(Math.hypot(vx, vz) * seconds + 2);
     target.moveCheck.grantUp((vy * vy) / (2 * GRAVITY) + 1);
     target.conn.send({ t: "knock", v: [vx, vy, vz], s: seconds });
@@ -1223,7 +1230,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         for (const target of this.players.values()) {
           if (target.conn.id === field.owner || !this.alive.has(target.conn.id) || !inField(field, target.p, now)) continue;
           if (this.state === "playing") this.damage(target, amount, owner, field.p, field.kind === "flames" ? "burned up" : "was dragged into the pit");
-          if (field.kind === "hellpit" && (this.friendlyFire || target.conn.isBot)) {
+          if (field.kind === "hellpit" && (this.friendlyFire || target.conn.isBot) && !this.unstoppable(target, now)) {
             const f = this.fighters.get(target.conn.id);
             if (f) f.slowedUntil = now + 500;
             this.broadcast({ t: "slowed", id: target.conn.id, ms: 500 });
@@ -1299,20 +1306,45 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // A charging Knight hits the first enemy along their path.
   private chargeInto(player: Player, from: Vec3, to: Vec3, now: number): void {
     const f = this.fighters.get(player.conn.id);
-    if (!f || f.chargeHit || now > f.chargeUntil) return;
+    if (!f || now > f.chargeUntil) return;
+    // Everyone along the way, once each: hit, shoved aside, slowed.
+    const hits: number[] = [];
+    const blockedIds: number[] = [];
     for (const target of this.players.values()) {
-      if (target === player || !this.alive.has(target.conn.id)) continue;
+      if (target === player || !this.alive.has(target.conn.id) || f.chargeHits.has(target.conn.id)) continue;
+      if (!this.friendlyFire && !target.conn.isBot) continue; // allies in a boss fight
       // Closest point on this move to the target (flat), and roughly level.
       const [dx, dz] = [to[0] - from[0], to[2] - from[2]];
       const len2 = dx * dx + dz * dz || 1;
       const k = Math.max(0, Math.min(1, ((target.p[0] - from[0]) * dx + (target.p[2] - from[2]) * dz) / len2));
       const near = Math.hypot(from[0] + dx * k - target.p[0], from[2] + dz * k - target.p[2]);
-      if (near > 1.3 || Math.abs(target.p[1] - to[1]) > 1.5) continue;
-      f.chargeHit = true;
-      const blocked = this.damage(target, CHARGE_DAMAGE, player, from);
-      this.broadcast({ t: "melee", id: player.conn.id, weapon: "sword", hits: [target.conn.id], blocked: blocked ? [target.conn.id] : [], backstabs: [] });
-      return;
+      if (near > 1.5 || Math.abs(target.p[1] - to[1]) > 1.5) continue;
+      f.chargeHits.add(target.conn.id);
+      hits.push(target.conn.id);
+      if (this.damage(target, CHARGE_DAMAGE, player, from)) blockedIds.push(target.conn.id);
+      if (!this.unstoppable(target, now)) {
+        // Thrown to whichever side of the Knight's path they were on.
+        const len = Math.hypot(dx, dz) || 1;
+        const side = Math.sign((target.p[0] - from[0]) * -dz / len + (target.p[2] - from[2]) * dx / len) || 1;
+        this.knock(target, (-dz / len) * side * CHARGE_KNOCK + (dx / len) * 6, (dx / len) * side * CHARGE_KNOCK + (dz / len) * 6, 5, 0.3);
+        const tf = this.fighters.get(target.conn.id);
+        if (tf) tf.slowedUntil = now + CHARGE_SLOW_MS;
+        this.broadcast({ t: "slowed", id: target.conn.id, ms: CHARGE_SLOW_MS });
+      }
     }
+    // Monsters and a boss in the way take it too.
+    for (const m of this.bodies()) {
+      if (f.chargeHits.has(m.id) || Math.hypot(m.p[0] - to[0], m.p[2] - to[2]) > 1.5 + m.radius) continue;
+      f.chargeHits.add(m.id);
+      hits.push(m.id);
+      this.hitMonster(m.id, CHARGE_DAMAGE, player);
+    }
+    if (hits.length) this.broadcast({ t: "melee", id: player.conn.id, weapon: "sword", hits, blocked: blockedIds, backstabs: [] });
+  }
+
+  // A fortified Knight can't be slowed or shoved.
+  private unstoppable(player: Player, now = Date.now()): boolean {
+    return now < (this.fighters.get(player.conn.id)?.fortifyUntil ?? 0);
   }
 
   // ---- Falling and stomping ----

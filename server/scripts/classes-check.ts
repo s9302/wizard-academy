@@ -130,8 +130,8 @@ c.send({ t: "class", cls: "wizard" });
 check("the round starts", await waitFor(() => a.state === "playing", 15_000), `state=${a.state}`);
 await sleep(300);
 check(
-  "each class has its own health (140 / 85 / 100)",
-  a.hp.get(a.id)?.max === 140 && a.hp.get(b.id)?.max === 85 && a.hp.get(c.id)?.max === 100,
+  "each class has its own health (180 / 85 / 100)",
+  a.hp.get(a.id)?.max === 180 && a.hp.get(b.id)?.max === 85 && a.hp.get(c.id)?.max === 100,
   JSON.stringify([...a.hp.entries()]),
 );
 

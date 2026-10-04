@@ -42,8 +42,8 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   pillar: { name: "Earth Pillar", cooldownMs: 14_000, durationMs: 12_000, description: "A 3.5 m pillar rises where you aim. Aim at your feet to ride it up." },
   blink: { name: "Shadow Step", cooldownMs: 9_000, description: "Teleport up to 12 m where you're looking. Not through walls." },
   stealth: { name: "Vanish", cooldownMs: 16_000, durationMs: 4_000, description: "Invisible for 4 s, or until you attack." },
-  charge: { name: "Charge", cooldownMs: 10_000, description: "Rush 8 m forward. The first enemy you hit takes 20." },
-  fortify: { name: "Fortify", cooldownMs: 18_000, durationMs: 5_000, description: "Take half damage for 5 s." },
+  charge: { name: "Charge", cooldownMs: 7_000, description: "Rush 11 m forward. Everyone you plow through takes 35, is knocked aside and slowed." },
+  fortify: { name: "Fortify", cooldownMs: 13_000, durationMs: 6_000, description: "Heal 25 and take only 30% damage for 6 s. Nothing can slow or shove you." },
   // Wizard, level 11+
   tornado: { name: "Tornado", cooldownMs: 16_000, durationMs: 4_000, description: "A tornado rolls where you aim. Whoever it touches takes 25 and is thrown into the air." },
   flames: { name: "Wall of Flame", cooldownMs: 15_000, durationMs: 7_000, description: "A 12 m line of fire where you aim, for 7 s. Burns anyone in it (24 a second)." },
@@ -83,10 +83,13 @@ export const PILLAR_SIZE = 1.6;
 export const PILLAR_HEIGHT = 3.5;
 export const CONJURE_RANGE = 18;
 export const BLINK_RANGE = 12;
-export const CHARGE_SPEED = 24; // m/s
-export const CHARGE_TIME = 0.34; // seconds: about 8 m
-export const CHARGE_DAMAGE = 20;
-export const FORTIFY_FACTOR = 0.5; // damage multiplier
+export const CHARGE_SPEED = 28; // m/s
+export const CHARGE_TIME = 0.4; // seconds: about 11 m
+export const CHARGE_DAMAGE = 35;
+export const CHARGE_KNOCK = 13; // m/s, sideways out of the way
+export const CHARGE_SLOW_MS = 1200;
+export const FORTIFY_FACTOR = 0.3; // damage multiplier
+export const FORTIFY_HEAL = 25;
 
 // Level 11+ numbers.
 export const TORNADO = { speed: 7, radius: 2.2, damage: 25, lift: 14, range: 30 };

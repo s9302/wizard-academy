@@ -24,7 +24,7 @@ export type ClassDef = {
 export const CLASSES: Record<ClassId, ClassDef> = {
   knight: {
     name: "Knight",
-    maxHealth: 140,
+    maxHealth: 180,
     speed: 0.92,
     defense: 0.15,
     main: "sword",

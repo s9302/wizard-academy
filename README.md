@@ -401,7 +401,7 @@ Every class has two, on **E** and **R** (cooldowns show in their HUD slots):
 |---|---|---|
 | **Wizard** | **Stone Wall**: a 4.5 x 2.6 m wall where you aim (up to 18 m), for 15 s. Cooldown 12 s | **Earth Pillar**: a 3.5 m pillar where you aim, for 12 s; aim at your feet to ride it up. 14 s |
 | **Rogue** | **Shadow Step**: teleport up to 12 m where you look, not through walls. 9 s | **Vanish**: invisible for 4 s, or until you attack. 16 s |
-| **Knight** | **Charge**: rush 8 m; the first enemy you run into takes 20. 10 s | **Fortify**: half damage for 5 s. 18 s |
+| **Knight** | **Charge**: rush 11 m; everyone you plow through takes 35, is shoved aside and slowed for 1.2 s. 7 s | **Fortify**: heal 25, take 30% damage for 6 s, and nothing can slow or shove you. 13 s |
 
 **From level 11 (Mastery)**, each class has more to choose from, and you pick
 which two go on E and R in the Esc panel (under Class; saved per class in
@@ -450,7 +450,7 @@ battle royale.
 
 | | Knight | Rogue | Wizard |
 |---|---|---|---|
-| Health | 140 | 85 | 100 |
+| Health | 180 | 85 | 100 |
 | Speed | 92% | 112% | 100% |
 | Defense | takes 15% less damage | none | none |
 | Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** |
