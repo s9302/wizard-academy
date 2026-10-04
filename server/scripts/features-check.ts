@@ -151,6 +151,9 @@ for (let i = 0; i < 40 && !since(mark, "monsterDied").length; i++) {
 }
 const died = since(mark, "monsterDied")[0];
 check("spells hurt monsters, and one goes down", !!died, died ? JSON.stringify(died) : `hits: ${since(mark, "spellEnd").filter((m) => m.t === "spellEnd" && (m.hit ?? 0) >= 1_000_000).length}`);
+await waitFor(() => since(mark, "xp").length > 0, 2000);
+const xp = since(mark, "xp")[0];
+check("...and the kill pays XP", xp?.t === "xp" && xp.reason.startsWith("Slew a") && xp.amount > 0, JSON.stringify(xp));
 
 mark = msgs.length;
 send({ t: "monsters", action: "remove" });

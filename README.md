@@ -139,6 +139,7 @@ no guest play: XP and best times need an owner.
 | First clear of Trial I / II / III | 100 / 150 / 200 |
 | First clear of Trial IV / V / VI | 250 / 300 / 400 |
 | Clearing it again | a quarter of that, +25 for a new personal best |
+| Killing a monster (battle royale, the Tyrant's wolves) | Slime 8, Shadow Wolf 10, Stone Golem 25; at most 12 kills pay XP per 5 minutes |
 | Finishing a tag or infection round | 20 |
 | Tag: least time as It | +40 |
 | Infection: surviving the curse | +50 |

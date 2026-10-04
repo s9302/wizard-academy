@@ -73,7 +73,7 @@ import {
 import { EYE_HEIGHT, GRAVITY, PLAYER_RADIUS, RUN_SPEED } from "../../../shared/src/constants.ts";
 import { abilitiesFor, abilityAllowed } from "../../../shared/src/unlocks.ts";
 import { boxTouchesPlayer, floorBelow, lerp3, lineOfSight, segmentHitsCapsule, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
-import { MAX_MONSTERS, MONSTERS } from "../../../shared/src/monsters.ts";
+import { MAX_MONSTERS, type MonsterKind, MONSTERS } from "../../../shared/src/monsters.ts";
 import { Monsters } from "../monsters/Monsters.ts";
 import type { CastMsg, ClientMsg, DecoyState, PickupInfo, Vec3, ZoneState } from "../../../shared/src/protocol.ts";
 import { saveLoadout } from "../accounts.ts";
@@ -181,6 +181,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Monsters (Phase 16), and players just thrown by a jump pad (no fall damage).
   protected monsters: Monsters;
   private padGrace = new Map<number, number>();
+  // Monster kills paid XP recently, per account (server times), for the cap.
+  private monsterPay = new Map<number, number[]>();
   // What a subclass (BossRoom) turns off: players hurting each other, the
   // storm, and the arena vote between rounds.
   // Level 11+ abilities: areas on the ground, and Rogue copies.
@@ -648,6 +650,22 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       this.broadcast({ t: "health", id: by.conn.id, hp: f.hp, max: f.maxHp, shield: f.shield });
     }
     by.conn.send({ t: "announce", text: `You slew a ${MONSTERS[kind].name}!${this.state === "playing" ? ` +${MONSTERS[kind].heal} health` : ""}` });
+    this.payMonsterXp(by, kind);
+  }
+
+  // XP for a kill, unless this account has hit the cap for now.
+  private payMonsterXp(by: Player, kind: MonsterKind): void {
+    const account = by.conn.account;
+    if (!account || account.isAdmin) return;
+    const now = Date.now();
+    const recent = (this.monsterPay.get(account.id) ?? []).filter((t) => now - t < XP.monsterWindowMs);
+    if (recent.length >= XP.monsterKillsPaid) {
+      this.monsterPay.set(account.id, recent);
+      return;
+    }
+    recent.push(now);
+    this.monsterPay.set(account.id, recent);
+    this.giveXp(by, XP.perMonster[kind] ?? 5, `Slew a ${MONSTERS[kind].name}`);
   }
 
   // A spell: a Wizard's Spellbook spell (spell in hand), or a Fireball
