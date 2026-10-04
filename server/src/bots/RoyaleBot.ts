@@ -68,6 +68,12 @@ const eye = (p: Vec3): Vec3 => [p[0], p[1] + EYE_HEIGHT, p[2]];
 
 export class RoyaleBot extends BotWalker {
   private boxes: Box[];
+
+  setLevel(grid: NavGrid, boxes: Box[]): void {
+    this.setGrid(grid);
+    this.boxes = boxes;
+    this.target = null;
+  }
   // Each bot has one left-click spell, like a player picks in the Spellbook.
   // Bots in a room take turns: Knight, Rogue, Wizard, Knight... and the
   // Wizards take turns with spells (Frost, Spark, Bolt). Six bots = two of

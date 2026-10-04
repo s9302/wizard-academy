@@ -24,6 +24,7 @@ export type RoyaleHooks = {
   onSlowed: (ms: number) => void; // hit by Frost Shard: slow the player down
   onSpeed: (multiplier: number) => void; // class and hand set how fast you move
   feed: (text: string) => void; // a line in the message feed
+  onArena: (levelId: string) => void; // the server switched arenas
 };
 
 export class Royale {
@@ -59,6 +60,7 @@ export class Royale {
     this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, {
       onBots: (action) => hooks.send({ t: "bots", action }),
       onClass: (c) => this.pickClass(c),
+      onVote: (arena) => hooks.send({ t: "vote", arena }),
     });
     this.applyLoadout();
   }
@@ -123,6 +125,12 @@ export class Royale {
         return true;
       case "zone":
         this.storm.set(msg.zone);
+        return true;
+      case "arena":
+        this.hooks.onArena(msg.levelId);
+        return true;
+      case "arenaVote":
+        this.hud.vote(msg.options, msg.votes);
         return true;
       case "pickups":
         this.pickups.set(msg.items);
@@ -223,6 +231,11 @@ export class Royale {
     const inStorm = !!c && Math.hypot(me.x - c[0], me.z - c[1]) > c[2];
     const now = performance.now();
     this.hud.update(Math.max(0, this.readyAt.primary - now), Math.max(0, this.handReadyAt - now), inStorm);
+  }
+
+  // A new arena: spells stop at its walls.
+  setLevel(level: Level): void {
+    this.spells.setBoxes(level.boxes);
   }
 
   dispose(): void {

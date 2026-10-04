@@ -4,8 +4,9 @@
 // delay), the sword's reach, cleave and walls, the Knight's shield (blocks
 // from the front, not from behind), the Rogue's backstab and arcing arrows.
 //
-// Needs shortened rounds:
-//   ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
+// It's written for The Ruins (positions of walls and pickups), so pin the
+// battle royale to it with ROYALE_ARENA=arena. Needs shortened rounds:
+//   ROYALE_ARENA=arena ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 //   GAME_PIN=... node server/scripts/classes-check.ts http://localhost:3000
 //
 // Creates test accounts, so run it against a test stack, never production.

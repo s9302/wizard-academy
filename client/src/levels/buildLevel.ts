@@ -52,7 +52,7 @@ function addCollider(world: RAPIER.World, box: Box): void {
 }
 
 // A magic barrier: see-through, its own mesh.
-function addBarrier(scene: THREE.Scene, box: Box): void {
+function addBarrier(scene: THREE.Object3D, box: Box): void {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(...box.size),
     new THREE.MeshBasicMaterial({ color: box.color, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }),
@@ -70,7 +70,7 @@ export class CheckpointMarkers {
   private crystals: THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshLambertMaterial>[] = [];
   private baseY: number[] = [];
 
-  constructor(scene: THREE.Scene, level: Level) {
+  constructor(scene: THREE.Object3D, level: Level) {
     for (const checkpoint of level.course?.checkpoints ?? []) {
       const crystal = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.45),
@@ -104,7 +104,7 @@ export class CheckpointMarkers {
 }
 
 // unlocked: what this player has opened (barriers they've earned are left out).
-export function buildLevel(scene: THREE.Scene, world: RAPIER.World, level: Level, unlocked = new Set<string>()): CheckpointMarkers {
+export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Level, unlocked = new Set<string>()): CheckpointMarkers {
   // Game-dev note: drawing each box separately costs one "draw call" each
   // (twice, with shadows), and a level has hundreds. Merged into one mesh,
   // the whole level is a single draw call.

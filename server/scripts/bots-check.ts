@@ -3,7 +3,7 @@
 // they chase and tag (or flee) or fight with spells, and that they leave when
 // the last real player does.
 //
-//   ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
+//   ROYALE_ARENA=arena ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 //   GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000
 
 import WebSocket from "ws";

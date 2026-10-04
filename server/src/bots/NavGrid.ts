@@ -83,6 +83,7 @@ export class NavGrid {
         const [x, z] = this.center(r * this.cols + c);
         let best = NaN;
         for (const b of level.boxes) {
+          if (b.overhead) continue; // bridges and arches: bots walk under them
           const top = topAt(b, x, z);
           if (top !== null && !(top <= best)) best = top;
         }

@@ -5,6 +5,7 @@
 
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
+import { LEVELS } from "../../../shared/src/levels/index.ts";
 import type { RoundState } from "../../../shared/src/protocol.ts";
 import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
@@ -38,6 +39,10 @@ export class RoyaleHud {
   private fireSlot: HTMLElement;
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
+  private votePanel: HTMLElement; // in the pause panel: buttons
+  private voteCard: HTMLElement; // on screen: the tally
+  private myVote: string | null = null;
+  private onVote: (arena: string) => void;
   private cls: ClassId = "wizard";
   private hand: Hand = "main";
   private pendingCls: ClassId | null = null;
@@ -62,15 +67,21 @@ export class RoyaleHud {
     clock: ServerClock,
     storm: Storm,
     roomName: string,
-    actions: { onBots: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void },
+    actions: { onBots: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void; onVote: (arena: string) => void },
   ) {
     this.clock = clock;
+    this.onVote = actions.onVote;
     this.storm = storm;
 
     // Bot controls and the class picker live in the pause panel (press Esc),
     // where the mouse is free.
     this.bots = new BotControls(actions.onBots);
     this.picker = this.makePicker(actions.onClass);
+    this.votePanel = document.createElement("div");
+    this.votePanel.id = "arena-vote";
+    this.votePanel.hidden = true;
+    this.votePanel.onclick = (e) => e.stopPropagation();
+    document.querySelector("#overlay .panel")!.insertBefore(this.votePanel, this.picker);
 
     this.crosshairEl = document.getElementById("crosshair")!;
     this.stormEl = el("div", "storm-haze", hud);
@@ -85,6 +96,8 @@ export class RoyaleHud {
     this.resultsEl.hidden = true;
 
     this.calloutEl = el("div", "callout", hud);
+    this.voteCard = el("div", "vote-card", hud);
+    this.voteCard.hidden = true;
     const bottom = el("div", "royale-bottom", hud);
     this.classEl = el("div", "", bottom, "class-badge");
     const bar = el("div", "", bottom, "hp-bar");
@@ -163,6 +176,47 @@ export class RoyaleHud {
     for (const b of this.picker.querySelectorAll<HTMLButtonElement>("button")) {
       b.classList.toggle("on", b.dataset.cls === this.cls);
       b.classList.toggle("next", b.dataset.cls === this.pendingCls && this.pendingCls !== this.cls);
+    }
+  }
+
+  // The arena vote: options (level ids) and votes so far. Empty: closed.
+  vote(options: string[], votes: Record<string, number>): void {
+    if (!options.includes(this.myVote ?? "")) this.myVote = null;
+    this.votePanel.replaceChildren();
+    this.voteCard.replaceChildren();
+    this.votePanel.hidden = this.voteCard.hidden = options.length === 0;
+    if (!options.length) return;
+    const title = document.createElement("div");
+    title.className = "picker-title";
+    title.textContent = "Vote: next arena";
+    this.votePanel.appendChild(title);
+    const cardTitle = document.createElement("div");
+    cardTitle.className = "vote-title";
+    cardTitle.textContent = "Next arena (Esc to vote)";
+    this.voteCard.appendChild(cardTitle);
+    for (const id of options) {
+      const level = LEVELS[id];
+      const size = level?.arena?.size ?? "";
+      const n = votes[id] ?? 0;
+      const label = `${level?.name ?? id}`;
+      const count = `${n} vote${n === 1 ? "" : "s"}`;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = id === this.myVote ? "on" : "";
+      const name = document.createElement("strong");
+      name.textContent = label;
+      const detail = document.createElement("span");
+      detail.textContent = `${size[0]?.toUpperCase() ?? ""}${size.slice(1)} \u00b7 ${count}`;
+      button.append(name, detail);
+      button.onclick = () => {
+        this.myVote = id;
+        this.onVote(id);
+      };
+      this.votePanel.appendChild(button);
+      const line = document.createElement("div");
+      line.className = id === this.myVote ? "mine" : "";
+      line.textContent = `${size} \u00b7 ${label} \u2014 ${count}`;
+      this.voteCard.appendChild(line);
     }
   }
 
@@ -283,6 +337,7 @@ export class RoyaleHud {
 
   dispose(): void {
     this.picker.remove();
+    this.votePanel.remove();
     window.clearTimeout(this.calloutTimer);
     window.clearTimeout(this.bannerTimer);
     window.clearTimeout(this.hitTimer);

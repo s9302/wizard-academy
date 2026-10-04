@@ -45,10 +45,25 @@ import { RoyaleBot } from "../bots/RoyaleBot.ts";
 import type { BotPeer } from "../Connection.ts";
 import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
+import { arenasOfSize } from "../../../shared/src/levels/arenas.ts";
+import { LEVELS } from "../../../shared/src/levels/index.ts";
+import type { Level } from "../../../shared/src/levels/types.ts";
 import { navGridFor, RoundRoom, SCALE } from "./RoundRoom.ts";
 
 const STORM_TICK_MS = 1000; // storm damage is dealt once a second
-const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle
+const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle (medium arena)
+const RESULTS_MS = 12_000 * SCALE; // long enough to vote for the next arena
+
+// Falling: more than SAFE_FALL meters hurts, FALL_DAMAGE per meter beyond.
+// Only real falls count (moving down faster than FALL_SPEED at some point),
+// so walking down a ramp never does. Landing on someone (a "stomp") hurts
+// them instead, and you bounce off.
+const SAFE_FALL = 4;
+const FALL_DAMAGE = 8;
+const FALL_SPEED = 9; // m/s
+const STOMP_SPEED = 6; // m/s
+const STOMP_DAMAGE = 25;
+const STOMP_PER_METER = 3;
 const COOLDOWN_SLACK = 0.85; // accept casts a bit early: messages arrive unevenly
 const MELEE_HISTORY_MS = 300; // lag compensation for swings, like tag's
 const MELEE_HEIGHT = 1.8; // how far above or below you a swing reaches
@@ -78,6 +93,9 @@ let nextPickupId = 1;
 const eye = (p: Vec3): Vec3 => [p[0], p[1] + EYE_HEIGHT, p[2]];
 const dist3 = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
+// Testing only: always play this arena (a level id); no votes.
+const FIXED_ARENA = process.env.ROYALE_ARENA;
+
 export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private fighters = new Map<number, Fighter>();
   private alive = new Set<number>();
@@ -94,6 +112,17 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // positions for melee lag compensation.
   private chosen = new Map<number, ClassId>();
   private history = new Map<number, { time: number; p: Vec3 }[]>();
+  // Falling, per player: the highest point of this drop, the fastest it got.
+  // stomped: already landed on someone this fall (once is enough, and it
+  // cancels your own fall damage).
+  private falls = new Map<number, { peak: number; speed: number; lastMove: number; lastY: number; stomped: boolean }>();
+  // Arena vote: the options on offer and each person's vote.
+  private voteOptions: string[] = [];
+  private votes = new Map<number, string>();
+
+  constructor(info: ConstructorParameters<typeof RoundRoom>[0], level: Level) {
+    super(info, (FIXED_ARENA && LEVELS[FIXED_ARENA]) || level);
+  }
 
   // ---- Round cycle (RoundRoom hooks) ----
 
@@ -102,6 +131,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   protected override onCountdown(): void {
+    this.falls.clear(); // everyone was just moved to a spawn point
     this.projectiles.clear();
     this.alive.clear();
     this.broadcast({ t: "alive", ids: [] });
@@ -124,7 +154,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
     this.stage = 0;
     this.nextStormTick = now + STORM_TICK_MS;
-    this.startStage([0, 0, STORM_START_RADIUS], now);
+    this.startStage([0, 0, this.level.arena?.stormRadius ?? STORM_START_RADIUS], now);
     this.broadcast({ t: "announce", text: "The storm is gathering. Last wizard standing wins!" });
   }
 
@@ -132,9 +162,14 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     return this.alive.size <= 1;
   }
 
+  protected override resultsMs(): number {
+    return RESULTS_MS;
+  }
+
   protected override onRoundEnded(): void {
     this.setZone(null);
     this.projectiles.clear();
+    this.openVote();
     // Class changes picked during the round take effect now, at the results
     // screen, rather than waiting for the next countdown.
     for (const player of this.players.values()) {
@@ -180,7 +215,67 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // ---- Players coming and going ----
 
+  // ---- Arenas: vote between rounds, switch before the countdown ----
+
+  // Offer one arena of each size.
+  private openVote(): void {
+    if (FIXED_ARENA) return;
+    const pick = (size: "small" | "medium" | "large") => {
+      const list = arenasOfSize(size);
+      return list[Math.floor(Math.random() * list.length)].id;
+    };
+    this.voteOptions = [pick("small"), pick("medium"), pick("large")];
+    this.votes.clear();
+    this.broadcastVote();
+  }
+
+  private broadcastVote(): void {
+    const votes: Record<string, number> = {};
+    for (const id of this.voteOptions) votes[id] = 0;
+    for (const v of this.votes.values()) votes[v] = (votes[v] ?? 0) + 1;
+    this.broadcast({ t: "arenaVote", options: this.voteOptions, votes });
+  }
+
+  private vote(player: Player, arena: string): void {
+    if (player.conn.isBot || !this.voteOptions.includes(arena)) return;
+    if (this.state !== "waiting" && this.state !== "ended") return;
+    this.votes.set(player.conn.id, arena);
+    this.broadcastVote();
+  }
+
+  // The countdown is about to start: count the votes (most wins; ties and
+  // no votes at all are settled at random among the leaders).
+  protected override beforeCountdown(): void {
+    if (!this.voteOptions.length) return;
+    const tally = new Map(this.voteOptions.map((id) => [id, 0]));
+    for (const v of this.votes.values()) tally.set(v, (tally.get(v) ?? 0) + 1);
+    const top = Math.max(...tally.values());
+    const leaders = [...tally].filter(([, n]) => n === top).map(([id]) => id);
+    const winner = leaders[Math.floor(Math.random() * leaders.length)];
+    this.voteOptions = [];
+    this.votes.clear();
+    this.broadcastVote();
+    const level = LEVELS[winner];
+    if (level && level !== this.level) this.setArena(level);
+  }
+
+  private setArena(level: Level): void {
+    this.level = level;
+    this.projectiles.clear();
+    this.pickups.clear();
+    this.respawnAt.clear();
+    this.broadcastPickups();
+    this.falls.clear();
+    for (const bot of this.bots.values()) bot.setLevel(navGridFor(level), level.boxes);
+    this.broadcast({ t: "arena", levelId: level.id });
+    this.broadcast({ t: "announce", text: `Next arena: ${level.name}` });
+    console.log(`[${this.name}] arena: ${level.id}`);
+  }
+
   protected override onJoinedRound(player: Player): void {
+    player.conn.send({ t: "arena", levelId: this.level.id });
+    if (!this.voteOptions.length && this.state === "waiting") this.openVote();
+    else this.broadcastVote();
     // Joining mid-round: you watch until the next one. Everyone hears what
     // you're playing as (and holding).
     this.resetFighter(player);
@@ -200,6 +295,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.inRound.delete(id);
     this.chosen.delete(id);
     this.history.delete(id);
+    this.falls.delete(id);
+    if (this.votes.delete(id)) this.broadcastVote();
     if (this.alive.delete(id)) {
       this.broadcast({ t: "alive", ids: [...this.alive] });
       if (this.state === "playing") this.announceLeft(`${player.conn.name} left the arena.`);
@@ -266,6 +363,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     else if (msg.t === "attack") this.attack(player, msg.o, msg.d, msg.seq);
     else if (msg.t === "hand") this.setHand(player, msg.hand);
     else if (msg.t === "class") this.setClass(player, msg.cls);
+    else if (msg.t === "vote") this.vote(player, msg.arena);
   }
 
   // ---- Classes and hands ----
@@ -507,7 +605,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       this.setZone({ from, to: from, shrinkAt: now, endsAt: now, dps: STORM_FINAL_DPS });
       return;
     }
-    const to = this.nextCircle(from, stage.radius);
+    const to = this.nextCircle(from, stage.radius * (this.level.arena?.stormScale ?? 1));
     const shrinkAt = now + stage.holdMs * SCALE;
     this.setZone({ from, to, shrinkAt, endsAt: shrinkAt + stage.shrinkMs * SCALE, dps: stage.dps });
   }
@@ -520,7 +618,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const r = Math.sqrt(Math.random()) * room;
       const x = from[0] + Math.cos(a) * r;
       const z = from[1] + Math.sin(a) * r;
-      if (Math.hypot(x, z) <= STORM_CENTER_LIMIT) return [round1(x), round1(z), radius];
+      if (Math.hypot(x, z) <= STORM_CENTER_LIMIT * (this.level.arena?.stormScale ?? 1)) return [round1(x), round1(z), radius];
     }
     return [from[0], from[1], radius];
   }
@@ -567,12 +665,13 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.broadcast({ t: "pickups", items: this.pickupList() });
   }
 
-  protected override onPlayerMoved(player: Player, _from: Vec3, to: Vec3, now: number): void {
+  protected override onPlayerMoved(player: Player, from: Vec3, to: Vec3, now: number): void {
     const list = this.history.get(player.conn.id) ?? [];
     list.push({ time: now, p: to });
     while (list.length && now - list[0].time > MELEE_HISTORY_MS) list.shift();
     this.history.set(player.conn.id, list);
     if (this.state !== "playing" || !this.alive.has(player.conn.id)) return;
+    this.trackFall(player, from, to, now);
     for (const item of this.pickups.values()) {
       if (Math.hypot(item.p[0] - to[0], item.p[2] - to[2]) > PICKUP_REACH || Math.abs(item.p[1] - to[1]) > 1.6) continue;
       if (this.usePickup(player, item.kind)) {
@@ -583,6 +682,54 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       }
       return;
     }
+  }
+
+  // ---- Falling and stomping ----
+
+  // Watches each player's height from their moves: a drop starts when they
+  // begin moving down, and ends when they stop. Then: fall damage, unless
+  // they landed on someone.
+  private trackFall(player: Player, from: Vec3, to: Vec3, now: number): void {
+    const id = player.conn.id;
+    const f = this.falls.get(id);
+    const dt = f ? Math.max(0.02, (now - f.lastMove) / 1000) : 0.05;
+    const vy = (to[1] - from[1]) / dt;
+    if (to[1] < from[1] - 0.02) {
+      // Going down.
+      const fall = f && f.peak >= from[1] ? f : { peak: from[1], speed: 0, lastMove: now, lastY: to[1], stomped: false };
+      fall.speed = Math.max(fall.speed, -vy);
+      fall.lastMove = now;
+      fall.lastY = to[1];
+      this.falls.set(id, fall);
+      if (!fall.stomped && fall.speed >= STOMP_SPEED && this.stomp(player, from, to, fall.peak - to[1])) fall.stomped = true;
+      return;
+    }
+    if (f) {
+      // Stopped going down: landed.
+      this.falls.delete(id);
+      const drop = f.peak - to[1];
+      if (!f.stomped && f.speed >= FALL_SPEED && drop > SAFE_FALL) {
+        this.damage(player, Math.round((drop - SAFE_FALL) * FALL_DAMAGE), null);
+        player.conn.send({ t: "announce", text: `Ouch! A ${drop.toFixed(1)} m fall.` });
+      }
+    }
+  }
+
+  // Did this bit of falling land on someone's head? Hurts them, not you.
+  private stomp(lander: Player, from: Vec3, to: Vec3, drop: number): boolean {
+    const feetFrom = from[1] - 0.9;
+    const feetTo = to[1] - 0.9;
+    for (const victim of this.players.values()) {
+      if (victim === lander || !this.alive.has(victim.conn.id)) continue;
+      const head = victim.p[1] + 0.9;
+      if (Math.hypot(to[0] - victim.p[0], to[2] - victim.p[2]) > 0.9) continue;
+      if (feetFrom < head - 0.2 || feetTo > head + 0.3) continue;
+      this.damage(victim, STOMP_DAMAGE + Math.round(Math.min(drop, 10) * STOMP_PER_METER), lander); // no source: shields don't help
+      lander.conn.send({ t: "bounce" });
+      this.broadcast({ t: "announce", text: `${lander.conn.name} landed on ${victim.conn.name}!` });
+      return true;
+    }
+    return false;
   }
 
   // Returns false (leaving it for someone else) if it would do nothing.

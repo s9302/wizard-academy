@@ -17,7 +17,7 @@ const POSE: Record<WeaponId, { pos: [number, number, number]; rot: [number, numb
   bow: { pos: [0.38, -0.32, -0.9], rot: [0.05, 0.1, 0.3], scale: 0.6 },
   daggers: { pos: [0.05, -0.38, -0.6], rot: [-0.7, 0, 0], scale: 0.9 },
   staff: { pos: [0.45, -0.55, -0.7], rot: [-0.25, 0.1, -0.2], scale: 0.9 },
-  spell: { pos: [0.35, -0.35, -0.6], rot: [0.1, 0, 0], scale: 1 },
+  spell: { pos: [0.34, -0.3, -0.8], rot: [0.1, 0, 0], scale: 0.55 },
 };
 
 export class Viewmodel {

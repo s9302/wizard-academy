@@ -153,6 +153,11 @@ export class Spells {
     return t <= def.range / def.speed + 0.5; // keep briefly for the server's verdict
   }
 
+  setBoxes(boxes: Box[]): void {
+    this.clear();
+    this.boxes = boxes;
+  }
+
   update(): void {
     const now = this.clock.now();
     for (const [id, flying] of this.byId) {

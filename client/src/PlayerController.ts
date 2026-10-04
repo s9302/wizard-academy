@@ -99,6 +99,11 @@ export class PlayerController {
     this.velocityY = 0;
   }
 
+  // Landed on someone's head: bounce off them.
+  bounce(): void {
+    this.velocityY = JUMP_SPEED * 1.1;
+  }
+
   // Hit by Frost Shard: move at `factor` speed for `seconds`.
   slow(seconds: number, factor: number): void {
     this.slowLeft = seconds;

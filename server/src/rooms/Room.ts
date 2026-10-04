@@ -27,7 +27,7 @@ export type Player = {
 export abstract class Room {
   readonly name: string; // room id, e.g. "tag"
   readonly info: RoomInfo;
-  readonly level: Level;
+  level: Level; // the battle royale switches arenas between rounds
   readonly maxPlayers: number = MAX_PLAYERS_PER_ROOM;
   protected players = new Map<number, Player>();
   private tickTimer: NodeJS.Timeout | null = null;

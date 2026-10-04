@@ -13,6 +13,9 @@ export type Box = {
   // (e.g. "area:garden"). Movement is client-side, so each player's own
   // world simply leaves out the barriers they've opened.
   gate?: string;
+  // A bridge or arch you can also walk under. Server-side bots plan on one
+  // floor per spot, so they treat these as not there (they walk under).
+  overhead?: boolean;
 };
 
 // Something to walk up to and press E at (hub only).
@@ -77,6 +80,9 @@ export type Level = {
   stations?: Station[]; // the hub only
   labels?: Label[];
   lights?: PointLightDef[];
+  // Battle royale arenas: size class, and the storm's starting radius and
+  // how much to scale its stages (1 = the medium arena).
+  arena?: { size: "small" | "medium" | "large"; stormRadius: number; stormScale: number };
 };
 
 // A point relative to a portal: `side` meters to its right (as seen walking

@@ -30,6 +30,14 @@ export class BotWalker {
     this.grid = grid;
   }
 
+  // The arena changed: a new walking map, and forget the old plan.
+  setGrid(grid: NavGrid): void {
+    this.grid = grid;
+    this.path = [];
+    this.goal = null;
+    this.replanAt = 0;
+  }
+
   // Call at the start of each think(): notices server teleports (round
   // start, respawn) and forgets the old plan.
   protected sync(me: Player): void {

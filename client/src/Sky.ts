@@ -57,7 +57,9 @@ export class Sky {
   private dome: THREE.Mesh;
   private clouds: THREE.Group[] = [];
 
-  constructor(scene: THREE.Scene, style: SkyStyle, clouds: boolean) {
+  // The dome and clouds go into `parent` (the level's group, so they go when
+  // the level does); the fog is set on the scene.
+  constructor(parent: THREE.Object3D, scene: THREE.Scene, style: SkyStyle, clouds: boolean) {
     const p = PRESETS[style];
     const el = THREE.MathUtils.degToRad(p.sunElevation);
     const az = THREE.MathUtils.degToRad(p.sunAzimuth);
@@ -102,15 +104,15 @@ export class Sky {
     );
     this.dome.renderOrder = -1;
     this.dome.frustumCulled = false;
-    scene.add(this.dome);
+    parent.add(this.dome);
     scene.background = null;
     scene.fog = new THREE.Fog(this.horizon, 60, 260);
 
-    if (clouds) this.makeClouds(scene, p.cloud);
+    if (clouds) this.makeClouds(parent, p.cloud);
   }
 
   // Each cloud is a handful of squashed, flat-shaded blobs merged into one mesh.
-  private makeClouds(scene: THREE.Scene, color: string): void {
+  private makeClouds(parent: THREE.Object3D, color: string): void {
     const material = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.35, flatShading: true, fog: false });
     let seed = 7;
     const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -127,7 +129,7 @@ export class Sky {
       cloud.add(new THREE.Mesh(mergeGeometries(parts), material));
       cloud.position.set((rand() - 0.5) * CLOUD_RANGE * 2, 70 + rand() * 45, (rand() - 0.5) * CLOUD_RANGE * 2);
       cloud.rotation.y = rand() * Math.PI;
-      scene.add(cloud);
+      parent.add(cloud);
       this.clouds.push(cloud);
     }
   }

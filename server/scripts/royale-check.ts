@@ -4,8 +4,9 @@
 // hits and damage, elimination and spectating, pickups, fireball splash,
 // storm damage, the winner, and XP.
 //
-// Needs shortened rounds (the storm's first wait is 10 s at 0.25):
-//   ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
+// It's written for The Ruins (positions of walls and pickups), so pin the
+// battle royale to it with ROYALE_ARENA=arena. Needs shortened rounds (the storm's first wait is 10 s at 0.25):
+//   ROYALE_ARENA=arena ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 //   GAME_PIN=... node server/scripts/royale-check.ts http://localhost:3000
 //
 // Creates test accounts, so run it against a test stack, never production.

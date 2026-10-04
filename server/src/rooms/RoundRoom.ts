@@ -19,7 +19,7 @@ import { Room } from "./Room.ts";
 // Testing only: ROUND_TIME_SCALE=0.1 makes rounds 10x shorter.
 export const SCALE = Math.min(1, Math.max(0.02, Number(process.env.ROUND_TIME_SCALE ?? 1)));
 const COUNTDOWN_MS = 5_000 * SCALE;
-const RESULTS_MS = 8_000 * SCALE;
+const RESULTS_MS = 8_000 * SCALE; // see resultsMs()
 const MIN_PLAYERS = 2;
 
 const MAX_BOTS = 6;
@@ -64,6 +64,11 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   protected abstract runBot(bot: B, me: Player, now: number, dt: number): void;
 
   // Optional hooks.
+  protected resultsMs(): number {
+    return RESULTS_MS;
+  }
+  // Before everyone is moved to a spawn point (e.g. switch the arena).
+  protected beforeCountdown(_now: number): void {}
   protected onCountdown(_now: number): void {}
   protected onRoundEnded(_now: number): void {}
   protected onRoundTick(_now: number): void {}
@@ -120,6 +125,7 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   }
 
   private startCountdown(now: number): void {
+    this.beforeCountdown(now);
     // Everyone to a different spawn point (as far as there are enough).
     const points = [...(this.level.spawnPoints ?? [this.level.spawn])].sort(() => Math.random() - 0.5);
     let i = 0;
@@ -142,7 +148,7 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
       ? { title: "Round cancelled", lines: ["Not enough players left. Waiting for more wizards..."] }
       : this.results(now);
     if (!cancelled) this.payXp();
-    this.setState("ended", now + RESULTS_MS);
+    this.setState("ended", now + this.resultsMs());
     this.onRoundEnded(now);
     this.broadcast({ t: "roundResult", title, lines });
     console.log(`[${this.name}] round over: ${title}`);

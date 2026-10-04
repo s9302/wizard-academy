@@ -1,9 +1,9 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases. **Phase 10** added battle royale classes
-(Knight, Rogue, Wizard); next up are more arenas with heights and fall
-damage, then wizard spells that reshape the arena.
+first person with friends. Built in phases. **Phase 11** added nine battle royale arenas
+(voted between rounds), fall damage, and landing on people; next up are
+wizard spells that reshape the arena.
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -83,7 +83,8 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `royale-check`, `classes-check`, `unlocks-check`, `admin-check`, `accounts-check` (run it last:
+`hub-check`, `royale-check`, `classes-check`, `arena-check`, `unlocks-check`, `admin-check`,
+`accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
 back can trip the limit too: restart the test server between batches.
@@ -339,6 +340,49 @@ ROUND_TIME_SCALE=0.25 GAME_PIN=... SESSION_SECRET=... node server/src/index.ts
 GAME_PIN=... node server/scripts/royale-check.ts http://localhost:3000   # combat rules, round, XP
 GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000     # includes a bots-only royale round
 ```
+
+## Arenas (battle royale)
+
+Nine arenas, three of each size, all with high ground: ramps lead up
+everything you're meant to stand on.
+
+| Small (48 m) | Medium (84 m) | Large (120 m) |
+|---|---|---|
+| **The Pit**: a sunken floor under a raised rim, a tower in the middle | **The Ruins**: the dais, the wall ring, corner watchtowers | **The Highlands**: mesas from 2.5 to 8 m over open grass |
+| **Twin Towers**: two 6 m towers and the bridge between | **Sky Bridges**: four 7 m towers joined by a ring of bridges | **The Fortress**: walk the battlements, over the corner towers, hold the keep |
+| **The Ziggurat**: a stepped pyramid, corner watchtowers | **The Canyon**: two plateaus, bridges across, a mesa below | **The Rooftops**: a city of roofs, ramps up, a bridge ring at 6 m |
+
+- **Voting:** while the room is waiting and on the results screen (now 12 s),
+  one arena of each size is on offer: Esc to vote, the tally shows on screen.
+  When the next countdown starts, the most votes wins (ties, or no votes:
+  random among the leaders). The world is rebuilt in place, no reconnect.
+- **The storm** starts at each arena's size (35 / 50 / 72 m) and its stages
+  scale with it.
+- **Falling** more than 4 m hurts: 8 per meter beyond (an 8 m fall is 32).
+  Only real falls count (falling faster than 9 m/s at some point), so walking
+  down a ramp, however long, never does.
+- **Landing on someone** while falling hurts them (25 + 3 per meter fallen,
+  shields don't help), bounces you off, and spares you the fall damage.
+  Once per fall.
+- Both are worked out by the server from the positions players send
+  (it has no collision for movement), and admins are immune as usual.
+
+Arenas are built with a small kit (`shared/src/levels/arenaKit.ts`: blocks,
+ramps between two heights, bridges, walls) in `shared/src/levels/arenas.ts`.
+Bridges and arches are marked `overhead`: the bots' walking map plans one
+floor per spot, so bots walk under them and don't use them.
+
+```sh
+node client/scripts/walk-arenas.ts   # every arena: spawns open, pickups reachable by bots, and
+                                     # the real movement can follow the bots' route to each
+# A bots-only round in one arena (ROYALE_ARENA pins the arena, testing only):
+ROYALE_ARENA=fortress ROUND_TIME_SCALE=0.25 ... node server/src/index.ts
+GAME_PIN=... node server/scripts/arena-bots-check.ts http://localhost:3000 fortress
+GAME_PIN=... node server/scripts/arena-check.ts http://localhost:3000   # vote, falls, stomps
+```
+
+`royale-check`, `classes-check` and `bots-check` are written for The Ruins:
+run them against a server started with `ROYALE_ARENA=arena`.
 
 ## Classes (battle royale)
 

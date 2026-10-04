@@ -72,7 +72,7 @@ for (const deg of [0, 90, 180, 270]) {
   const [cx, cz] = [26 * Math.cos(a), 26 * Math.sin(a)];
   const [tx, tz] = [-Math.sin(a), Math.cos(a)]; // along the arch
   for (const s of [-2.3, 2.3]) boxes.push({ pos: [cx + tx * s, 1.7, cz + tz * s], size: [1, 3.4, 1], color: STONE_DARK });
-  boxes.push({ pos: [cx, 3.8, cz], size: [Math.abs(tx) * 5.6 + Math.abs(tz) * 1, 0.8, Math.abs(tz) * 5.6 + Math.abs(tx) * 1], color: STONE_DARK });
+  boxes.push({ pos: [cx, 3.8, cz], size: [Math.abs(tx) * 5.6 + Math.abs(tz) * 1, 0.8, Math.abs(tz) * 5.6 + Math.abs(tx) * 1], color: STONE_DARK, overhead: true });
 }
 
 // ---- Scattered cover between the arches and the towers ----
@@ -153,4 +153,5 @@ export const arena: Level = {
   skyStyle: "dusk",
   boxes,
   pickupSpots,
+  arena: { size: "medium", stormRadius: 46, stormScale: 1 },
 };

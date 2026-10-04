@@ -9,6 +9,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS, TAG_RANGE } from "../../shared/src/constants.ts";
+import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { Level } from "../../shared/src/levels/types.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
@@ -73,11 +74,15 @@ export class Game {
   private sun = new THREE.DirectionalLight("#fff4d6", 2.2);
   private sky!: Sky;
   private sunOffset = new THREE.Vector3();
-  private world: RAPIER.World;
-  private player: PlayerController;
+  private world!: RAPIER.World;
+  // Everything that belongs to the current level (blocks, sky, grass), so
+  // the battle royale can swap arenas without rebuilding the whole game.
+  private levelRoot = new THREE.Group();
+  private hemi = new THREE.HemisphereLight("#dfe9ff", "#4d6b3c", 1.6);
+  private player!: PlayerController;
   private clock = new ServerClock();
   private remotes: RemotePlayers;
-  private markers: CheckpointMarkers;
+  private markers!: CheckpointMarkers;
   private parkour: ParkourHud | null = null;
   private chase: ChaseHud | null = null;
   private portals: Portals | null = null;
@@ -145,13 +150,8 @@ export class Game {
     this.camera.rotation.order = "YXZ"; // yaw first, then pitch: standard FPS camera
     this.setupScene();
 
-    this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
-    // The player's own world: barriers they've opened are left out.
-    this.markers = buildLevel(this.scene, this.world, level, unlocksFor(this.profile));
-    if (quality() === "high") addDecor(this.scene, level);
+    this.loadLevel(level);
     if (level.portals) this.portals = new Portals(this.scene, level.portals, this.profile.bestTimes);
-    this.world.step(); // builds the collision lookup structures before the first move
-    this.player = new PlayerController(this.world, level.killY);
     this.remotes = new RemotePlayers(this.scene, this.clock);
     if (room.mode === "parkour" && level.course) {
       this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, room.name);
@@ -168,6 +168,10 @@ export class Game {
         onSlowed: (ms) => this.player.slow(ms / 1000, slowFactor),
         onSpeed: (m) => (this.player.speedMul = m),
         feed: (text) => this.addFeed(text),
+        onArena: (id) => {
+          const next = LEVELS[id];
+          if (next && next !== this.level) this.loadLevel(next);
+        },
       });
     }
     if (level.stations) {
@@ -203,14 +207,46 @@ export class Game {
     );
   }
 
-  private setupScene(): void {
-    const style = this.level.skyStyle ?? "day";
-    this.sky = new Sky(this.scene, style, quality() === "high");
+  // Build (or rebuild, for a new arena) the level: blocks and colliders,
+  // grass, the sky. The player keeps their place, perks and speed.
+  private loadLevel(level: Level): void {
+    this.level = level;
+    this.levelRoot.traverse((obj) => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Sprite || obj instanceof THREE.InstancedMesh) {
+        obj.geometry.dispose();
+        for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) {
+          (m as THREE.Material & { map?: THREE.Texture }).map?.dispose();
+          m.dispose();
+        }
+      }
+    });
+    this.levelRoot.clear();
+    const old = this.player as PlayerController | undefined;
+    this.world?.free();
+    this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
+    // The player's own world: barriers they've opened are left out.
+    this.markers = buildLevel(this.levelRoot, this.world, level, unlocksFor(this.profile));
+    if (quality() === "high") addDecor(this.levelRoot, level);
+    const style = level.skyStyle ?? "day";
+    this.sky = new Sky(this.levelRoot, this.scene, style, quality() === "high");
     this.sun.color.copy(this.sky.sunColor);
     this.sunOffset.copy(this.sky.sunDirection).multiplyScalar(SUN_DISTANCE);
     // Light from the whole sky (blue-ish from above, earthy from below).
-    const skyLight = style === "dusk" ? new THREE.Color("#c9b6e8") : new THREE.Color("#dfe9ff");
-    this.scene.add(new THREE.HemisphereLight(skyLight, "#4d6b3c", style === "dusk" ? 1.3 : 1.6));
+    this.hemi.color.set(style === "dusk" ? "#c9b6e8" : "#dfe9ff");
+    this.hemi.intensity = style === "dusk" ? 1.3 : 1.6;
+    this.world.step(); // builds the collision lookup structures before the first move
+    this.player = new PlayerController(this.world, level.killY);
+    if (old) {
+      this.player.perks = old.perks;
+      this.player.speedMul = old.speedMul;
+      this.player.flying = old.flying;
+      this.player.teleport(old.position.x, old.position.y, old.position.z);
+    }
+    this.royale?.setLevel(level);
+  }
+
+  private setupScene(): void {
+    this.scene.add(this.levelRoot, this.hemi);
 
     // The sun follows the player (see frame()), so shadows work anywhere on
     // a long course without needing a huge, blurry shadow map.
@@ -319,6 +355,9 @@ export class Game {
         break;
       case "look":
         this.remotes.setLook(msg.id, msg.look);
+        break;
+      case "bounce":
+        this.player.bounce();
         break;
       case "loadoutSaved":
         this.profile.loadout = { primary: msg.primary, hat: msg.hat, robe: msg.robe, cls: msg.cls };

@@ -59,6 +59,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (len < 0.9 || len > 1.1) return null;
       return { t: "attack", o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len], seq: msg.seq as number };
     }
+    case "vote":
+      if (typeof msg.arena !== "string" || !ROOM_PATTERN.test(msg.arena)) return null;
+      return { t: "vote", arena: msg.arena };
     case "hand":
       if (msg.hand !== "main" && msg.hand !== "backup") return null;
       return { t: "hand", hand: msg.hand };

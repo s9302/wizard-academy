@@ -44,8 +44,10 @@ export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: 
 export type AttackMsg = { t: "attack"; o: Vec3; d: Vec3; seq: number };
 export type HandMsg = { t: "hand"; hand: Hand };
 export type ClassMsg = { t: "class"; cls: ClassId };
+// Vote for the next arena (a level id from the options offered).
+export type VoteMsg = { t: "vote"; arena: string };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg;
 
 // ---- Server -> Client ----
 
@@ -116,6 +118,13 @@ export type SlowedMsg = { t: "slowed"; id: number; ms: number };
 // To one player: your fireball charges.
 export type ChargesMsg = { t: "charges"; fireball: number };
 
+// The arena changed (rebuild the world from this level).
+export type ArenaMsg = { t: "arena"; levelId: string };
+// The arenas you can vote for next, and the votes so far. Empty: no vote open.
+export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<string, number> };
+// You landed on someone: bounce off.
+export type BounceMsg = { t: "bounce" };
+
 // ---- Looks and loadout ----
 // Someone changed their hat or robe.
 export type LookMsg = { t: "look"; id: number; look: Look };
@@ -157,4 +166,7 @@ export type ServerMsg =
   | LoadoutSavedMsg
   | EquipMsg
   | MeleeMsg
+  | ArenaMsg
+  | ArenaVoteMsg
+  | BounceMsg
   | XpMsg;

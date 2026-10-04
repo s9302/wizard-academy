@@ -33,7 +33,7 @@ function covered(boxes: Box[], self: Box, x: number, y: number, z: number): bool
   return false;
 }
 
-export function addDecor(scene: THREE.Scene, level: Level): void {
+export function addDecor(scene: THREE.Object3D, level: Level): void {
   let seed = 1234;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const tufts: THREE.Matrix4[] = [];
