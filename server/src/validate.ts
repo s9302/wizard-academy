@@ -68,6 +68,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (len < 0.9 || len > 1.1) return null;
       return { t: "ability", slot: msg.slot, o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
     }
+    case "modeVote":
+      if (msg.mode !== "ffa" && msg.mode !== "teams") return null;
+      return { t: "modeVote", mode: msg.mode };
     case "vote":
       if (typeof msg.arena !== "string" || !ROOM_PATTERN.test(msg.arena)) return null;
       return { t: "vote", arena: msg.arena };
@@ -86,7 +89,7 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "cast": {
       // Arrows only come from the bow ("attack"), never cast directly.
-      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
+      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || msg.spell === "holy" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
       if (!Number.isSafeInteger(msg.seq) || (msg.seq as number) < 0) return null;
       // Direction must be (roughly) a unit vector; the server renormalizes it.
       const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);

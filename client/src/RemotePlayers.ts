@@ -100,6 +100,26 @@ export class RemotePlayers {
     return remote ? createAvatar(id, remote.info.name, remote.info.look, remote.info.admin) : null;
   }
 
+  // A team round: a colored ring at their feet (null: none).
+  setTeam(id: number, color: string | null): void {
+    const remote = this.remotes.get(id);
+    if (!remote) return;
+    let ring = remote.avatar.getObjectByName("team-ring") as THREE.Mesh | undefined;
+    if (!color) {
+      if (ring) ring.visible = false;
+      return;
+    }
+    if (!ring) {
+      ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.05, 6, 24), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
+      ring.name = "team-ring";
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -0.86;
+      remote.avatar.add(ring);
+    }
+    (ring.material as THREE.MeshBasicMaterial).color.set(color);
+    ring.visible = true;
+  }
+
   // Giant Form: drawn `scale` times bigger for `ms` (the feet stay on the floor).
   setScale(id: number, scale: number, ms: number): void {
     const remote = this.remotes.get(id);

@@ -28,7 +28,14 @@ export type AbilityId =
   | "chain"
   | "decoys"
   | "glide"
-  | "smoke";
+  | "smoke"
+  // Cleric
+  | "heal"
+  | "smite"
+  // Cleric, level 11+
+  | "sanctuary"
+  | "aegis"
+  | "judgment";
 
 export type AbilityDef = {
   name: string;
@@ -57,6 +64,13 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   // Rogue, level 11+
   decoys: { name: "Mirror Images", cooldownMs: 16_000, durationMs: 7_000, description: "Two copies of you run off in different directions for 7 s. One hit breaks a copy." },
   glide: { name: "Glide", cooldownMs: 14_000, durationMs: 9_000, description: "Leap into the air and glide for 9 s: you fall slowly and move faster." },
+  // Cleric
+  heal: { name: "Healing Light", cooldownMs: 12_000, description: "Heal 35, and every teammate within 9 m too (team rounds and boss fights)." },
+  smite: { name: "Divine Smite", cooldownMs: 11_000, description: "Mark a spot (up to 25 m): a pillar of holy light lands there 0.7 s later. 40 damage within 3 m, and slowed." },
+  // Cleric, level 11+
+  sanctuary: { name: "Sanctuary", cooldownMs: 20_000, durationMs: 6_000, description: "A 6 m circle of light for 6 s: you and your teammates inside heal 12 a second." },
+  aegis: { name: "Aegis", cooldownMs: 14_000, description: "A 50-point shield on the teammate you aim at (30 m), or on yourself." },
+  judgment: { name: "Judgment", cooldownMs: 15_000, durationMs: 6_000, description: "Mark the enemy you aim at (30 m): they take 35% more damage for 6 s." },
   smoke: { name: "Smoke Bomb", cooldownMs: 16_000, durationMs: 8_000, description: "A thick cloud where you aim, for 8 s. Anyone inside is hidden from everyone outside." },
 };
 
@@ -68,13 +82,15 @@ export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
   wizard: ["wall", "pillar", "tornado", "flames", "hellpit", "invert", "shockwave"],
   rogue: ["blink", "stealth", "decoys", "glide", "smoke"],
   knight: ["charge", "fortify", "nullzone", "giant", "chain"],
+  cleric: ["heal", "smite", "sanctuary", "aegis", "judgment"],
 };
-export const MASTER_ABILITIES: AbilityId[] = ["tornado", "flames", "hellpit", "invert", "shockwave", "nullzone", "giant", "chain", "decoys", "glide", "smoke"];
+export const MASTER_ABILITIES: AbilityId[] = ["tornado", "flames", "hellpit", "invert", "shockwave", "nullzone", "giant", "chain", "decoys", "glide", "smoke", "sanctuary", "aegis", "judgment"];
 
 export const CLASS_ABILITIES: Record<ClassId, [AbilityId, AbilityId]> = {
   wizard: ["wall", "pillar"],
   rogue: ["blink", "stealth"],
   knight: ["charge", "fortify"],
+  cleric: ["heal", "smite"],
 };
 
 // Sizes and reaches (meters).
@@ -104,10 +120,17 @@ export const DECOYS = { count: 2, speed: 6.5, spread: 0.7 };
 export const GLIDE = { lift: 11, fall: 2.2, speed: 1.35 };
 export const SMOKE_RADIUS = 5;
 
+// Cleric numbers.
+export const HEAL = { amount: 35, radius: 9 };
+export const SMITE = { range: 25, radius: 3, damage: 40, delayMs: 700, slowMs: 1500 };
+export const SANCTUARY = { radius: 6, hps: 12 };
+export const AEGIS = { shield: 50, range: 30 };
+export const JUDGMENT = { range: 30, factor: 1.35 };
+
 // A lasting area an ability leaves on the ground (drawn by the client,
 // enforced by the server). Lines (flames) have a yaw and a length; circles a
 // radius; a tornado moves along d at TORNADO.speed from p, starting at `time`.
-export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke";
+export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary";
 export type FieldInfo = { id: number; kind: FieldKind; owner: number; p: Vec3; r: number; yaw?: number; len?: number; d?: Vec3; time: number; ms: number };
 
 export const fieldCenter = (f: FieldInfo, now: number): Vec3 => {

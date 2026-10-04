@@ -20,6 +20,7 @@ export const XP = {
   royaleWinner: 75, // last wizard standing
   royaleTopThree: 20, // 2nd or 3rd
   perElimination: 15, // max maxTagsPaid per round
+  teamWin: 50, // each member of the winning team (team rounds)
 
   // Monsters (battle royale and the Tyrant's wolves), paid on the kill.
   // Capped so a room full of monsters can't be farmed: at most

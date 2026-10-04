@@ -107,7 +107,7 @@ function faceTexture(skin: string, face: Face, features: Feature[], acc: Accesso
     }
     g.fillStyle = "#ffffff";
     g.beginPath();
-    g.ellipse(ex, y, 5.5, wide ? 6.5 : 5, 0, 0, Math.PI * 2);
+    g.ellipse(ex, y, 5.5, wide ? 6.5 : face === "fierce" ? 3.8 : 5, 0, 0, Math.PI * 2);
     g.fill();
     g.fillStyle = "#3a2a20";
     g.beginPath();
@@ -118,17 +118,34 @@ function faceTexture(skin: string, face: Face, features: Feature[], acc: Accesso
   };
   eye(x - 15, face === "sleepy", face === "surprised");
   eye(x + 15, face === "wink" || face === "sleepy", face === "surprised");
-  // Brows (in hair color): angled for fierce, raised for surprised.
+  // Brows (in hair color). Fierce: thick, slanting hard down toward the
+  // nose, with heavy lids under them; surprised: raised high.
   g.strokeStyle = hair;
-  g.lineWidth = 3;
   for (const s of [-1, 1]) {
     const bx = x + s * 15;
-    const by = y - (face === "surprised" ? 13 : 9);
-    const tilt = face === "fierce" ? 4 : face === "calm" ? 0 : -1;
+    const inner = bx - s * 7; // the end toward the nose
+    const outer = bx + s * 7;
+    g.lineWidth = face === "fierce" ? 4.5 : 3;
     g.beginPath();
-    g.moveTo(bx - 6 * s, by - tilt * 0.3);
-    g.lineTo(bx + 6 * s, by + (s > 0 ? -tilt : -tilt) * -0.6 + (face === "fierce" ? -3 : 0));
+    if (face === "fierce") {
+      g.moveTo(outer, y - 13);
+      g.lineTo(inner, y - 5);
+    } else {
+      const by = y - (face === "surprised" ? 14 : face === "sleepy" ? 7 : 9);
+      g.moveTo(outer, by + (face === "calm" || face === "sleepy" ? 0 : 1));
+      g.quadraticCurveTo(bx, by - (face === "surprised" ? 3 : 1.5), inner, by);
+    }
     g.stroke();
+    if (face === "fierce") {
+      // A lid line along the top of the eye, following the brow's slant.
+      g.strokeStyle = "#2a1c18";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(bx + s * 6, y - 3.5);
+      g.lineTo(bx - s * 6, y - 1);
+      g.stroke();
+      g.strokeStyle = hair;
+    }
   }
   // Nose: a soft shadow.
   g.fillStyle = "rgba(120, 60, 40, 0.25)";
@@ -154,6 +171,31 @@ function faceTexture(skin: string, face: Face, features: Feature[], acc: Accesso
       g.ellipse(x, my + 2, 4, 5.5, 0, 0, Math.PI * 2);
       g.fill();
       break;
+    case "fierce": {
+      // Gritted teeth, corners pulled down.
+      g.beginPath();
+      g.moveTo(x - 10, my + 3);
+      g.lineTo(x - 7, my - 1);
+      g.lineTo(x + 7, my - 1);
+      g.lineTo(x + 10, my + 3);
+      g.lineTo(x + 7, my + 4);
+      g.lineTo(x - 7, my + 4);
+      g.closePath();
+      g.fill();
+      g.fillStyle = "#f4f0e6";
+      g.fillRect(x - 6.5, my, 13, 3);
+      g.strokeStyle = "#7a2f2a";
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(x - 6.5, my + 1.5);
+      g.lineTo(x + 6.5, my + 1.5);
+      for (const tx of [-3, 0, 3]) {
+        g.moveTo(x + tx, my);
+        g.lineTo(x + tx, my + 3);
+      }
+      g.stroke();
+      break;
+    }
     case "smirk":
       g.moveTo(x - 7, my + 1);
       g.quadraticCurveTo(x + 3, my + 3, x + 9, my - 4);
@@ -161,9 +203,8 @@ function faceTexture(skin: string, face: Face, features: Feature[], acc: Accesso
       break;
     case "calm":
     case "sleepy":
-    case "fierce":
       g.moveTo(x - 7, my + 1);
-      g.lineTo(x + 7, my + (face === "fierce" ? 2 : 1));
+      g.lineTo(x + 7, my + 1);
       g.stroke();
       break;
     default:

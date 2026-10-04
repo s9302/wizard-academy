@@ -519,6 +519,9 @@ body.spectating #royale-bottom { opacity: 0.4; }
 #class-picker #ability-picker button:disabled { opacity: 0.3; cursor: not-allowed; }
 #ability-picker .ability-names { font-size: 12px; opacity: 0.85; text-align: center; }
 
+/* Team rounds: the mode vote's two buttons side by side. */
+#arena-vote .mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
 /* ---- Phase 11: arena vote ---- */
 #arena-vote { display: grid; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #3d3263; text-align: left; }
 #arena-vote[hidden] { display: none; }

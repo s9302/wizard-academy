@@ -38,6 +38,7 @@ export const UNLOCKS: Unlock[] = [
   // Over-the-top E/R abilities for each class (battle royale; pick them in the Esc panel).
   { id: "abilities:wizard", name: "Wizard mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Tornado, Wall of Flame, Pit to Hell, Inversion and Shockwave for E and R." },
   { id: "abilities:knight", name: "Knight mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Null Zone, Giant Form and Chain Pull for E and R." },
+  { id: "abilities:cleric", name: "Cleric mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Sanctuary, Aegis and Judgment for E and R." },
   { id: "abilities:rogue", name: "Rogue mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Mirror Images, Glide and Smoke Bomb for E and R." },
   { id: "spell:frost", name: "Frost Shard", kind: "spell", requires: { chapter: 1 }, description: "14 damage and slows whoever it hits for 1.5 s." },
   { id: "area:garden", name: "The Spell Garden", kind: "area", requires: { chapter: 1 }, description: "A walled garden in the hub." },

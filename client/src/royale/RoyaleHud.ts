@@ -8,7 +8,7 @@ import { abilityAllowed } from "../../../shared/src/unlocks.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
-import type { RoundState } from "../../../shared/src/protocol.ts";
+import type { RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
 import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
 import type { Storm } from "./Storm.ts";
@@ -49,6 +49,11 @@ export class RoyaleHud {
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
   private boss: boolean;
+  private onModeVote: (mode: RoyaleMode) => void;
+  private myMode: RoyaleMode | null = null;
+  // A team round: my team (0 red, 1 blue) and how many of each are standing.
+  private team: 0 | 1 | null = null;
+  private teamAlive: [number, number] = [0, 0];
   private abilityPicker: HTMLElement;
   private onAbilities: (e: AbilityId, r: AbilityId) => void;
   private side: HTMLElement; // pause panel column: class, vote, bots
@@ -89,6 +94,7 @@ export class RoyaleHud {
       onClass: (cls: ClassId) => void;
       onVote: (arena: string) => void;
       onAbilities: (e: AbilityId, r: AbilityId) => void;
+      onModeVote: (mode: RoyaleMode) => void;
     },
     boss = false, // Trial VII: a boss fight, not a battle royale (other words; no monster buttons)
   ) {
@@ -107,6 +113,7 @@ export class RoyaleHud {
     pausePanel.insertBefore(this.side, pausePanel.firstChild);
     this.picker = this.makePicker(actions.onClass);
     this.onAbilities = actions.onAbilities;
+    this.onModeVote = actions.onModeVote;
     this.abilityPicker = document.createElement("div");
     this.abilityPicker.id = "ability-picker";
     this.abilityPicker.onclick = (e) => e.stopPropagation();
@@ -274,8 +281,9 @@ export class RoyaleHud {
   }
 
   // The arena vote: options (level ids) and votes so far. Empty: closed.
-  vote(options: string[], votes: Record<string, number>): void {
+  vote(options: string[], votes: Record<string, number>, modes?: Record<RoyaleMode, number>): void {
     if (!options.includes(this.myVote ?? "")) this.myVote = null;
+    if (!options.length) this.myMode = null;
     this.votePanel.replaceChildren();
     this.voteCard.replaceChildren();
     this.votePanel.hidden = this.voteCard.hidden = options.length === 0;
@@ -312,6 +320,44 @@ export class RoyaleHud {
       line.textContent = `${size} \u00b7 ${label} \u2014 ${count}`;
       this.voteCard.appendChild(line);
     }
+    // And the mode: free-for-all or teams.
+    if (!modes || this.boss) return;
+    const modeTitle = document.createElement("div");
+    modeTitle.className = "picker-title";
+    modeTitle.textContent = "Vote: mode";
+    this.votePanel.appendChild(modeTitle);
+    const row = document.createElement("div");
+    row.className = "mode-row";
+    for (const [mode, label] of [
+      ["ffa", "Free-for-all"],
+      ["teams", "Teams"],
+    ] as [RoyaleMode, string][]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = this.myMode === mode ? "on" : "";
+      const name = document.createElement("strong");
+      name.textContent = label;
+      const detail = document.createElement("span");
+      detail.textContent = `${modes[mode]} vote${modes[mode] === 1 ? "" : "s"}`;
+      b.append(name, detail);
+      b.onclick = () => {
+        this.myMode = mode;
+        this.onModeVote(mode);
+      };
+      row.appendChild(b);
+    }
+    this.votePanel.appendChild(row);
+    const line = document.createElement("div");
+    line.textContent = `Mode \u2014 Free-for-all ${modes.ffa} \u00b7 Teams ${modes.teams}`;
+    this.voteCard.appendChild(line);
+  }
+
+  // A team round started (or ended: null).
+  setTeam(team: 0 | 1 | null, alive: [number, number]): void {
+    const changed = team !== this.team;
+    this.team = team;
+    this.teamAlive = alive;
+    if (changed && team !== null) this.banner(`You're on the ${team === 0 ? "Red" : "Blue"} team!`, 3000);
   }
 
   // E and R: names, and how much of each cooldown is left (0..1).
@@ -435,6 +481,14 @@ export class RoyaleHud {
           this.infoEl.textContent = this.amAlive ? `${this.aliveCount} fighting · hide behind pillars, jump the shockwaves` : "Down · watching the others";
           break;
         }
+        if (this.team !== null) {
+          const t = this.storm.timing(now);
+          this.timerEl.textContent = t?.phase === "hold" ? clockText(t.msLeft) : t?.phase === "shrink" ? "Closing!" : "The storm!";
+          const mine = this.team === 0 ? "Red (you)" : "Blue (you)";
+          const other = this.team === 0 ? "Blue" : "Red";
+          this.infoEl.textContent = `${mine} ${this.teamAlive[this.team]} \u00b7 ${other} ${this.teamAlive[1 - this.team]}${this.amAlive ? "" : " · Spectating"}`;
+          break;
+        }
         const t = this.storm.timing(now);
         this.timerEl.textContent = t?.phase === "hold" ? clockText(t.msLeft) : t?.phase === "shrink" ? "Closing!" : "The storm!";
         const what = t?.phase === "hold" ? "Storm moves in" : t?.phase === "shrink" ? "Storm closing" : "Storm everywhere";
@@ -449,7 +503,7 @@ export class RoyaleHud {
     }
     this.stormEl.classList.toggle("show", inStorm && this.state === "playing" && this.amAlive);
     const w = WEAPONS[weaponOf(this.cls, this.hand)];
-    const full = w.kind === "spell" ? this.spellCooldown : w.kind === "projectile" ? SPELLS.arrow.cooldownMs : w.melee!.cooldownMs;
+    const full = w.kind === "spell" ? this.spellCooldown : w.kind === "projectile" ? SPELLS[w.projectile ?? "arrow"].cooldownMs : w.melee!.cooldownMs;
     const fraction = Math.min(1, Math.max(readyIn / full, swapIn / SWAP_MS));
     this.slots[this.hand].cooldown.style.height = `${fraction * 100}%`;
     this.slots[this.hand === "main" ? "backup" : "main"].cooldown.style.height = "0%";

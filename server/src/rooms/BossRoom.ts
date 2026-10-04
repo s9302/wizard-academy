@@ -35,7 +35,6 @@ export class BossRoom extends RoyaleRoom {
 
   constructor(info: RoomInfo, level: Level) {
     super(info, level, null);
-    this.friendlyFire = false;
     this.stormOn = false;
     this.voting = false;
     const fight = level.bossFight;
@@ -64,6 +63,11 @@ export class BossRoom extends RoyaleRoom {
 
   private async refreshLeaderboard(): Promise<void> {
     this.board = await leaderboard(this.name, 10);
+  }
+
+  // Everyone here is on the same side, against the Tyrant.
+  protected override allies(a: Player | null, b: Player): boolean {
+    return !!a && a !== b;
   }
 
   // ---- Round cycle ----

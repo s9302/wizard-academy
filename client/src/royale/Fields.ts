@@ -72,6 +72,29 @@ export class Fields {
         sound.fx("fortify", { at: info.p });
         break;
       }
+      case "smite": {
+        // The marked circle; the pillar of light comes when it ends (remove).
+        const ring = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.2, info.r, 40), see("#ffe066", 0.85));
+        const fill = new THREE.Mesh(new THREE.CircleGeometry(info.r - 0.2, 40), see("#fff2b0", 0.2));
+        for (const m of [ring, fill]) {
+          m.rotation.x = -Math.PI / 2;
+          m.position.y = 0.06;
+        }
+        root.add(ring, fill);
+        spin.push(ring);
+        sound.fx("charge", { at: info.p, rate: 1.4, volume: 0.6 });
+        break;
+      }
+      case "sanctuary": {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.25, info.r, 48), glowMat("#ffe9a0", 2));
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.06;
+        const glow = new THREE.Mesh(new THREE.CylinderGeometry(info.r, info.r, 0.8, 32, 1, true), see("#fff2b0", 0.12));
+        glow.position.y = 0.4;
+        root.add(ring, glow);
+        sound.fx("levelUp", { at: info.p, volume: 0.5 });
+        break;
+      }
       case "smoke": {
         // Lumpy, nearly opaque grey balls: you really can't see through it.
         for (let i = 0; i < 9; i++) {
@@ -96,6 +119,19 @@ export class Fields {
     this.scene.remove(v.root);
     v.root.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
     this.views.delete(id);
+    if (v.info.kind === "smite") {
+      // The pillar of light, for a moment.
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(v.info.r * 0.6, v.info.r, 30, 16, 1, true), glowMat("#fff6c8", 3));
+      pillar.position.set(v.info.p[0], v.info.p[1] + 15, v.info.p[2]);
+      this.scene.add(pillar);
+      setTimeout(() => {
+        this.scene.remove(pillar);
+        pillar.geometry.dispose();
+      }, 350);
+      particles.emit({ at: [v.info.p[0], v.info.p[1] + 0.3, v.info.p[2]], count: 70, color: "#fff6c8", color2: "#ffd25a", speed: 6, up: 2, life: 0.7, size: 0.3 });
+      sound.fx("thunder", { at: v.info.p, volume: 0.7 });
+      sound.fx("explosion", { at: v.info.p, volume: 0.5 });
+    }
     if (v.info.kind === "smoke" || v.info.kind === "tornado") particles.emit({ at: fieldCenter(v.info, this.clock.now()), count: 25, color: "#a09cad", speed: 2, up: 1, spread: v.info.r, life: 0.8, size: 0.5 });
   }
 
@@ -129,6 +165,10 @@ export class Fields {
       } else if (info.kind === "hellpit") {
         v.spin[0].rotation.z += dt * 2;
         if (Math.random() < 0.8) particles.emit({ at: [info.p[0], info.p[1] + 0.2, info.p[2]], count: 2, color: "#ff4a1a", color2: "#3a0000", speed: 0.5, up: 3, spread: info.r * 0.8, life: 0.9, size: 0.3, gravity: -1 });
+      } else if (info.kind === "smite") {
+        v.spin[0].scale.setScalar(1 - Math.min(1, (now - info.time) / info.ms) * 0.3);
+      } else if (info.kind === "sanctuary") {
+        if (Math.random() < 0.6) particles.emit({ at: [info.p[0], info.p[1] + 0.2, info.p[2]], count: 1, color: "#fff2a8", color2: "#ffffff", speed: 0.2, up: 1.5, spread: info.r * 0.9, life: 1.2, size: 0.15, gravity: -0.5 });
       } else if (info.kind === "smoke") {
         v.spin.forEach((m, i) => {
           m.rotation.y += dt * 0.2 * (i % 2 ? 1 : -1);

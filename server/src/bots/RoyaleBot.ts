@@ -15,7 +15,7 @@
 //  - Otherwise: hunt the nearest wizard.
 
 import { type SpellId, SPELLS } from "../../../shared/src/combat.ts";
-import { CLASS_IDS, type ClassId, type Hand, moveSpeed, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
+import { BOT_CLASSES, type ClassId, type Hand, moveSpeed, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import type { PrimarySpell } from "../../../shared/src/unlocks.ts";
 import { EYE_HEIGHT, RUN_SPEED, WALK_SPEED } from "../../../shared/src/constants.ts";
 import { lineOfSight } from "../../../shared/src/levels/geometry.ts";
@@ -98,8 +98,8 @@ export class RoyaleBot extends BotWalker {
   constructor(peer: BotPeer, grid: NavGrid, boxes: () => Box[], index: number) {
     super(peer, grid);
     this.boxes = boxes;
-    this.cls = CLASS_IDS[index % CLASS_IDS.length];
-    this.primary = BOT_SPELLS[Math.floor(index / CLASS_IDS.length) % BOT_SPELLS.length];
+    this.cls = BOT_CLASSES[index % BOT_CLASSES.length];
+    this.primary = BOT_SPELLS[Math.floor(index / BOT_CLASSES.length) % BOT_SPELLS.length];
   }
 
   think(view: RoyaleView): RoyaleAction {

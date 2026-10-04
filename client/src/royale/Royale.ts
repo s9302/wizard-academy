@@ -26,8 +26,9 @@ import { sound } from "../audio/Sound.ts";
 import type { SynthId } from "../audio/synth.ts";
 
 // The sound of casting each spell (and loosing an arrow).
-const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow" };
+const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark" };
 const HITS = ["punch0", "punch1", "punch2"] as const;
+const TEAM_COLORS = ["#ff4a4a", "#4a8cff"];
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -61,6 +62,7 @@ export class Royale {
   private decoys: Decoys;
   private scene: THREE.Scene;
   private chosen: [AbilityId, AbilityId]; // on E and R (the server says, with "abilitySet")
+  private teams = new Map<number, 0 | 1>(); // a team round: who's on which
   private lastUpdate = performance.now();
   private remotes: RemotePlayers;
   private hooks: RoyaleHooks;
@@ -99,6 +101,7 @@ export class Royale {
       onMonsters: (action) => hooks.send({ t: "monsters", action }),
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
+      onModeVote: (mode) => hooks.send({ t: "modeVote", mode }),
       onAbilities: (e, r) => {
         this.chosen = [e, r];
         this.applyLoadout();
@@ -169,6 +172,7 @@ export class Royale {
         else if (this.state === "playing" && msg.ids.length < this.alive.size) sound.play("bell2", { volume: 0.35, rate: 1.5 });
         this.alive = new Set(msg.ids);
         this.hud.alive(msg.ids.length, this.alive.has(me));
+        this.showTeams();
         this.viewmodel.setVisible(!this.thirdPerson && (this.state !== "playing" || this.alive.has(me)));
         this.refreshVisibility();
         return true;
@@ -241,7 +245,12 @@ export class Royale {
         this.applyLoadout();
         return true;
       case "arenaVote":
-        this.hud.vote(msg.options, msg.votes);
+        this.hud.vote(msg.options, msg.votes, msg.modes);
+        return true;
+      case "teams":
+        this.teams.clear();
+        msg.teams?.forEach((ids, team) => ids.forEach((id) => this.teams.set(id, team as 0 | 1)));
+        this.showTeams();
         return true;
       case "pickups":
         this.pickups.set(msg.items);
@@ -282,6 +291,7 @@ export class Royale {
     const h = this.health.get(id) ?? { hp: 100, max: 100, shield: 0 };
     this.remotes.setHealth(id, h.hp / h.max, h.shield / MAX_SHIELD);
     this.refreshVisibility();
+    if (this.teams.size) this.showTeams();
   }
 
   // During a round, only those still in it are shown; spectators are invisible.
@@ -363,6 +373,21 @@ export class Royale {
     this.masteryEffect(mine, id, kind, ms, at, from, to);
   }
 
+  // Team rings under everyone, and the HUD's team counts.
+  private showTeams(): void {
+    const me = this.hooks.myId();
+    this.remotes.forEachId((id) => {
+      const team = this.teams.get(id);
+      this.remotes.setTeam(id, team === undefined ? null : TEAM_COLORS[team]);
+    });
+    const alive: [number, number] = [0, 0];
+    for (const id of this.alive) {
+      const t = this.teams.get(id);
+      if (t !== undefined) alive[t] += 1;
+    }
+    this.hud.setTeam(this.teams.get(me) ?? null, alive);
+  }
+
   // Level 11+ ability effects.
   private masteryEffect(mine: boolean, id: number, kind: string, ms: number, at: Vec3 | null, from?: Vec3, to?: Vec3): void {
     const where = at ?? this.remotes.positionOf(id);
@@ -404,6 +429,16 @@ export class Royale {
       requestAnimationFrame(grow);
       particles.emit({ at: from, count: 60, color: "#9fdcff", color2: "#ffffff", speed: 9, life: 0.5, size: 0.25 });
       sound.fx("explosion", { at: mine ? null : from, volume: 0.8 });
+    } else if (kind === "heal" || kind === "aegis") {
+      // Gold sparkles rising (heal), or a blue flash (a shield).
+      const heal = kind === "heal";
+      if (where) particles.emit({ at: where, count: 26, color: heal ? "#fff2a8" : "#7fd8ff", color2: heal ? "#8fff9f" : "#ffffff", speed: 1, up: 2.2, spread: 0.5, life: 0.9, size: 0.18, gravity: -1 });
+      sound.fx(heal ? "levelUp" : "ward", { at, volume: 0.5 });
+      if (mine) this.hud.callout(heal ? "Healed!" : "Shielded!");
+    } else if (kind === "judgment") {
+      sound.fx("sting", { at, rate: 1.4, volume: 0.6 });
+      if (mine) this.hud.callout("Judged!");
+      else this.remotes.glow(id, "#ffd25a", ms);
     } else if (kind === "chain" && from && to) {
       // A chain from the Knight to whoever they hooked, for a moment.
       const a = new THREE.Vector3(from[0], from[1] + 0.3, from[2]);
@@ -446,7 +481,7 @@ export class Royale {
   attack(button: "primary" | "fireball", origin: THREE.Vector3, dir: THREE.Vector3): void {
     const now = performance.now();
     if (!this.hud.canAct || now < this.handReadyAt) return;
-    if ((button === "fireball" || WEAPONS[this.weapon].kind === "spell") && this.fields.inNullZone(origin)) {
+    if ((button === "fireball" || WEAPONS[this.weapon].kind === "spell" || this.weapon === "holy") && this.fields.inNullZone(origin)) {
       this.hud.callout("No magic here!");
       return;
     }
@@ -462,19 +497,19 @@ export class Royale {
       return;
     }
     const weapon = WEAPONS[this.weapon];
-    const cooldown = weapon.kind === "spell" ? SPELLS[this.primary].cooldownMs : weapon.kind === "projectile" ? SPELLS.arrow.cooldownMs : weapon.melee!.cooldownMs;
+    const cooldown = weapon.kind === "spell" ? SPELLS[this.primary].cooldownMs : weapon.kind === "projectile" ? SPELLS[weapon.projectile ?? "arrow"].cooldownMs : weapon.melee!.cooldownMs;
     if (now < this.readyAt.primary) return;
     this.readyAt.primary = now + cooldown;
     this.seq += 1;
     this.viewmodel.swing();
     if (weapon.kind === "spell") sound.fx(CAST_SOUND[this.primary]);
-    else if (weapon.kind === "projectile") sound.fx("arrow");
+    else if (weapon.kind === "projectile") sound.fx(CAST_SOUND[weapon.projectile ?? "arrow"]);
     else sound.fx(this.weapon === "daggers" ? "swing" : "heavySwing", { rate: this.weapon === "daggers" ? 1.3 : 1 });
     if (weapon.kind === "spell") {
       this.spells.castLocal(this.seq, this.primary, o, castDirections(this.primary, d));
       this.hooks.send({ t: "cast", spell: this.primary, o, d, seq: this.seq });
     } else {
-      if (weapon.kind === "projectile") this.spells.castLocal(this.seq, "arrow", o, [d]);
+      if (weapon.kind === "projectile") this.spells.castLocal(this.seq, weapon.projectile ?? "arrow", o, [d]);
       this.hooks.send({ t: "attack", o, d, seq: this.seq });
     }
   }

@@ -58,6 +58,25 @@ export function makeWeapon(weapon: WeaponId, spellColor = "#b48cff"): THREE.Grou
       g.add(part(new THREE.CylinderGeometry(0.03, 0.035, 1.3, 6), wood, 0, 0.35));
       g.add(part(new THREE.OctahedronGeometry(0.09), mat("#8fe3ff", 0.6), 0, 1.07));
       break;
+    case "mace": {
+      // A wooden haft, a flanged steel head, a gold collar.
+      g.add(part(new THREE.CylinderGeometry(0.03, 0.035, 0.6, 6), wood, 0, 0.15));
+      g.add(part(new THREE.CylinderGeometry(0.05, 0.05, 0.06, 8), gold, 0, 0.43));
+      g.add(part(new THREE.DodecahedronGeometry(0.11, 0), steel, 0, 0.55));
+      for (let i = 0; i < 4; i++) {
+        const flange = part(new THREE.BoxGeometry(0.03, 0.18, 0.07), steel, Math.cos((i * Math.PI) / 2) * 0.1, 0.55, Math.sin((i * Math.PI) / 2) * 0.1);
+        flange.rotation.y = (-i * Math.PI) / 2;
+        g.add(flange);
+      }
+      break;
+    }
+    case "holy": {
+      // A holy symbol: a gold sunburst on a short handle, glowing.
+      g.add(part(new THREE.CylinderGeometry(0.025, 0.03, 0.22, 6), wood, 0, 0));
+      g.add(part(new THREE.TorusGeometry(0.1, 0.022, 6, 16), gold, 0, 0.22));
+      g.add(part(new THREE.OctahedronGeometry(0.07), mat("#ffe9a0", 0.9), 0, 0.22));
+      break;
+    }
     case "spell": {
       // A glowing orb hovering over an open hand.
       g.add(part(new THREE.BoxGeometry(0.14, 0.05, 0.16), mat("#f3dcc4"), 0, 0));

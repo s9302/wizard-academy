@@ -24,6 +24,7 @@ const SPARKS: Record<SpellId, [string, string]> = {
   spark: ["#fffbd0", "#ffd23a"],
   fireball: ["#ffe08a", "#ff3c0a"],
   arrow: ["#fff3d6", "#c9a36b"],
+  holy: ["#ffffff", "#ffd25a"],
 };
 
 const TRAIL = 4; // ghost copies behind each spell
@@ -90,6 +91,7 @@ export class Spells {
     };
     this.materials = {
       arrow: glow(SPELLS.arrow.color),
+      holy: glow(SPELLS.holy.color),
       bolt: glow(SPELLS.bolt.color),
       frost: glow(SPELLS.frost.color),
       spark: glow(SPELLS.spark.color),

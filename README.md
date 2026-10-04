@@ -84,7 +84,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
 `hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `story-check`, `admin-check`,
-`trials-check`, `features-check`, `boss-check`, `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
+`trials-check`, `features-check`, `boss-check`, `teams-check`, `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -449,18 +449,34 @@ Pick a class in the arena's pause panel (Esc). It's saved to your account;
 picked mid-round, it applies from the next round. Classes only exist in the
 battle royale.
 
-| | Knight | Rogue | Wizard |
-|---|---|---|---|
-| Health | 180 | 85 | 100 |
-| Speed | 92% | 112% | 100% |
-| Defense | takes 15% less damage | none | none |
-| Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** |
-| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range |
+| | Knight | Rogue | Wizard | Cleric |
+|---|---|---|---|---|
+| Health | 180 | 85 | 100 | 120 |
+| Speed | 92% | 112% | 100% | 97% |
+| Defense | takes 15% less damage | none | none | takes 10% less damage |
+| Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** | **Mace**: 24, 2.6 m reach |
+| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range | **Holy Light**: 15, straight shots, 42 m |
+
+The **Cleric** hits softer than the others and makes up for it by healing:
+**Healing Light** (E, 12 s) heals 35, and every teammate within 9 m in a team
+round or the boss fight; **Divine Smite** (R, 11 s) marks a spot up to 25 m
+away and a pillar of light lands 0.7 s later (40 within 3 m, and slowed).
+Level 11 adds **Sanctuary** (a 6 m circle healing you and teammates 12/s for
+6 s), **Aegis** (a 50 shield on the teammate you aim at, or yourself) and
+**Judgment** (the enemy you aim at takes 35% more damage for 6 s). Bots
+don't play Clerics.
 
 - **1 / 2 / mouse wheel** switch hands. Switching takes 0.4 s (no attacking
   meanwhile), so it can't be used to skip a cooldown; both hands share one
   cooldown.
 - **Right click** is still a Fireball, for every class (Fire Tome pickups).
+- **Team rounds:** between rounds you vote for the next arena and for the
+  mode, **Free-for-all** or **Teams** (Teams needs more votes than
+  Free-for-all). A team round splits everyone into Red and Blue (people
+  spread evenly, then bots), shown as colored rings at their feet. You
+  can't hurt teammates (your spells pass through them), and the last team
+  standing wins: 50 XP each for the winners. `teams-check` tests it
+  (`ROYALE_TEAMS=1` pins team rounds, testing only).
 - **Bots** take turns: Knight, Rogue, Wizard (six bots = two of each).
   Knights charge in and raise the shield when hurt at range, Rogues keep
   their distance and pull daggers up close, Wizards cast and use the staff

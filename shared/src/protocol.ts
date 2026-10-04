@@ -53,12 +53,15 @@ export type ClassMsg = { t: "class"; cls: ClassId };
 export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3 };
 // Choose a class's E and R abilities (level 11+ gives more to choose from).
 export type AbilitiesMsg = { t: "abilities"; cls: ClassId; e: AbilityId; r: AbilityId };
+// Vote for the next round's mode (battle royale, between rounds).
+export type RoyaleMode = "ffa" | "teams";
+export type ModeVoteMsg = { t: "modeVote"; mode: RoyaleMode };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
 // Battle royale: add or remove a monster.
 export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeVoteMsg;
 
 // ---- Server -> Client ----
 
@@ -132,13 +135,14 @@ export type ChargesMsg = { t: "charges"; fireball: number };
 // The arena changed (rebuild the world from this level).
 export type ArenaMsg = { t: "arena"; levelId: string };
 // The arenas you can vote for next, and the votes so far. Empty: no vote open.
-export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<string, number> };
+// modes: the mode vote's tally (next to the arena vote).
+export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<string, number>; modes?: Record<RoyaleMode, number> };
 // A wizard conjured a wall or pillar (ms: how long it has left), and when
 // it's gone.
 export type ConjureMsg = { t: "conjure"; id: number; box: Box; ms: number };
 export type UnconjureMsg = { t: "unconjure"; id: number };
 // Someone vanished, fortified, charged or shadow-stepped (ms 0: it ended).
-export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain";
+export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment";
 // id: who it's on (for chain: who was pulled; from = the Knight's position).
 export type EffectMsg = { t: "effect"; id: number; kind: EffectKind; ms: number; from?: Vec3; to?: Vec3 };
 // Level 11+ abilities: areas on the ground, being thrown, and Rogue copies.
@@ -150,6 +154,8 @@ export type DecoyState = { id: number; owner: number; p: Vec3; ry: number };
 export type DecoysMsg = { t: "decoys"; list: DecoyState[] };
 // To one player: the abilities you have on E and R (after picking, or joining).
 export type AbilitySetMsg = { t: "abilitySet"; e: AbilityId; r: AbilityId };
+// A team round: who's on which team (0 red, 1 blue); null when it isn't one.
+export type TeamsMsg = { t: "teams"; teams: [number[], number[]] | null };
 // To one player: an ability you tried didn't work (cooldown refunded).
 export type AbilityFailedMsg = { t: "abilityFailed"; slot: 0 | 1; reason: string };
 // You landed on someone: bounce off.
@@ -228,6 +234,7 @@ export type ServerMsg =
   | KnockMsg
   | DecoysMsg
   | AbilitySetMsg
+  | TeamsMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg

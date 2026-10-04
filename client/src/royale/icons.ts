@@ -23,6 +23,14 @@ export const ICONS: Record<string, string> = {
   blink: svg('<path d="M4 12h9M6 8h6M6 16h6"/><circle cx="17.5" cy="12" r="3.5" fill="currentColor" fill-opacity="0.3"/>'),
   stealth: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/>'),
   charge: svg('<path d="M4 6l6 6-6 6M12 6l6 6-6 6"/>'),
+  // Cleric
+  mace: svg('<path d="M6 20l7-7"/><circle cx="15.5" cy="8.5" r="4" fill="currentColor" fill-opacity="0.25"/><path d="M15.5 2.5v2M21.5 8.5h-2M15.5 14.5v-2M11.5 8.5h-2"/>'),
+  holy: svg('<circle cx="12" cy="10" r="3.5" fill="currentColor" fill-opacity="0.3"/><path d="M12 2.5v2M12 15.5v2M4.5 10h2M17.5 10h2M6.7 4.7l1.4 1.4M15.9 13.9l1.4 1.4M6.7 15.3l1.4-1.4M15.9 6.1l1.4-1.4M12 17.5V22"/>'),
+  heal: svg('<path d="M12 20.5s-8-4.6-8-10.4A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 8 2.5c0 5.8-8 10.4-8 10.4z" fill="currentColor" fill-opacity="0.2"/><path d="M12 10.5v6M9 13.5h6"/>'),
+  smite: svg('<path d="M9 2h6l-1 9h-4z" fill="currentColor" fill-opacity="0.3"/><path d="M12 11v5"/><ellipse cx="12" cy="19" rx="7" ry="2.5"/><path d="M6 15l-2-1.5M18 15l2-1.5"/>'),
+  sanctuary: svg('<path d="M3 20a9 9 0 0 1 18 0z" fill="currentColor" fill-opacity="0.2"/><path d="M12 7v6M9 10h6"/>'),
+  aegis: svg('<path d="M12 2.5l8 3v6c0 5-3.4 8.8-8 10.5C7.4 20.3 4 16.5 4 11.5v-6z" fill="currentColor" fill-opacity="0.2"/><path d="M12 7l1.3 3 3.2.3-2.4 2.1.7 3.1-2.8-1.6-2.8 1.6.7-3.1-2.4-2.1 3.2-.3z"/>'),
+  judgment: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'),
   // Level 11+ abilities
   tornado: svg('<path d="M3 4h18M5 8h14M7.5 12h10M10 16h6M12 20h2"/>'),
   flames: svg('<path d="M3 20h18"/><path d="M6 20c-1.5-2-1-4 .5-5.5.3 1.2 1 1.8 1.6 2 0-2 .8-3.6 2.4-4.5-.3 2.4 1.5 3.5 1.5 5.5 0 1.2-.6 2-1.5 2.5M14 20c-1-1.6-.6-3.2.6-4.4.2 1 .8 1.4 1.3 1.6 0-1.6.6-2.9 1.9-3.6-.2 1.9 1.2 2.8 1.2 4.4 0 1-.5 1.6-1.2 2"/>'),

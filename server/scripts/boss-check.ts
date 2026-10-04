@@ -124,7 +124,7 @@ check("...and it falls", a.me.boss?.state === "dead", `${a.me.boss?.state}, hp $
 await waitFor(() => a.since(mark).some((m) => m.t === "finish"), 5000);
 const finish = a.since(mark).find((m) => m.t === "finish");
 check("beating it is a first clear", finish?.t === "finish" && finish.firstClear, JSON.stringify(finish));
-const xp = a.since(mark).find((m) => m.t === "xp");
+const xp = a.since(mark).find((m) => m.t === "xp" && m.reason.startsWith("First clear"));
 check("...worth 600 XP", xp?.t === "xp" && xp.amount === 600, JSON.stringify(xp));
 await waitFor(() => a.since(mark).some((m) => m.t === "roundResult"), 3000);
 const result = a.since(mark).find((m) => m.t === "roundResult");

@@ -1,15 +1,17 @@
-// Battle royale classes: Knight, Rogue and Wizard. Each has its own health,
+// Battle royale classes: Knight, Rogue, Wizard and Cleric. Each has its own health,
 // speed and defense, a main-hand weapon and a backup (swap with 1/2 or the
 // mouse wheel). Shared so the client can show and predict them; the server
 // enforces every number.
 //
 // Balance idea: the Knight wins up close and soaks damage but is slow; the
 // Rogue wins at range and moves fast but is fragile; the Wizard is in the
-// middle, with a spell for range and a staff for close calls.
+// middle, with a spell for range and a staff for close calls; the Cleric
+// hits softer than all of them but heals (themselves, and teammates in a
+// team round or a boss fight) and smites groups.
 
-export type ClassId = "knight" | "rogue" | "wizard";
+export type ClassId = "knight" | "rogue" | "wizard" | "cleric";
 export type Hand = "main" | "backup";
-export type WeaponId = "sword" | "shield" | "bow" | "daggers" | "spell" | "staff";
+export type WeaponId = "sword" | "shield" | "bow" | "daggers" | "spell" | "staff" | "mace" | "holy";
 
 export type ClassDef = {
   name: string;
@@ -49,6 +51,15 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     backup: "staff",
     blurb: "In between. Your Spellbook spell at range, a staff up close.",
   },
+  cleric: {
+    name: "Cleric",
+    maxHealth: 120,
+    speed: 0.97,
+    defense: 0.1,
+    main: "mace",
+    backup: "holy",
+    blurb: "The healer. A mace up close, holy light at range; heals and smites.",
+  },
 };
 
 export const CLASS_IDS = Object.keys(CLASSES) as ClassId[];
@@ -69,7 +80,7 @@ export type WeaponDef = {
   // spell: the Spellbook spell; shield: blocks, and bashes on click.
   kind: "melee" | "projectile" | "spell" | "shield";
   melee?: MeleeDef;
-  projectile?: "arrow";
+  projectile?: "arrow" | "holy";
   // Shield: while it's in your hand, damage from in front of you (within
   // blockArcDeg) is cut by `block`, and you move slower.
   block?: number;
@@ -91,7 +102,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   daggers: { name: "Daggers", kind: "melee", melee: { kind: "melee", damage: 14, reach: 2.2, arcDeg: 70, cooldownMs: 350, backstab: 2 } },
   spell: { name: "Spell", kind: "spell" },
   staff: { name: "Staff", kind: "melee", melee: { kind: "melee", damage: 18, reach: 2.6, arcDeg: 90, cooldownMs: 600 } },
+  mace: { name: "Mace", kind: "melee", melee: { kind: "melee", damage: 24, reach: 2.6, arcDeg: 100, cooldownMs: 700 } },
+  holy: { name: "Holy Light", kind: "projectile", projectile: "holy" },
 };
+
+// Classes bots play (the Cleric's healing is beyond them).
+export const BOT_CLASSES: ClassId[] = ["knight", "rogue", "wizard"];
 
 // Swapping hands takes a moment, so it can't be used to skip a cooldown.
 export const SWAP_MS = 400;
