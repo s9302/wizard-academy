@@ -480,26 +480,27 @@ const HATS: Record<Hat, { color: string; build: (mat: THREE.MeshLambertMaterial,
     },
   },
   // A gold crown: a band and five points.
-  crown: {
-    color: "#e8c547",
-    build: (mat, g) => {
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.12, 10, 1, true), mat);
-      band.material.side = THREE.DoubleSide;
-      band.position.y = TOP - 0.02;
-      g.add(band);
-      for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        const point = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), mat);
-        point.position.set(Math.cos(a) * 0.17, TOP + 0.1, Math.sin(a) * 0.17);
-        g.add(point);
-      }
-      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), flat("#ff5a8a"));
-      gem.position.set(0, TOP - 0.02, -0.175);
-      g.add(gem);
-      return [mat];
-    },
-  },
+  crown: { color: "#e8c547", build: (mat, g) => crown(mat, g, 5, 0.12, "#ff5a8a", false) },
+  // The Storm Tyrant's: darker gold, seven tall points, a glowing storm gem.
+  tyrant: { color: "#b8862a", build: (mat, g) => crown(mat, g, 7, 0.2, "#8fe3ff", true) },
 };
+
+function crown(mat: THREE.MeshLambertMaterial, g: THREE.Group, points: number, height: number, gemColor: string, glow: boolean): THREE.MeshLambertMaterial[] {
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.12, 10, 1, true), mat);
+  band.material.side = THREE.DoubleSide;
+  band.position.y = TOP - 0.02;
+  g.add(band);
+  for (let i = 0; i < points; i++) {
+    const a = (i / points) * Math.PI * 2;
+    const point = new THREE.Mesh(new THREE.ConeGeometry(0.04, height, 4), mat);
+    point.position.set(Math.cos(a) * 0.17, TOP + 0.04 + height / 2, Math.sin(a) * 0.17);
+    g.add(point);
+  }
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(glow ? 0.05 : 0.035), glow ? new THREE.MeshBasicMaterial({ color: gemColor, toneMapped: false }) : flat(gemColor));
+  gem.position.set(0, TOP - 0.02, -0.175);
+  g.add(gem);
+  return [mat];
+}
 
 function cone(mat: THREE.MeshLambertMaterial, g: THREE.Group, height: number): THREE.MeshLambertMaterial[] {
   const brimMat = mat.clone();

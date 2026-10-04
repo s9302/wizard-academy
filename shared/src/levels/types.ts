@@ -185,6 +185,7 @@ export type Level = {
   // Battle royale arenas: size class, and the storm's starting radius and
   // how much to scale its stages (1 = the medium arena).
   arena?: { size: "small" | "medium" | "large"; stormRadius: number; stormScale: number };
+  bossFight?: { boss: BossKind; home: Vec3 }; // a boss room (Trial VII): where the boss starts
 };
 
 // A point relative to a portal: `side` meters to its right (as seen walking

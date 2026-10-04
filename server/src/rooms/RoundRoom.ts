@@ -69,6 +69,10 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   protected abstract runBot(bot: B, me: Player, now: number, dt: number): void;
 
   // Optional hooks.
+  // Players needed for a round (a boss fight can be fought alone).
+  protected minPlayers(): number {
+    return MIN_PLAYERS;
+  }
   protected resultsMs(): number {
     return RESULTS_MS;
   }
@@ -100,7 +104,7 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
 
   protected onTick(now: number): void {
     this.runBots(now);
-    const enough = this.players.size >= MIN_PLAYERS;
+    const enough = this.players.size >= this.minPlayers();
     switch (this.state) {
       case "waiting":
         if (enough) this.startCountdown(now);

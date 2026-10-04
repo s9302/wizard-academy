@@ -7,7 +7,7 @@ import type { Box } from "./levels/types.ts";
 import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 import type { Appearance } from "./appearance.ts";
 import type { MonsterKind, MonsterState } from "./monsters.ts";
-import type { BossKind, BossShot } from "./bosses.ts";
+import type { BossKind, BossShot, StrikeKind } from "./bosses.ts";
 
 export type Vec3 = [number, number, number];
 
@@ -154,7 +154,8 @@ export type BossMsg = { t: "boss"; kind: BossKind; p: Vec3; ry: number; hp: numb
 export type BossShotMsg = { t: "bossShot"; shot: BossShot };
 export type BossShotEndMsg = { t: "bossShotEnd"; id: number; p: Vec3 };
 export type BossWaveMsg = { t: "bossWave"; o: Vec3; time: number };
-export type BossStrikeMsg = { t: "bossStrike"; p: Vec3; at: number };
+// r and kind: the Tyrant's bigger circles (default STRIKE_RADIUS, lightning).
+export type BossStrikeMsg = { t: "bossStrike"; p: Vec3; at: number; r?: number; kind?: StrikeKind };
 // To one player: hearts left in a boss fight.
 export type HeartsMsg = { t: "hearts"; hearts: number; max: number };
 // To one player: progress on a trial task (orbs collected, runes in order,

@@ -84,6 +84,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
 `hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `story-check`, `admin-check`,
+`trials-check`, `features-check`, `boss-check` (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -463,11 +464,36 @@ Class numbers: `shared/src/classes.ts`; the arrow: `shared/src/combat.ts`.
 GAME_PIN=... node server/scripts/classes-check.ts http://localhost:3000   # health, hands, reach, walls, shield, backstab, arrows
 ```
 
+## Trial VII: the Storm Tyrant (boss fight)
+
+The seventh trial isn't a course: it's a boss fight, fought with your
+**battle royale class** (Knight, Rogue or Wizard; change it in the Esc
+panel). Its portal is on the Sanctum's east wall, behind a barrier until
+Chapter VI is done.
+
+- **The arena** (`shared/src/levels/trial7.ts`): an 80 x 80 m ruin with
+  pillars to hide behind (they stop boulders and orbs), four raised
+  platforms with ramps, lava pools, jump pads, and potions and wards.
+- **The Tyrant** (`server/src/bosses/Boss.ts`, numbers in
+  `shared/src/bosses.ts` `TYRANT`) walks after the nearest fighter on the
+  bots' walking map. Phase 1: ground slam (a shockwave ring: jump it),
+  boulders, and a leap at whoever is furthest away (a marked circle; it lands
+  3 m short of you). Below 66%: lightning, rings of storm orbs, and storm
+  wolves (two at a time, at most four). Below 33%: meteor rain and more speed.
+  It has 2200 health alone, +60% for each extra fighter.
+- **A round is an attempt** (`server/src/rooms/BossRoom.ts`, built on the
+  battle royale room with the storm, the vote and friendly fire turned off).
+  Everyone still standing when it falls clears the trial: a best time, 600 XP
+  the first time (Chapter VII and the Tyrant's crown), less after. If
+  everyone goes down, it heals and you try again. **Bots** added from the
+  Esc panel fight on your side.
+
 ## Story, spells and unlocks
 
 **The story** is told through the trials and the hub. Headmaster Orrin Vale
 vanished into the storm (the battle royale's), leaving three trials for a
-successor; three more, through the Sanctum, follow him into it. Each trial is a chapter: its opening text appears when you
+successor; three more, through the Sanctum, follow him into it; and in the
+seventh, the storm comes back as the Storm Tyrant. Each trial is a chapter: its opening text appears when you
 arrive, and its ending (plus what it unlocked) the first time you clear it.
 A chapter is complete once you have a time on its trial. The text is in
 `shared/src/story.ts`.
@@ -503,7 +529,8 @@ looks.
 | The Sanctum (and Trial IV), Headmaster's crown, Ivory robe | Chapter III |
 | Trial V, Storm robe | Chapter IV |
 | Trial VI, Ember robe | Chapter V |
-| Stormcaller's hat | Chapter VI |
+| Stormcaller's hat, Trial VII | Chapter VI |
+| Tyrant's crown | Chapter VII |
 
 **Perks are off in the trials**, so trial times stay comparable.
 

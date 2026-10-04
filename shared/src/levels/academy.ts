@@ -223,6 +223,7 @@ const labels: Label[] = [
   { pos: [0, 10.2, FRONT + 1.2], title: "The Sanctum", color: "#ff8fb8", unlock: "area:sanctum" },
   { pos: [-13, 3, BACK + 2.6], title: "Trial V", color: "#7b5bd6", unlock: "area:trial5", onlyLocked: true },
   { pos: [13, 3, BACK + 2.6], title: "Trial VI", color: "#c65bd6", unlock: "area:trial6", onlyLocked: true },
+  { pos: [17, 3, HALL_Z], title: "Trial VII", color: "#ffcf5a", unlock: "area:trial7", onlyLocked: true },
 ];
 
 const lights: PointLightDef[] = [
@@ -274,12 +275,14 @@ const ringPortals: Portal[] = portalAngles.map(([room, degrees, color]) => {
 });
 
 // Chapters IV to VI: three more portals along the Sanctum's back wall,
-// facing the great door. V and VI are behind barriers until the chapter
-// before them is done.
+// facing the great door, and VII on its east wall. V, VI and VII are
+// behind barriers until the chapter before them is done.
 const sanctumPortals: Portal[] = [
   { room: "trial4", pos: [0, 0, BACK + 1.2], yaw: Math.PI, color: "#9f7bff" },
   { room: "trial5", pos: [-13, 0, BACK + 1.2], yaw: Math.PI, color: "#7b5bd6" },
   { room: "trial6", pos: [13, 0, BACK + 1.2], yaw: Math.PI, color: "#c65bd6" },
+  // Chapter VII, the Tyrant: on the hall's east wall, facing west.
+  { room: "trial7", pos: [18.4, 0, HALL_Z], yaw: Math.PI / 2, color: "#ffcf5a" },
 ];
 
 export const portals: Portal[] = [...ringPortals, ...sanctumPortals];
@@ -307,6 +310,7 @@ for (const portal of portals) {
 for (const [room, gate] of [
   ["trial5", "area:trial5"],
   ["trial6", "area:trial6"],
+  ["trial7", "area:trial7"],
 ]) {
   const portal = sanctumPortals.find((p) => p.room === room)!;
   boxes.push({

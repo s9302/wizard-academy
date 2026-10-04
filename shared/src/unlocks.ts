@@ -14,7 +14,7 @@ import { type ChapterId, chaptersDone } from "./story.ts";
 export type Requirement = { level: number } | { chapter: ChapterId };
 
 export type PrimarySpell = "bolt" | "frost" | "spark";
-export type Hat = "classic" | "tall" | "starry" | "crown" | "storm";
+export type Hat = "classic" | "tall" | "starry" | "crown" | "storm" | "tyrant";
 export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold" | "storm" | "ember";
 
 export type Unlock = {
@@ -48,13 +48,15 @@ export const UNLOCKS: Unlock[] = [
   { id: "area:trial6", name: "Trial VI", kind: "area", requires: { chapter: 5 }, description: "The portal to the Eye of the Storm." },
   { id: "robe:ember", name: "Ember robe", kind: "robe", requires: { chapter: 5 }, description: "Still warm from the hollow." },
   { id: "hat:storm", name: "Stormcaller's hat", kind: "hat", requires: { chapter: 6 }, description: "It crackles." },
+  { id: "hat:tyrant", name: "Tyrant's crown", kind: "hat", requires: { chapter: 7 }, description: "Taken off the Storm Tyrant." },
+  { id: "area:trial7", name: "Trial VII", kind: "area", requires: { chapter: 6 }, description: "The portal to the Tyrant's Crown." },
 ];
 
 // Always available.
 const DEFAULTS = ["spell:bolt", "hat:classic", "robe:auto"];
 
 export function requirementText(r: Requirement): string {
-  return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III", "IV", "V", "VI"][r.chapter - 1]}`;
+  return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III", "IV", "V", "VI", "VII"][r.chapter - 1]}`;
 }
 
 // Admins have everything.
@@ -95,7 +97,7 @@ export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassI
 export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard", ...DEFAULT_APPEARANCE };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
-export const HATS: Hat[] = ["classic", "tall", "starry", "crown", "storm"];
+export const HATS: Hat[] = ["classic", "tall", "starry", "crown", "storm", "tyrant"];
 export const ROBES: Robe[] = ["auto", "crimson", "emerald", "midnight", "ivory", "gold", "storm", "ember"];
 export const ROBE_COLORS: Record<Exclude<Robe, "auto">, string> = {
   crimson: "#a8283a",
@@ -112,6 +114,7 @@ export const HAT_NAMES: Record<Hat, string> = {
   starry: "Starry hat",
   crown: "Headmaster's crown",
   storm: "Stormcaller's hat",
+  tyrant: "Tyrant's crown",
 };
 export const ROBE_NAMES: Record<Robe, string> = {
   auto: "Your own color",

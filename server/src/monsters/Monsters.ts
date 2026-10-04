@@ -9,9 +9,8 @@
 
 import { MAX_MONSTERS, MONSTER_ID_BASE, MONSTER_KINDS, type MonsterKind, MONSTERS, type MonsterState } from "../../../shared/src/monsters.ts";
 import type { Vec3 } from "../../../shared/src/protocol.ts";
+import { followPath, type Vec2 } from "../bots/followPath.ts";
 import type { NavGrid } from "../bots/NavGrid.ts";
-
-type Vec2 = [number, number];
 
 export type Prey = { id: number; p: Vec3 };
 
@@ -141,6 +140,47 @@ export class Monsters {
     return this.list();
   }
 
+  // Bring in n monsters of one kind around a spot, on top of the wanted
+  // count (the Storm Tyrant's summons). Killed ones don't come back.
+  summon(kind: MonsterKind, near: Vec3, n: number): void {
+    const grid = this.host.grid();
+    const def = MONSTERS[kind];
+    for (let i = 0; i < n; i++) {
+      for (let tries = 0; tries < 12; tries++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = 3 + Math.random() * 4;
+        const x = near[0] + Math.cos(a) * r;
+        const z = near[2] + Math.sin(a) * r;
+        if (!grid.isWalkable(x, z)) continue;
+        this.add(kind, [x, grid.floorAt(x, z) + def.height, z]);
+        break;
+      }
+    }
+  }
+
+  // How many of one kind are alive.
+  countOf(kind: MonsterKind): number {
+    return [...this.monsters.values()].filter((m) => m.kind === kind).length;
+  }
+
+  private add(kind: MonsterKind, p: Vec3): void {
+    const m: Monster = {
+      id: nextId++,
+      kind,
+      p,
+      ry: Math.random() * Math.PI * 2,
+      hp: MONSTERS[kind].hp,
+      path: [],
+      goal: null,
+      replanAt: 0,
+      target: null,
+      nextAttack: 0,
+      windupUntil: 0,
+      windupTarget: null,
+    };
+    this.monsters.set(m.id, m);
+  }
+
   private spawn(): void {
     const grid = this.host.grid();
     if (!grid.walkableCount) return;
@@ -156,21 +196,7 @@ export class Monsters {
     const kind = ORDER[this.spawned++ % ORDER.length] ?? MONSTER_KINDS[0];
     const def = MONSTERS[kind];
     const floor = grid.floorAt(spot[0], spot[1]);
-    const m: Monster = {
-      id: nextId++,
-      kind,
-      p: [spot[0], (Number.isNaN(floor) ? 0 : floor) + def.height, spot[1]],
-      ry: Math.random() * Math.PI * 2,
-      hp: def.hp,
-      path: [],
-      goal: null,
-      replanAt: 0,
-      target: null,
-      nextAttack: 0,
-      windupUntil: 0,
-      windupTarget: null,
-    };
-    this.monsters.set(m.id, m);
+    this.add(kind, [spot[0], (Number.isNaN(floor) ? 0 : floor) + def.height, spot[1]]);
   }
 
   private think(m: Monster, prey: Prey[], now: number, dt: number): void {
@@ -228,29 +254,9 @@ export class Monsters {
   // Follow the path; the last stretch stops short of whoever it's chasing.
   private walk(m: Monster, speed: number, dt: number, chasing: boolean): void {
     const def = MONSTERS[m.kind];
-    let [x, , z] = m.p;
-    let budget = speed * dt;
-    while (budget > 0 && m.path.length) {
-      const [tx, tz] = m.path[0];
-      let d = Math.hypot(tx - x, tz - z);
-      const stop = chasing && m.path.length === 1 ? def.reach * 0.7 : 0;
-      if (d <= stop) {
-        m.path.shift();
-        continue;
-      }
-      d -= stop;
-      const step = Math.min(budget, d);
-      const len = Math.hypot(tx - x, tz - z);
-      x += ((tx - x) / len) * step;
-      z += ((tz - z) / len) * step;
-      budget -= step;
-      if (step >= d - 1e-6) m.path.shift();
-      if (!chasing && Math.abs(tx - x) + Math.abs(tz - z) > 0.01) m.ry = Math.atan2(-(tx - x), -(tz - z));
-    }
-    const floor = this.host.grid().floorAt(x, z);
-    const y = Number.isNaN(floor) ? m.p[1] : floor + def.height;
-    const r = (n: number) => Math.round(n * 1000) / 1000;
-    m.p = [r(x), r(m.p[1] + Math.max(-10 * dt, Math.min(8 * dt, y - m.p[1]))), r(z)];
+    const moved = followPath(this.host.grid(), m.p, m.path, speed, dt, chasing ? def.reach * 0.7 : 0, def.height);
+    m.p = moved.p;
+    if (!chasing && moved.dir) m.ry = Math.atan2(-moved.dir[0], -moved.dir[1]);
   }
 
   // Monsters push each other apart a little, so a pack doesn't stack up.

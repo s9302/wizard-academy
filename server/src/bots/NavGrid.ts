@@ -219,6 +219,12 @@ export class NavGrid {
     return i < 0 ? NaN : this.floor[i];
   }
 
+  // Can you stand here and walk from here to the rest of the level?
+  isWalkable(x: number, z: number): boolean {
+    const i = this.cellAt(x, z);
+    return i >= 0 && this.open(i);
+  }
+
   randomSpot(): Vec2 {
     return this.center(this.walkableCells[Math.floor(Math.random() * this.walkableCells.length)]);
   }

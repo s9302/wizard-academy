@@ -79,7 +79,7 @@ export class Royale {
       onMonsters: (action) => hooks.send({ t: "monsters", action }),
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
-    });
+    }, !!level.bossFight);
     this.applyLoadout();
   }
 

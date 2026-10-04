@@ -37,6 +37,7 @@ import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
 import { Royale } from "./royale/Royale.ts";
+import { BossView } from "./bosses/BossView.ts";
 import { ServerClock } from "./ServerClock.ts";
 import { animateAvatar, createAvatar, disposeAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
 import { lookOf } from "../../shared/src/unlocks.ts";
@@ -60,6 +61,7 @@ const HELP: Record<string, string> = {
   tag: "Click tag",
   infection: "Click curse",
   royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
+  boss: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
 const STEP_EVERY = 2.1; // meters walked per footstep sound
@@ -92,6 +94,7 @@ export class Game {
   private props: { update(time: number, dt: number): void } | null = null;
   private features: Features | null = null;
   private trial: Trial | null = null;
+  private bossView: BossView | null = null; // Trial VII
   private npcs: Npcs | null = null;
   private talkHint: HTMLElement | null = null;
   // Third person (V): your own body, and a camera over your shoulder.
@@ -191,7 +194,7 @@ export class Game {
       if (chapterForTrial(room.id)) this.story = new StoryCard(hud);
     } else if (room.mode === "tag" || room.mode === "infection") {
       this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }));
-    } else if (room.mode === "royale") {
+    } else if (room.mode === "royale" || room.mode === "boss") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
       this.scene.add(this.camera); // the weapon in view is a child of the camera
@@ -209,6 +212,11 @@ export class Game {
           if (next && next !== this.level) this.loadLevel(next);
         },
       });
+    }
+    // Trial VII: the arena's combat, plus the boss.
+    if (room.mode === "boss" && level.bossFight) {
+      this.bossView = new BossView(this.scene, hud, this.clock, level.bossFight.boss, level.bossFight.home);
+      if (chapterForTrial(room.id)) this.story = new StoryCard(hud);
     }
     if (room.mode === "parkour" && level.course?.tasks?.length) {
       this.trial = new Trial(this.scene, hud, this.clock, level, { send: (msg) => this.net.send(msg), feed: (text) => this.addFeed(text) });
@@ -379,6 +387,8 @@ export class Game {
 
   private onServerMessage(msg: ServerMsg): void {
     if (this.disposed) return; // still in flight when we left
+    if (this.bossView?.onMessage(msg)) return;
+    if (msg.t === "round" && msg.state === "playing") this.story?.hideSoon(); // Trial VII's fight begins
     if (this.royale?.onMessage(msg)) return;
     if (this.trial?.onMessage(msg, this.myId)) return;
     switch (msg.t) {
@@ -636,6 +646,7 @@ export class Game {
 
     this.royale?.dispose();
     this.trial?.dispose();
+    this.bossView?.dispose();
     this.npcs?.dispose();
     this.story?.dispose();
     this.postfx?.dispose();
@@ -868,6 +879,7 @@ export class Game {
 
     this.props?.update(now / 1000, dt);
     this.trial?.update(now / 1000);
+    this.bossView?.update(now / 1000);
     this.npcs?.update(now / 1000, dt, this.player.position);
     this.features?.update(now / 1000, dt);
     this.particleSystem.update(dt);

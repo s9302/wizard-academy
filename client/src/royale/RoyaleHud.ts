@@ -47,6 +47,7 @@ export class RoyaleHud {
   private stealthEl: HTMLElement;
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
+  private boss: boolean;
   private side: HTMLElement; // pause panel column: class, vote, bots
   private votePanel: HTMLElement; // in the pause panel: buttons
   private voteCard: HTMLElement; // on screen: the tally
@@ -80,8 +81,10 @@ export class RoyaleHud {
     storm: Storm,
     roomName: string,
     actions: { onBots: (action: "add" | "remove") => void; onMonsters: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void; onVote: (arena: string) => void },
+    boss = false, // Trial VII: a boss fight, not a battle royale (other words; no monster buttons)
   ) {
     this.clock = clock;
+    this.boss = boss;
     this.onVote = actions.onVote;
     this.storm = storm;
 
@@ -100,6 +103,7 @@ export class RoyaleHud {
     this.votePanel.onclick = (e) => e.stopPropagation();
     this.monsterControls = new BotControls(actions.onMonsters, "monster");
     this.side.append(this.picker, this.votePanel, document.getElementById("bot-controls")!, document.getElementById("monster-controls")!);
+    if (boss) document.getElementById("monster-controls")!.hidden = true;
 
     document.body.classList.add("in-royale");
     this.crosshairEl = document.getElementById("crosshair")!;
@@ -289,14 +293,14 @@ export class RoyaleHud {
     this.endsAt = endsAt;
     if (state !== "ended") this.resultsEl.hidden = true;
     if (state === "countdown") this.banner("Get ready!", 1500);
-    if (state === "playing") this.banner("Last wizard standing wins!", 2500);
+    if (state === "playing") this.banner(this.boss ? "Bring it down!" : "Last wizard standing wins!", 2500);
   }
 
   alive(count: number, amAlive: boolean): void {
     const wasAlive = this.amAlive;
     this.aliveCount = count;
     this.amAlive = amAlive;
-    if (this.state === "playing" && wasAlive && !amAlive) this.banner("You're out! Spectating", 3000);
+    if (this.state === "playing" && wasAlive && !amAlive) this.banner(this.boss ? "You're down! Watching the others" : "You're out! Spectating", 3000);
     document.body.classList.toggle("spectating", this.state === "playing" && !amAlive);
   }
 
@@ -372,6 +376,11 @@ export class RoyaleHud {
         break;
       }
       case "playing": {
+        if (this.boss) {
+          this.timerEl.textContent = clockText(Math.max(0, left));
+          this.infoEl.textContent = this.amAlive ? `${this.aliveCount} fighting · hide behind pillars, jump the shockwaves` : "Down · watching the others";
+          break;
+        }
         const t = this.storm.timing(now);
         this.timerEl.textContent = t?.phase === "hold" ? clockText(t.msLeft) : t?.phase === "shrink" ? "Closing!" : "The storm!";
         const what = t?.phase === "hold" ? "Storm moves in" : t?.phase === "shrink" ? "Storm closing" : "Storm everywhere";
@@ -380,7 +389,7 @@ export class RoyaleHud {
         break;
       }
       case "ended":
-        this.timerEl.textContent = `Next round in ${Math.max(1, Math.ceil(left / 1000))}`;
+        this.timerEl.textContent = `${this.boss ? "Next attempt" : "Next round"} in ${Math.max(1, Math.ceil(left / 1000))}`;
         this.infoEl.textContent = "Round over";
         break;
     }

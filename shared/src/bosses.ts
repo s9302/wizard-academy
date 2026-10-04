@@ -5,7 +5,7 @@
 
 import type { Vec3 } from "./protocol.ts";
 
-export type BossKind = "golem" | "wraith";
+export type BossKind = "golem" | "wraith" | "tyrant";
 
 export type BossDef = {
   name: string;
@@ -20,7 +20,28 @@ export type BossDef = {
 export const BOSSES: Record<BossKind, BossDef> = {
   golem: { name: "The Bridge Golem", title: "Guardian of the Shattered Bridge", hp: 260, radius: 1.7, height: 2.1, speed: 2.4, color: "#9a96aa" },
   wraith: { name: "The Storm Wraith", title: "Heart of the Storm", hp: 380, radius: 1.4, height: 3.6, speed: 3.6, color: "#8fe3ff" },
+  // Trial VII's boss: fought with your battle royale class (BossRoom), not
+  // with hearts. Its numbers are in TYRANT below.
+  tyrant: { name: "The Storm Tyrant", title: "The Storm Made Flesh", hp: 2200, radius: 1.8, height: 3, speed: 3.2, color: "#ffcf5a" },
 };
+
+// The Storm Tyrant (Trial VII). It walks after the nearest fighter and gets
+// meaner as it's hurt: phase 2 below 66% health, phase 3 below 33%.
+export const TYRANT = {
+  // Damage to a fighter (before class defense, shields and Fortify).
+  damage: { slam: 28, rock: 20, leap: 38, orb: 14, lightning: 24, meteor: 30 },
+  phase2: 0.66,
+  phase3: 0.33,
+  leapRadius: 4.5, // the marked circle it lands in
+  leapDelayMs: 1400,
+  meteorRadius: 3.2,
+  meteorDelayMs: 1600,
+  wolves: 2, // per summon, at most 4 at once
+};
+
+// In the battle royale's hit tests the boss is one more body to hit; its id
+// is in the monster range, so clients treat a hit on it like a monster's.
+export const BOSS_BODY_ID = 999_000_000;
 
 export const BOSS_HEARTS = 3;
 export const PLAYER_BOLT_DAMAGE = 18;
@@ -40,3 +61,5 @@ export const WAVE_HEIGHT = 0.6; // your feet must be at least this high to clear
 // A lightning strike: a marked circle, then a bolt from the sky.
 export const STRIKE_DELAY_MS = 1300;
 export const STRIKE_RADIUS = 2.4;
+// What a marked circle is (lightning by default; the Tyrant also leaps and calls meteors).
+export type StrikeKind = "lightning" | "leap" | "meteor";

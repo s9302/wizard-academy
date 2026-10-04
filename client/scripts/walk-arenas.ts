@@ -1,4 +1,4 @@
-// Checks every battle royale arena (shared/src/levels/arenas.ts):
+// Checks every battle royale arena (shared/src/levels/arenas.ts) and Trial VII:
 //  - each spawn point is open floor (not inside anything) the bots can reach;
 //  - each pickup sits on a floor the bots can reach;
 //  - a walker using the game's real movement (Rapier, the PlayerController)
@@ -9,7 +9,11 @@
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
-import { ARENAS } from "../../shared/src/levels/arenas.ts";
+import { ARENAS as ROYALE_ARENAS } from "../../shared/src/levels/arenas.ts";
+import { trial7 } from "../../shared/src/levels/trial7.ts";
+
+// The battle royale arenas, and Trial VII (a boss fight in the same kind of arena).
+const ARENAS = [...ROYALE_ARENAS, trial7];
 import type { Level } from "../../shared/src/levels/types.ts";
 import type { Vec3 } from "../../shared/src/protocol.ts";
 import { NavGrid } from "../../server/src/bots/NavGrid.ts";

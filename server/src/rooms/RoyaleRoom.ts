@@ -119,9 +119,12 @@ const FIXED_ARENA = process.env.ROYALE_ARENA;
 // Testing only: ROYALE_STORM=off for exact damage checks.
 const NO_STORM = process.env.ROYALE_STORM === "off";
 
+// Something besides players that attacks can hit (monsters, a boss).
+export type Body = { id: number; p: Vec3; radius: number; height: number };
+
 export class RoyaleRoom extends RoundRoom<RoyaleBot> {
-  private fighters = new Map<number, Fighter>();
-  private alive = new Set<number>();
+  protected fighters = new Map<number, Fighter>();
+  protected alive = new Set<number>();
   private inRound = new Set<number>(); // started this round (for XP)
   private outOrder: number[] = []; // eliminated, first out first
   private projectiles = new Map<number, Projectile>();
@@ -146,11 +149,17 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private voteOptions: string[] = [];
   private votes = new Map<number, string>();
   // Monsters (Phase 16), and players just thrown by a jump pad (no fall damage).
-  private monsters: Monsters;
+  protected monsters: Monsters;
   private padGrace = new Map<number, number>();
+  // What a subclass (BossRoom) turns off: players hurting each other, the
+  // storm, and the arena vote between rounds.
+  protected friendlyFire = true;
+  protected stormOn = true;
+  protected voting = true;
 
-  constructor(info: ConstructorParameters<typeof RoundRoom>[0], level: Level) {
-    super(info, (FIXED_ARENA && LEVELS[FIXED_ARENA]) || level);
+  // fixedArena: the ROYALE_ARENA test setting (BossRoom passes null: its level is its own).
+  constructor(info: ConstructorParameters<typeof RoundRoom>[0], level: Level, fixedArena: string | null = FIXED_ARENA ?? null) {
+    super(info, (fixedArena && LEVELS[fixedArena]) || level);
     this.monsters = new Monsters({
       grid: () => navGridFor(this.level),
       // During a round they hunt whoever is still in it; between rounds,
@@ -199,8 +208,22 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
     this.stage = 0;
     this.nextStormTick = now + STORM_TICK_MS;
-    if (!NO_STORM) this.startStage([0, 0, this.level.arena?.stormRadius ?? STORM_START_RADIUS], now);
-    this.broadcast({ t: "announce", text: "The storm is gathering. Last wizard standing wins!" });
+    if (!NO_STORM && this.stormOn) this.startStage([0, 0, this.level.arena?.stormRadius ?? STORM_START_RADIUS], now);
+    this.broadcast({ t: "announce", text: this.playStartText() });
+  }
+
+  protected playStartText(): string {
+    return "The storm is gathering. Last wizard standing wins!";
+  }
+
+  // Monsters, and whatever else a subclass adds (a boss), for hit tests.
+  protected bodies(): Body[] {
+    return this.monsters.bodies();
+  }
+
+  // A hit on a body that isn't a monster (a boss): return true if handled.
+  protected hitOther(_id: number, _amount: number, _by: Player | null): boolean {
+    return false;
   }
 
   protected isRoundOver(): boolean {
@@ -264,7 +287,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // Offer one arena of each size.
   private openVote(): void {
-    if (FIXED_ARENA) return;
+    if (FIXED_ARENA || !this.voting) return;
     const pick = (size: "small" | "medium" | "large") => {
       const list = arenasOfSize(size);
       return list[Math.floor(Math.random() * list.length)].id;
@@ -525,8 +548,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       hits.push(target.conn.id);
       if (this.state === "playing" && this.damage(target, m.damage * (behind ? m.backstab! : 1), attacker, attacker.p)) blocked.push(target.conn.id);
     }
-    // Monsters in reach take the hit too (all of them for a cleave).
-    for (const m of this.monsters.bodies()) {
+    // Monsters (and a boss) in reach take the hit too (all of them for a cleave).
+    for (const m of this.bodies()) {
       const flat = Math.hypot(m.p[0] - from[0], m.p[2] - from[2]) - m.radius;
       if (flat > WEAPONS[weapon].melee!.reach || Math.abs(m.p[1] - attacker.p[1]) > MELEE_HEIGHT + m.height) continue;
       if (!inFront(yaw, [m.p[0] - from[0], m.p[2] - from[2]], WEAPONS[weapon].melee!.arcDeg) && flat > 0.4) continue;
@@ -540,6 +563,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // A monster took a hit; finishing one off heals you a little.
   private hitMonster(id: number, amount: number, by: Player | null): void {
+    if (this.hitOther(id, amount, by)) return;
     const kind = this.monsters.damage(id, amount);
     if (!kind) return;
     this.broadcast({ t: "monsterDied", id, kind, by: by?.conn.id ?? null });
@@ -608,7 +632,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
           hitPlayer = target;
         }
       }
-      for (const m of this.monsters.bodies()) {
+      for (const m of this.bodies()) {
         const t = segmentHitsCapsule(spell.p, to, m.p, Math.max(0, m.height - m.radius), m.radius, def.radius);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
@@ -638,7 +662,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // While a round is on, only those still in it can be hit; between rounds
   // anyone can (practice: no damage is dealt then anyway).
-  private canBeHit(id: number): boolean {
+  protected canBeHit(id: number): boolean {
     return this.state !== "playing" || this.alive.has(id);
   }
 
@@ -667,7 +691,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (!def.splashRadius) return;
     const attacker = this.players.get(spell.caster) ?? null;
     const from = lerp3(at, [at[0] - spell.d[0], at[1] - spell.d[1], at[2] - spell.d[2]], 0.3);
-    for (const m of this.monsters.bodies()) {
+    for (const m of this.bodies()) {
       const d = dist3(at, m.p);
       if (d > def.splashRadius + m.radius || !lineOfSight(from, m.p, this.allBoxes())) continue;
       this.hitMonster(m.id, Math.round(def.splashMax! - (def.splashMax! - def.splashMin!) * Math.min(1, d / def.splashRadius)), attacker);
@@ -685,10 +709,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // attacker null = the storm. source: where the hit came from (a swing, a
   // projectile, a blast), for the Knight's shield. Returns true if a shield
   // blocked most of it.
-  private damage(target: Player, raw: number, attacker: Player | null, source?: Vec3, cause = "was swallowed by the storm"): boolean {
+  protected damage(target: Player, raw: number, attacker: Player | null, source?: Vec3, cause = "was swallowed by the storm"): boolean {
     const id = target.conn.id;
     const f = this.fighters.get(id);
     if (!f || !this.alive.has(id) || raw <= 0 || target.conn.isAdmin) return false; // admins can't be hurt
+    if (!this.friendlyFire && attacker && attacker !== target) return false; // on the same side
     let amount = raw * (1 - CLASSES[f.cls].defense) * (Date.now() < f.fortifyUntil ? FORTIFY_FACTOR : 1);
     const held = WEAPONS[weaponOf(f.cls, f.hand)];
     const blocked =
@@ -1082,14 +1107,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       me,
       fighting: this.state === "playing" && this.alive.has(me.conn.id),
       practice: this.state === "waiting" || this.state === "ended",
-      enemies: [
-        ...[...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id) && !this.isStealthed(p.conn.id, now)),
-        // Monsters that come close are fair game too.
-        ...this.monsters
-          .bodies()
-          .filter((m) => Math.hypot(m.p[0] - me.p[0], m.p[2] - me.p[2]) < 14)
-          .map((m) => ({ conn: { id: m.id }, p: m.p, ry: 0 }) as unknown as Player),
-      ],
+      enemies: this.botEnemies(me, now),
       hp: f?.hp ?? MAX_HEALTH,
       maxHp: f?.maxHp ?? MAX_HEALTH,
       hand: f?.hand ?? "main",
@@ -1104,6 +1122,19 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (action.attack) this.attack(me, eye(me.p), action.attack, 0);
     if (action.ability) this.ability(me, action.ability.slot, action.ability.d);
   }
+
+  // Who a bot fights: other fighters, and monsters that come close.
+  protected botEnemies(me: Player, now: number): Player[] {
+    return [
+      ...[...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id) && !this.isStealthed(p.conn.id, now)),
+      ...this.bodies()
+        .filter((m) => Math.hypot(m.p[0] - me.p[0], m.p[2] - me.p[2]) < 14)
+        .map((m) => bodyAsEnemy(m)),
+    ];
+  }
 }
+
+// Bots aim at players; a monster or boss is given to them in the same shape.
+export const bodyAsEnemy = (m: Body): Player => ({ conn: { id: m.id }, p: m.p, ry: 0 }) as unknown as Player;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;

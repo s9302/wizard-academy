@@ -1,11 +1,16 @@
-// A trial's boss. ParkourRoom owns one per boss level and calls step()
-// every tick. The boss wakes when someone with a run in progress walks into
-// its arena, picks its attacks on a rhythm (faster below half health), and
-// goes back to sleep (healed) if everyone leaves or falls.
+// A boss. ParkourRoom owns one per boss trial (the golem, the wraith) and
+// BossRoom owns Trial VII's Storm Tyrant; each calls step() every tick. The
+// boss wakes when someone it may fight is in its arena, picks its attacks on
+// a rhythm (faster as it's hurt), and goes back to sleep (healed) if
+// everyone leaves or falls.
 //
 // Everything a player can be hit by is dodgeable: rocks and orbs fly in
-// straight lines, shockwaves can be jumped, and lightning is marked on the
-// floor before it lands.
+// straight lines, shockwaves can be jumped, and lightning, meteors and the
+// Tyrant's leaps are marked on the floor before they land.
+//
+// The Tyrant walks after the nearest fighter on the bots' walking map and
+// has three phases (TYRANT.phase2 / phase3): it adds lightning, orb rings
+// and wolves in phase 2, and meteor rain and more speed in phase 3.
 
 import {
   BOSS_HEARTS,
@@ -18,6 +23,8 @@ import {
   SHOT_RANGE,
   STRIKE_DELAY_MS,
   STRIKE_RADIUS,
+  type StrikeKind,
+  TYRANT,
   WAVE_HEIGHT,
   WAVE_RANGE,
   WAVE_SPEED,
@@ -27,15 +34,23 @@ import { SPELLS } from "../../../shared/src/combat.ts";
 import { segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
 import { inZone, type Box, type Zone } from "../../../shared/src/levels/types.ts";
 import type { ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
+import type { MonsterKind } from "../../../shared/src/monsters.ts";
+import { followPath, type Vec2 } from "../bots/followPath.ts";
+import type { NavGrid } from "../bots/NavGrid.ts";
 
 export type BossFighter = { id: number; p: Vec3 };
 
 export type BossHost = {
-  fighters(): BossFighter[]; // runners inside the arena
-  hurt(id: number, by: string): void; // take a heart
+  fighters(): BossFighter[]; // who it may fight (runners in the arena, or fighters still in the round)
+  // A hit: a trial takes a heart (amount unused); BossRoom deals the damage.
+  hurt(id: number, by: string, amount: number): void;
   defeated(ids: number[]): void; // these were there when it fell
   broadcast(msg: ServerMsg): void;
   boxes(): Box[];
+  // The Tyrant only: its walking map, and calling in monsters.
+  grid?(): NavGrid;
+  summon?(kind: MonsterKind, near: Vec3, n: number): void;
+  summoned?(): number; // how many of its monsters are still alive
 };
 
 // Testing only: BOSS_HP_SCALE=0.05 makes bosses quick to beat.
@@ -45,7 +60,9 @@ const STATE_MS = 100;
 
 type Bolt = { id: number; caster: number; o: Vec3; d: Vec3; t: number; p: Vec3 };
 type Wave = { o: Vec3; start: number; hit: Set<number> };
-type Strike = { p: Vec3; at: number };
+type Strike = { p: Vec3; at: number; r: number; kind: StrikeKind };
+// The Tyrant in the air: from -> to between start and end (server times).
+type Leap = { from: Vec3; to: Vec3; start: number; end: number };
 
 let nextShotId = 1;
 let nextBoltId = 5_000_000; // apart from the battle royale's spell ids
@@ -71,6 +88,12 @@ export class Boss {
   private nextCast = new Map<number, number>();
   private lastState = 0;
   private orbit = 0;
+  // The Tyrant.
+  private path: Vec2[] = [];
+  private replanAt = 0;
+  private leap: Leap | null = null;
+  private phase = 1;
+  private nextSummon = 0;
 
   constructor(kind: BossKind, arena: Zone, home: Vec3, host: BossHost) {
     this.kind = kind;
@@ -87,6 +110,20 @@ export class Boss {
 
   get alive(): boolean {
     return this.state !== "dead";
+  }
+
+  get fighting(): boolean {
+    return this.state === "fight";
+  }
+
+  get health(): { hp: number; max: number } {
+    return { hp: this.hp, max: this.max };
+  }
+
+  // Its body, for the battle royale's hit tests (BossRoom): only while it fights.
+  body(id: number): { id: number; p: Vec3; radius: number; height: number } | null {
+    if (this.state !== "fight") return null;
+    return { id, p: this.p, radius: BOSSES[this.kind].radius, height: BOSSES[this.kind].height };
   }
 
   // The current state, for someone who just arrived.
@@ -127,13 +164,16 @@ export class Boss {
     }
   }
 
-  private reset(): void {
+  reset(): void {
     this.state = "sleep";
     this.hp = this.max;
     this.p = [...this.home];
-    this.ry = Math.PI;
+    this.ry = this.kind === "tyrant" ? 0 : Math.PI;
     this.windupUntil = 0;
     this.windupAttack = null;
+    this.leap = null;
+    this.path = [];
+    this.phase = 1;
     this.shots.clear();
     this.waves = [];
     this.strikes = [];
@@ -143,11 +183,14 @@ export class Boss {
   private wake(count: number, now: number): void {
     this.max = this.hp = Math.round(BOSSES[this.kind].hp * HP_SCALE * (1 + 0.6 * (count - 1)));
     this.state = "fight";
+    this.phase = 1;
     this.nextAttack = now + 1800;
+    this.nextSummon = now + 8000;
     this.host.broadcast({ t: "announce", text: `${BOSSES[this.kind].name} awakens!` });
   }
 
   private think(fighters: { id: number; p: Vec3 }[], now: number, dt: number): void {
+    if (this.kind === "tyrant") return this.thinkTyrant(fighters, now, dt);
     const def = BOSSES[this.kind];
     // Face (and, for the golem, lumber toward) the nearest wizard.
     let near = fighters[0];
@@ -205,6 +248,141 @@ export class Boss {
     this.host.broadcast(this.stateMsg());
   }
 
+  // ---- The Storm Tyrant ----
+
+  private thinkTyrant(fighters: BossFighter[], now: number, dt: number): void {
+    const def = BOSSES.tyrant;
+    // Phases: announced once each, and phase 2 starts with a summons.
+    const frac = this.hp / this.max;
+    const phase = frac < TYRANT.phase3 ? 3 : frac < TYRANT.phase2 ? 2 : 1;
+    if (phase > this.phase) {
+      this.phase = phase;
+      this.host.broadcast({ t: "announce", text: phase === 2 ? "The Tyrant roars, and the storm answers!" : "The Tyrant is enraged!" });
+      this.nextAttack = Math.min(this.nextAttack, now + 600);
+      if (phase === 2) this.nextSummon = now;
+    }
+
+    // In the air: follow the arc; the landing is a marked strike (see leapAt).
+    if (this.leap) {
+      const k = Math.min(1, (now - this.leap.start) / (this.leap.end - this.leap.start));
+      const { from, to } = this.leap;
+      this.p = [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k + Math.sin(k * Math.PI) * 9, from[2] + (to[2] - from[2]) * k];
+      if (k >= 1) {
+        this.leap = null;
+        this.slam(now);
+        this.nextAttack = now + 900;
+      }
+      return;
+    }
+
+    let near = fighters[0];
+    for (const f of fighters) if (dist(f.p, this.p) < dist(near.p, this.p)) near = f;
+    this.ry = Math.atan2(-(near.p[0] - this.p[0]), -(near.p[2] - this.p[2]));
+    if (this.windupUntil) {
+      if (now >= this.windupUntil) {
+        this.windupUntil = 0;
+        this.windupAttack?.();
+        this.windupAttack = null;
+      }
+      return;
+    }
+
+    // Walk toward the nearest fighter, stopping at arm's length.
+    const grid = this.host.grid?.();
+    if (grid && dist(near.p, this.p) > 4) {
+      if (now >= this.replanAt || !this.path.length) {
+        this.path = grid.findPath([this.p[0], this.p[2]], [near.p[0], near.p[2]]) ?? [];
+        this.replanAt = now + 600;
+      }
+      const speed = def.speed * (phase === 3 ? 1.3 : 1);
+      this.p = followPath(grid, this.p, this.path, speed, dt, 3.5, def.height).p;
+    }
+
+    if (now < this.nextAttack) return;
+    this.nextAttack = now + [0, 2600, 2100, 1600][phase];
+    const far = fighters.reduce((a, b) => (dist(b.p, this.p) > dist(a.p, this.p) ? b : a));
+    const close = dist(near.p, this.p) < 7;
+
+    // Summons first when it's time (phase 2+, at most 4 wolves at once).
+    if (phase >= 2 && now >= this.nextSummon && (this.host.summoned?.() ?? 0) < 4) {
+      this.nextSummon = now + 20_000;
+      this.windup(700, () => {
+        this.host.summon?.("wolf", this.p, TYRANT.wolves);
+        this.host.broadcast({ t: "announce", text: "The Tyrant calls the storm wolves!" });
+      });
+      return;
+    }
+    const options: [number, () => void][] = [
+      [close ? 4 : 0.5, () => this.windup(900, () => this.slam(now + 900))],
+      [3, () => this.throwRocks(fighters, now, phase === 1 ? 3 : 5)],
+      [dist(far.p, this.p) > 10 ? 2.5 : 0.5, () => this.windup(500, () => this.leapAt(far.p, now + 500))],
+    ];
+    if (phase >= 2) {
+      options.push([2, () => this.lightning(fighters, now, phase === 3 ? 2 : 1)]);
+      options.push([2, () => this.windup(700, () => this.orbRing(now + 700, phase === 3 ? 2 : 1))]);
+    }
+    if (phase === 3) options.push([2.5, () => this.windup(800, () => this.meteors(fighters, now + 800))]);
+    let roll = Math.random() * options.reduce((s, [w]) => s + w, 0);
+    for (const [w, attack] of options) {
+      roll -= w;
+      if (roll <= 0) {
+        attack();
+        break;
+      }
+    }
+  }
+
+  // Jump to a spot: the landing circle is marked first, then it comes down there.
+  private leapAt(target: Vec3, now: number): void {
+    const grid = this.host.grid?.();
+    // Land 3 m short of them (the circle still covers them), not on top of them.
+    const away = Math.hypot(target[0] - this.p[0], target[2] - this.p[2]) || 1;
+    const short = Math.min(3, away);
+    let to: Vec3 = [target[0] - ((target[0] - this.p[0]) / away) * short, target[1], target[2] - ((target[2] - this.p[2]) / away) * short];
+    if (grid && !grid.isWalkable(to[0], to[2])) to = [target[0], target[1], target[2]];
+    if (grid) {
+      const floor = grid.floorAt(to[0], to[2]);
+      // Land on the floor, not on a platform (it walks back down otherwise).
+      if (!grid.isWalkable(to[0], to[2]) || Number.isNaN(floor)) return this.slam(now);
+      to = [to[0], floor + BOSSES.tyrant.height, to[2]];
+    }
+    const end = now + TYRANT.leapDelayMs;
+    this.leap = { from: [...this.p], to, start: now, end };
+    this.path = [];
+    this.strike([to[0], to[1] - BOSSES.tyrant.height, to[2]], end, TYRANT.leapRadius, "leap");
+  }
+
+  // Storm orbs in every direction (two staggered rings when enraged).
+  private orbRing(now: number, rings: number): void {
+    for (let r = 0; r < rings; r++) {
+      const n = 14;
+      for (let i = 0; i < n; i++) {
+        const a = ((i + r * 0.5) / n) * Math.PI * 2;
+        const o: Vec3 = [this.p[0], this.p[1] - 1.2, this.p[2]];
+        const shot: BossShot = { id: nextShotId++, o, d: [Math.sin(a), 0, Math.cos(a)], speed: 8 - r * 2, radius: 0.5, kind: "orb", time: now };
+        this.shots.set(shot.id, shot);
+        this.host.broadcast({ t: "bossShot", shot });
+      }
+    }
+  }
+
+  // Meteors: one on each fighter, and more scattered around the arena.
+  private meteors(fighters: BossFighter[], now: number): void {
+    const grid = this.host.grid?.();
+    const spots: Vec3[] = fighters.map((f) => [f.p[0], f.p[1] - 0.9, f.p[2]]);
+    for (let i = 0; i < 8 && grid; i++) {
+      const [x, z] = grid.randomSpot();
+      spots.push([x, grid.floorAt(x, z), z]);
+    }
+    spots.forEach((p, i) => this.strike(p, now + TYRANT.meteorDelayMs + i * 120, TYRANT.meteorRadius, "meteor"));
+    this.host.broadcast({ t: "announce", text: "Meteors! Get out of the circles!" });
+  }
+
+  private strike(p: Vec3, at: number, r: number, kind: StrikeKind): void {
+    this.strikes.push({ p, at, r, kind });
+    this.host.broadcast(kind === "lightning" ? { t: "bossStrike", p, at } : { t: "bossStrike", p, at, r, kind });
+  }
+
   // ---- Attacks ----
 
   private shoot(o: Vec3, target: Vec3, speed: number, radius: number, kind: BossShot["kind"], now: number, spread = 0): void {
@@ -232,7 +410,7 @@ export class Boss {
   }
 
   private slam(now: number): void {
-    const o: Vec3 = [this.p[0], this.arena.min[1], this.p[2]];
+    const o: Vec3 = [this.p[0], this.kind === "tyrant" ? this.p[1] - BOSSES.tyrant.height : this.arena.min[1], this.p[2]];
     this.waves.push({ o, start: now, hit: new Set() });
     this.host.broadcast({ t: "bossWave", o, time: now });
   }
@@ -241,9 +419,9 @@ export class Boss {
     for (const f of fighters) {
       for (let i = 0; i < perFighter; i++) {
         const jitter = i === 0 ? 0 : 3;
-        const p: Vec3 = [f.p[0] + (Math.random() - 0.5) * jitter, this.arena.min[1], f.p[2] + (Math.random() - 0.5) * jitter];
-        this.strikes.push({ p, at: now + STRIKE_DELAY_MS });
-        this.host.broadcast({ t: "bossStrike", p, at: now + STRIKE_DELAY_MS });
+        const y = this.kind === "tyrant" ? f.p[1] - 0.9 : this.arena.min[1];
+        const p: Vec3 = [f.p[0] + (Math.random() - 0.5) * jitter, y, f.p[2] + (Math.random() - 0.5) * jitter];
+        this.strike(p, now + STRIKE_DELAY_MS, STRIKE_RADIUS, "lightning");
       }
     }
   }
@@ -258,7 +436,7 @@ export class Boss {
       const wall = segmentHitsLevel(prev, p, this.host.boxes(), 0.05);
       let hit: BossFighter | null = null;
       for (const f of fighters) if (segmentHitsPlayer(prev, p, f.p, s.radius) !== null) hit = f;
-      if (hit) this.host.hurt(hit.id, s.kind === "rock" ? "a boulder" : "a storm orb");
+      if (hit) this.host.hurt(hit.id, s.kind === "rock" ? "a boulder" : "a storm orb", s.kind === "rock" ? TYRANT.damage.rock : TYRANT.damage.orb);
       if (hit || wall !== null || t * s.speed > SHOT_RANGE) {
         this.shots.delete(s.id);
         this.host.broadcast({ t: "bossShotEnd", id: s.id, p });
@@ -276,7 +454,7 @@ export class Boss {
         const feet = f.p[1] - 0.9 - w.o[1];
         if (Math.abs(flat - r) < WAVE_WIDTH && feet < WAVE_HEIGHT) {
           w.hit.add(f.id);
-          this.host.hurt(f.id, "the shockwave");
+          this.host.hurt(f.id, "the shockwave", TYRANT.damage.slam);
         }
       }
       return true;
@@ -286,7 +464,12 @@ export class Boss {
   private stepStrikes(fighters: BossFighter[], now: number): void {
     this.strikes = this.strikes.filter((s) => {
       if (now < s.at) return true;
-      for (const f of fighters) if (Math.hypot(f.p[0] - s.p[0], f.p[2] - s.p[2]) < STRIKE_RADIUS) this.host.hurt(f.id, "lightning");
+      const by = s.kind === "leap" ? `the ${BOSSES[this.kind].name.replace(/^The /, "")}'s landing` : s.kind;
+      for (const f of fighters) {
+        // A fighter on something high (a platform) is safe from the Tyrant's landing.
+        if (s.kind === "leap" && f.p[1] - s.p[1] > 2.5) continue;
+        if (Math.hypot(f.p[0] - s.p[0], f.p[2] - s.p[2]) < s.r) this.host.hurt(f.id, by, TYRANT.damage[s.kind]);
+      }
       return false;
     });
   }
@@ -304,7 +487,7 @@ export class Boss {
         const at = lerp(b.p, to, body);
         this.bolts.delete(b.id);
         this.host.broadcast({ t: "spellEnd", id: b.id, p: at, hit: -1 });
-        this.damage(PLAYER_BOLT_DAMAGE, now);
+        this.hit(PLAYER_BOLT_DAMAGE, now);
         continue;
       }
       if (wall !== null || t >= def.range / def.speed - 1e-6) {
@@ -317,10 +500,11 @@ export class Boss {
     }
   }
 
-  private damage(amount: number, now: number): void {
-    if (this.state !== "fight") return;
+  // Damage it (a trial's bolts, or anything in BossRoom). Returns true if that finished it.
+  hit(amount: number, now = Date.now()): boolean {
+    if (this.state !== "fight") return false;
     this.hp = Math.max(0, this.hp - amount);
-    if (this.hp > 0) return;
+    if (this.hp > 0) return false;
     this.state = "dead";
     this.respawnAt = now + RESPAWN_MS;
     this.shots.clear();
@@ -328,8 +512,10 @@ export class Boss {
     this.strikes = [];
     this.windupUntil = 0;
     this.host.broadcast(this.stateMsg());
+    this.leap = null;
     this.host.broadcast({ t: "announce", text: `${BOSSES[this.kind].name} has fallen!` });
     this.host.defeated(this.host.fighters().map((f) => f.id));
+    return true;
   }
 }
 

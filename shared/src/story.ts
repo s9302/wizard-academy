@@ -3,7 +3,7 @@
 // when you clear it for the first time; clearing it is what completes the
 // chapter. The hub's Chronicle board and lore tablets show the rest.
 
-export type ChapterId = 1 | 2 | 3 | 4 | 5 | 6;
+export type ChapterId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type Chapter = {
   id: ChapterId;
@@ -90,6 +90,19 @@ export const CHAPTERS: Chapter[] = [
     outro: [
       "Vale is sitting on the last stone, tired and grinning. \"You took your time,\" he says. Then, more quietly: \"Thank you.\"",
       "The storm will always come back, he tells you on the walk home. But now the academy has someone who knows the way through it.",
+    ],
+  },
+  {
+    id: 7,
+    trial: "trial7",
+    title: "Chapter VII: The Tyrant's Crown",
+    intro: [
+      "The storm came back sooner than Vale said it would, and this time it came back with a shape: a giant of thunder and stone, wearing the crown of the old ruins.",
+      "No more running from it. Choose how you fight, sword, bow or staff, and bring friends if you have them.",
+    ],
+    outro: [
+      "The Tyrant breaks apart into rain, and the crown rolls to a stop at your feet.",
+      "Vale picks it up, turns it over, and hands it back to you. \"I think,\" he says, \"it was always meant for whoever was brave enough to take it off him.\"",
     ],
   },
 ];

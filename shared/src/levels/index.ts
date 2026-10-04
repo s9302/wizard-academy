@@ -11,6 +11,7 @@ import { trial3 } from "./trial3.ts";
 import { trial4 } from "./trial4.ts";
 import { trial5 } from "./trial5.ts";
 import { trial6 } from "./trial6.ts";
+import { trial7 } from "./trial7.ts";
 import type { Level } from "./types.ts";
 
 export const LEVELS: Record<string, Level> = {
@@ -23,6 +24,7 @@ export const LEVELS: Record<string, Level> = {
   [trial4.id]: trial4,
   [trial5.id]: trial5,
   [trial6.id]: trial6,
+  [trial7.id]: trial7,
   [courtyard.id]: courtyard,
   [playground.id]: playground,
 };
