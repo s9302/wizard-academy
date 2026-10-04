@@ -416,7 +416,7 @@ text in `shared/src/abilityInfo.ts`.
 |---|---|
 | **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
 | **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no Wizard/Rogue/Cleric abilities), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
-| **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (leap up, 9 s of slow falling and 35% more speed, no fall damage), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
+| **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (a high leap, then 9 s of very slow falling and 80% more speed, no fall damage), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
 
 Being thrown (Shockwave, Tornado, Chain Pull, the pit's drag) is a "knock"
 message to that player's own client, which moves them; the server grants

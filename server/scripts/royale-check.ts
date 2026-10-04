@@ -147,7 +147,7 @@ check("casting during the countdown is ignored", !a.since(mark).some((m) => m.t 
 check("the round starts", await waitFor(() => a.state === "playing", 10_000));
 await waitFor(() => a.alive.length === 3 && a.pickups.length > 0, 2000);
 check("everyone starts alive at 100 health", a.alive.length === 3 && [a, b, c].every((w) => a.hp.get(w.id) === 100));
-check("pickups appear at every pickup spot", a.pickups.length === arena.pickupSpots!.length, `${a.pickups.length}`);
+check("pickups appear at every pickup spot (ROYALE_PICKUPS=all)", a.pickups.length === arena.pickupSpots!.length, `${a.pickups.length}`);
 check("the storm starts", !!a.zone && a.zone.from[2] > 40);
 
 // ---- Spells hit the ground; cooldowns hold ----

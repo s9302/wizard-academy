@@ -62,6 +62,7 @@ import {
   MAX_SHIELD,
   PICKUP_REACH,
   PICKUP_RESPAWN_MS,
+  PICKUP_START_FRACTION,
   PICKUPS,
   POTION_HEAL,
   type PickupKind,
@@ -157,6 +158,8 @@ const FIXED_ARENA = process.env.ROYALE_ARENA;
 // Testing only: ROYALE_TEAMS=1 makes every round a team round.
 const FORCE_TEAMS = process.env.ROYALE_TEAMS === "1";
 const TEAM_NAMES = ["Red", "Blue"];
+// Testing only: ROYALE_PICKUPS=all fills every pickup spot at the start.
+const START_FRACTION = process.env.ROYALE_PICKUPS === "all" ? 1 : PICKUP_START_FRACTION;
 // Testing only: ROYALE_STORM=off for exact damage checks.
 const NO_STORM = process.env.ROYALE_STORM === "off";
 
@@ -265,7 +268,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.broadcast({ t: "alive", ids: [...this.alive] });
 
     this.respawnAt.clear();
-    (this.level.pickupSpots ?? []).forEach((_, spot) => this.spawnPickup(spot));
+    // Only some spots start filled; the rest fill in over the round.
+    (this.level.pickupSpots ?? []).forEach((_, spot) => {
+      if (Math.random() < START_FRACTION) this.spawnPickup(spot);
+      else this.respawnAt.set(spot, now + PICKUP_RESPAWN_MS * SCALE * (0.5 + Math.random() * 0.5));
+    });
     this.broadcastPickups();
 
     this.stage = 0;

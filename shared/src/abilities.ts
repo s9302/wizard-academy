@@ -64,7 +64,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   chain: { name: "Chain Pull", cooldownMs: 11_000, description: "Hook the first enemy in your aim (20 m) and drag them to you. 12 damage." },
   // Rogue, level 11+
   decoys: { name: "Mirror Images", cooldownMs: 16_000, durationMs: 7_000, description: "Two copies of you run off in different directions for 7 s. One hit breaks a copy." },
-  glide: { name: "Glide", cooldownMs: 14_000, durationMs: 9_000, description: "Leap into the air and glide for 9 s: you fall slowly and move faster." },
+  glide: { name: "Glide", cooldownMs: 14_000, durationMs: 9_000, description: "Leap high into the air and glide for 9 s: you fall very slowly and move much faster, so you can cross a whole arena." },
   // Cleric
   heal: { name: "Healing Light", cooldownMs: 12_000, description: "Heal 35, and every teammate within 9 m too (team rounds and boss fights)." },
   smite: { name: "Divine Smite", cooldownMs: 11_000, description: "Mark a spot (up to 25 m): a pillar of holy light lands there 0.7 s later. 40 damage within 3 m, and slowed." },
@@ -124,7 +124,7 @@ export const NULLZONE_RADIUS = 7;
 export const GIANT = { scale: 2, damage: 1.6, reach: 1.5, taken: 0.65 };
 export const CHAIN = { range: 20, damage: 12, speed: 26 };
 export const DECOYS = { count: 2, speed: 6.5, spread: 0.7 };
-export const GLIDE = { lift: 11, fall: 2.2, speed: 1.35 };
+export const GLIDE = { lift: 14, fall: 1.3, speed: 1.8 };
 export const SMOKE_RADIUS = 5;
 
 // Cleric numbers.

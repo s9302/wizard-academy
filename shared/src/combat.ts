@@ -130,7 +130,10 @@ export const MAX_FIREBALL_CHARGES = 6;
 export const POTION_HEAL = 40;
 export const WARD_SHIELD = 50;
 export const PICKUP_REACH = 1.4; // meters, flat distance
-export const PICKUP_RESPAWN_MS = 25_000;
+// Pickups are scarce: a round starts with only some spots filled
+// (PICKUP_START_FRACTION), and a taken one takes a while to come back.
+export const PICKUP_RESPAWN_MS = 50_000;
+export const PICKUP_START_FRACTION = 0.5;
 
 // ---- The storm (battle royale zone) ----
 //
