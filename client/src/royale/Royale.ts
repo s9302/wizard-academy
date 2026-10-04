@@ -116,7 +116,9 @@ export class Royale {
       onMonsters: (action) => hooks.send({ t: "monsters", action }),
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
-      onModeVote: (mode) => hooks.send({ t: "modeVote", mode }),
+      onMode: (mode) => hooks.send({ t: "mode", mode }),
+      onPickTeam: (team) => hooks.send({ t: "pickTeam", team }),
+      onBotSet: (id, change) => hooks.send({ t: "botSet", id, ...change }),
       onReady: () => hooks.send({ t: "ready" }),
       onAbilities: (e, r) => {
         this.chosen = [e, r];
@@ -271,7 +273,10 @@ export class Royale {
         this.applyLoadout();
         return true;
       case "arenaVote":
-        this.hud.vote(msg.options, msg.votes, msg.modes);
+        this.hud.vote(msg.options, msg.votes);
+        return true;
+      case "lineup":
+        this.hud.lineup(msg.players, msg.mode, msg.next, me);
         return true;
       case "readyState":
         this.hud.readyState(msg.ids.length, msg.needed, msg.ids.includes(me), msg.on);

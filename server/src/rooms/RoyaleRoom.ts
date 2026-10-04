@@ -206,7 +206,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Teams or free-for-all: voted between rounds (ROYALE_TEAMS=1 pins teams, tests only).
   protected teamsMode = FORCE_TEAMS;
   private teams = new Map<number, 0 | 1>();
-  private modeVotes = new Map<number, RoyaleMode>();
+  private nextTeams = FORCE_TEAMS; // the mode for the next round (the toggle)
+  private teamPick = new Map<number, 0 | 1>(); // the team each person (or bot) wants
   protected voting = true;
 
   // fixedArena: the ROYALE_ARENA test setting (BossRoom passes null: its level is its own).
@@ -246,6 +247,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.projectiles.clear();
     this.teams.clear();
     this.broadcastTeams();
+    this.broadcastLineup();
     this.alive.clear();
     this.broadcast({ t: "alive", ids: [] });
     this.setZone(null);
@@ -390,13 +392,28 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // Split everyone into two teams: people first (so they're spread evenly),
   // then bots.
+  // Teams for a round: everyone who picked one (people and bots) gets it;
+  // the rest fill in the smaller team (people first, then bots).
   private makeTeams(): void {
     this.teams.clear();
-    const shuffle = <T>(list: T[]) => list.sort(() => Math.random() - 0.5);
-    const humans = shuffle([...this.players.values()].filter((p) => !p.conn.isBot));
-    const bots = shuffle([...this.players.values()].filter((p) => p.conn.isBot));
-    [...humans, ...bots].forEach((p, i) => this.teams.set(p.conn.id, (i % 2) as 0 | 1));
+    const size = [0, 0];
+    const rest: Player[] = [];
+    for (const p of this.players.values()) {
+      const pick = this.teamPick.get(p.conn.id);
+      if (pick === undefined) rest.push(p);
+      else {
+        this.teams.set(p.conn.id, pick);
+        size[pick] += 1;
+      }
+    }
+    rest.sort((a, b) => Number(a.conn.isBot) - Number(b.conn.isBot) || Math.random() - 0.5);
+    for (const p of rest) {
+      const team = (size[0] <= size[1] ? 0 : 1) as 0 | 1;
+      this.teams.set(p.conn.id, team);
+      size[team] += 1;
+    }
     this.broadcastTeams();
+    this.broadcastLineup();
   }
 
   private broadcastTeams(): void {
@@ -439,16 +456,49 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const votes: Record<string, number> = {};
     for (const id of this.voteOptions) votes[id] = 0;
     for (const v of this.votes.values()) votes[v] = (votes[v] ?? 0) + 1;
-    const modes: Record<RoyaleMode, number> = { ffa: 0, teams: 0 };
-    for (const m of this.modeVotes.values()) modes[m] += 1;
-    this.broadcast({ t: "arenaVote", options: this.voteOptions, votes, modes });
+    this.broadcast({ t: "arenaVote", options: this.voteOptions, votes });
   }
 
-  private voteMode(player: Player, mode: RoyaleMode): void {
-    if (player.conn.isBot || !this.voting || !this.voteOptions.length) return;
-    if (this.state !== "waiting" && this.state !== "ended") return;
-    this.modeVotes.set(player.conn.id, mode);
-    this.broadcastVote();
+  // ---- Mode, teams and bots (the Esc panel) ----
+
+  // Anyone can switch the next round between free-for-all and teams.
+  private setMode(player: Player, mode: RoyaleMode): void {
+    if (player.conn.isBot || !this.voting || FORCE_TEAMS) return;
+    const teams = mode === "teams";
+    if (teams === this.nextTeams) return;
+    this.nextTeams = teams;
+    const when = this.state === "playing" || this.state === "countdown" ? "Next round" : "This round";
+    this.broadcast({ t: "announce", text: `${player.conn.name}: ${when} is ${teams ? "Teams" : "Free-for-all"}.` });
+    this.broadcastLineup();
+  }
+
+  // Your own team (null: either, filled in to balance).
+  private pickTeam(player: Player, team: 0 | 1 | null): void {
+    if (player.conn.isBot) return;
+    if (team === null) this.teamPick.delete(player.conn.id);
+    else this.teamPick.set(player.conn.id, team);
+    this.broadcastLineup();
+  }
+
+  // A bot's class (from its next round, if it's mid-round) and team.
+  private setBot(by: Player, msg: { id: number; cls?: ClassId; team?: 0 | 1 }): void {
+    const target = this.players.get(msg.id);
+    const bot = this.bots.get(msg.id);
+    if (by.conn.isBot || !target || !bot) return;
+    if (msg.team !== undefined) this.teamPick.set(msg.id, msg.team);
+    if (msg.cls && msg.cls !== this.classOf(target)) this.setClass(target, msg.cls); // the bot plays it from its next reset
+    this.broadcastLineup();
+  }
+
+  protected broadcastLineup(): void {
+    const players = [...this.players.values()].map((p) => ({
+      id: p.conn.id,
+      name: p.conn.name,
+      bot: p.conn.isBot,
+      cls: this.classOf(p),
+      team: this.teams.get(p.conn.id) ?? this.teamPick.get(p.conn.id) ?? null,
+    }));
+    this.broadcast({ t: "lineup", players, mode: this.teamsMode ? "teams" : "ffa", next: this.nextTeams ? "teams" : "ffa" });
   }
 
   private vote(player: Player, arena: string): void {
@@ -461,15 +511,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // The countdown is about to start: count the votes (most wins; ties and
   // no votes at all are settled at random among the leaders).
   protected override beforeCountdown(): void {
-    // The mode: teams only if more people want it than not (ties: free-for-all).
-    if (this.voting && !FORCE_TEAMS) {
-      let teams = 0;
-      for (const m of this.modeVotes.values()) teams += m === "teams" ? 1 : -1;
-      const next = teams > 0;
-      if (next !== this.teamsMode) this.broadcast({ t: "announce", text: next ? "Next round: Teams!" : "Next round: Free-for-all!" });
-      this.teamsMode = next;
-      this.modeVotes.clear();
-    }
+    // The mode the toggle says.
+    if (this.voting) this.teamsMode = this.nextTeams;
     if (!this.voteOptions.length) return;
     const tally = new Map(this.voteOptions.map((id) => [id, 0]));
     for (const v of this.votes.values()) tally.set(v, (tally.get(v) ?? 0) + 1);
@@ -525,6 +568,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       conn.send({ t: "health", id, hp: f.hp, max: f.maxHp, shield: f.shield });
       conn.send({ t: "equip", id, cls: f.cls, hand: f.hand });
     }
+    this.broadcastLineup();
   }
 
   protected override onLeftRound(player: Player): void {
@@ -536,7 +580,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.falls.delete(id);
     this.padGrace.delete(id);
     this.teams.delete(id);
-    this.modeVotes.delete(id);
+    this.teamPick.delete(id);
     this.botPush.delete(id);
     if (this.votes.delete(id)) this.broadcastVote();
     // The last person left: the monsters go too.
@@ -545,6 +589,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       this.broadcast({ t: "alive", ids: [...this.alive] });
       if (this.state === "playing") this.announceLeft(`${player.conn.name} left the arena.`);
     }
+    this.broadcastLineup();
   }
 
   private classOf(player: Player): ClassId {
@@ -581,6 +626,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     };
     const id = player.conn.id;
     this.fighters.set(id, f);
+    const bot = this.bots.get(id);
+    if (bot) bot.cls = cls; // a bot plays the class it now has
     if (tell) {
       this.broadcast({ t: "health", id, hp: f.hp, max: maxHp, shield: f.shield });
       this.broadcast({ t: "equip", id, cls, hand: f.hand });
@@ -643,7 +690,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     else if (msg.t === "hand") this.setHand(player, msg.hand);
     else if (msg.t === "class") this.setClass(player, msg.cls);
     else if (msg.t === "vote") this.vote(player, msg.arena);
-    else if (msg.t === "modeVote") this.voteMode(player, msg.mode);
+    else if (msg.t === "mode") this.setMode(player, msg.mode);
+    else if (msg.t === "pickTeam") this.pickTeam(player, msg.team);
+    else if (msg.t === "botSet") this.setBot(player, msg);
     else if (msg.t === "ability") this.ability(player, msg.slot, msg.d);
     else if (msg.t === "abilities") this.setAbilities(player, msg.cls, msg.e, msg.r);
     else if (msg.t === "monsters" && !player.conn.isBot) {
@@ -669,7 +718,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     }
     const fighting = this.state === "playing" && this.alive.has(id);
     if (!fighting) this.resetFighter(player);
-    player.conn.send({ t: "announce", text: fighting ? `You'll be a ${CLASSES[cls].name} next round.` : `You're a ${CLASSES[cls].name}.` });
+    if (!player.conn.isBot) player.conn.send({ t: "announce", text: fighting ? `You'll be a ${CLASSES[cls].name} next round.` : `You're a ${CLASSES[cls].name}.` });
+    this.broadcastLineup();
   }
 
   setHand(player: Player, hand: Hand): void {

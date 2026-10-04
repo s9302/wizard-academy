@@ -53,9 +53,13 @@ export type ClassMsg = { t: "class"; cls: ClassId };
 export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3 };
 // Choose a class's E and R abilities (level 11+ gives more to choose from).
 export type AbilitiesMsg = { t: "abilities"; cls: ClassId; e: AbilityId; r: AbilityId };
-// Vote for the next round's mode (battle royale, between rounds).
+// The battle royale's mode, set for the next round by anyone (a toggle).
 export type RoyaleMode = "ffa" | "teams";
-export type ModeVoteMsg = { t: "modeVote"; mode: RoyaleMode };
+export type ModeMsg = { t: "mode"; mode: RoyaleMode };
+// Team rounds: the team you want (0 red, 1 blue; null: either).
+export type PickTeamMsg = { t: "pickTeam"; team: 0 | 1 | null };
+// A bot's class, and its team in team rounds (anyone can set them).
+export type BotSetMsg = { t: "botSet"; id: number; cls?: ClassId; team?: 0 | 1 };
 // Vote to start the next round (toggles; battle royale and boss fight).
 export type ReadyMsg = { t: "ready" };
 // Vote for the next arena (a level id from the options offered).
@@ -63,7 +67,7 @@ export type VoteMsg = { t: "vote"; arena: string };
 // Battle royale: add or remove a monster.
 export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeVoteMsg | ReadyMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg;
 
 // ---- Server -> Client ----
 
@@ -158,6 +162,10 @@ export type DecoysMsg = { t: "decoys"; list: DecoyState[] };
 export type AbilitySetMsg = { t: "abilitySet"; e: AbilityId; r: AbilityId };
 // A team round: who's on which team (0 red, 1 blue); null when it isn't one.
 export type TeamsMsg = { t: "teams"; teams: [number[], number[]] | null };
+// Everyone in the arena with their class and team choice, and the mode
+// (now, and for the next round). Sent whenever any of it changes.
+export type LineupEntry = { id: number; name: string; bot: boolean; cls: ClassId; team: 0 | 1 | null };
+export type LineupMsg = { t: "lineup"; players: LineupEntry[]; mode: RoyaleMode; next: RoyaleMode };
 // Who has voted to start the next round, and how many votes it needs.
 // on: false when the vote is switched off (tests).
 export type ReadyStateMsg = { t: "readyState"; ids: number[]; needed: number; on: boolean };
@@ -241,6 +249,7 @@ export type ServerMsg =
   | AbilitySetMsg
   | TeamsMsg
   | ReadyStateMsg
+  | LineupMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg

@@ -10,7 +10,7 @@ import { attachTooltip, hideTooltip } from "../ui/Tooltip.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
-import type { RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
+import type { LineupEntry, RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
 import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
 import type { Storm } from "./Storm.ts";
@@ -51,11 +51,14 @@ export class RoyaleHud {
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
   private boss: boolean;
-  private onModeVote: (mode: RoyaleMode) => void;
+  private actions: { onMode: (mode: RoyaleMode) => void; onPickTeam: (team: 0 | 1 | null) => void; onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void };
+  private match: HTMLElement; // left column: ready, mode, teams, arena vote, monsters
+  private modeBox: HTMLElement;
+  private teamBox: HTMLElement;
+  private botList: HTMLElement;
   private readyButton: HTMLButtonElement;
   // The ready vote: how many have voted, how many it needs, and me.
   private readyVotes = { count: 0, needed: 0, mine: false, on: false };
-  private myMode: RoyaleMode | null = null;
   // A team round: my team (0 red, 1 blue) and how many of each are standing.
   private team: 0 | 1 | null = null;
   private teamAlive: [number, number] = [0, 0];
@@ -99,7 +102,9 @@ export class RoyaleHud {
       onClass: (cls: ClassId) => void;
       onVote: (arena: string) => void;
       onAbilities: (e: AbilityId, r: AbilityId) => void;
-      onModeVote: (mode: RoyaleMode) => void;
+      onMode: (mode: RoyaleMode) => void;
+      onPickTeam: (team: 0 | 1 | null) => void;
+      onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void;
       onReady: () => void;
     },
     boss = false, // Trial VII: a boss fight, not a battle royale (other words; no monster buttons)
@@ -119,7 +124,7 @@ export class RoyaleHud {
     pausePanel.insertBefore(this.side, pausePanel.firstChild);
     this.picker = this.makePicker(actions.onClass);
     this.onAbilities = actions.onAbilities;
-    this.onModeVote = actions.onModeVote;
+    this.actions = actions;
     // Vote to start the next round (also Enter).
     this.readyButton = document.createElement("button");
     this.readyButton.type = "button";
@@ -138,8 +143,29 @@ export class RoyaleHud {
     this.votePanel.hidden = true;
     this.votePanel.onclick = (e) => e.stopPropagation();
     this.monsterControls = new BotControls(actions.onMonsters, "monster");
-    this.side.append(this.readyButton, this.picker, this.votePanel, document.getElementById("bot-controls")!, document.getElementById("monster-controls")!);
-    if (boss) document.getElementById("monster-controls")!.hidden = true;
+    // Two columns: on the right, you (class, abilities) and the bots; on the
+    // left, under the menu, the match (ready, mode, teams, next arena,
+    // monsters).
+    this.botList = document.createElement("div");
+    this.botList.id = "bot-list";
+    this.botList.onclick = (e) => e.stopPropagation();
+    const botsTitle = document.createElement("div");
+    botsTitle.className = "picker-title section-title";
+    botsTitle.textContent = "Bots";
+    this.side.append(this.picker, botsTitle, document.getElementById("bot-controls")!, this.botList);
+    this.match = document.createElement("div");
+    this.match.id = "arena-match";
+    this.match.onclick = (e) => e.stopPropagation();
+    this.modeBox = document.createElement("div");
+    this.modeBox.id = "mode-box";
+    this.teamBox = document.createElement("div");
+    this.teamBox.id = "team-box";
+    this.match.append(this.readyButton, this.modeBox, this.teamBox, this.votePanel, document.getElementById("monster-controls")!);
+    pausePanel.appendChild(this.match);
+    if (boss) {
+      document.getElementById("monster-controls")!.hidden = true;
+      this.modeBox.hidden = this.teamBox.hidden = true;
+    }
 
     document.body.classList.add("in-royale");
     this.crosshairEl = document.getElementById("crosshair")!;
@@ -317,9 +343,8 @@ export class RoyaleHud {
   }
 
   // The arena vote: options (level ids) and votes so far. Empty: closed.
-  vote(options: string[], votes: Record<string, number>, modes?: Record<RoyaleMode, number>): void {
+  vote(options: string[], votes: Record<string, number>): void {
     if (!options.includes(this.myVote ?? "")) this.myVote = null;
-    if (!options.length) this.myMode = null;
     this.votePanel.replaceChildren();
     this.voteCard.replaceChildren();
     this.votePanel.hidden = this.voteCard.hidden = options.length === 0;
@@ -356,36 +381,97 @@ export class RoyaleHud {
       line.textContent = `${size} \u00b7 ${label} \u2014 ${count}`;
       this.voteCard.appendChild(line);
     }
-    // And the mode: free-for-all or teams.
-    if (!modes || this.boss) return;
-    const modeTitle = document.createElement("div");
-    modeTitle.className = "picker-title";
-    modeTitle.textContent = "Vote: mode";
-    this.votePanel.appendChild(modeTitle);
+  }
+
+  // The lineup: the mode toggle, the two teams (with a Join button each),
+  // and the bots with their class and team.
+  lineup(players: LineupEntry[], mode: RoyaleMode, next: RoyaleMode, myId: number): void {
+    if (this.boss) return;
+    // Mode: a two-way switch for the next round.
+    this.modeBox.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "picker-title section-title";
+    title.textContent = next === mode ? "Mode" : `Mode (next round: ${next === "teams" ? "Teams" : "Free-for-all"})`;
     const row = document.createElement("div");
     row.className = "mode-row";
-    for (const [mode, label] of [
+    for (const [m, label] of [
       ["ffa", "Free-for-all"],
       ["teams", "Teams"],
     ] as [RoyaleMode, string][]) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = this.myMode === mode ? "on" : "";
-      const name = document.createElement("strong");
-      name.textContent = label;
-      const detail = document.createElement("span");
-      detail.textContent = `${modes[mode]} vote${modes[mode] === 1 ? "" : "s"}`;
-      b.append(name, detail);
-      b.onclick = () => {
-        this.myMode = mode;
-        this.onModeVote(mode);
-      };
+      b.className = next === m ? "on" : "";
+      b.textContent = label;
+      b.onclick = () => this.actions.onMode(m);
       row.appendChild(b);
     }
-    this.votePanel.appendChild(row);
-    const line = document.createElement("div");
-    line.textContent = `Mode \u2014 Free-for-all ${modes.ffa} \u00b7 Teams ${modes.teams}`;
-    this.voteCard.appendChild(line);
+    this.modeBox.append(title, row);
+    // Teams: who's on which side; Join to switch (Either to let it balance).
+    this.teamBox.replaceChildren();
+    this.teamBox.hidden = next !== "teams";
+    if (next === "teams") {
+      const mine = players.find((p) => p.id === myId)?.team ?? null;
+      const cols = document.createElement("div");
+      cols.className = "team-cols";
+      for (const team of [0, 1] as const) {
+        const col = document.createElement("div");
+        col.className = `team-col team-${team}`;
+        const head = document.createElement("strong");
+        head.textContent = team === 0 ? "Red" : "Blue";
+        col.appendChild(head);
+        for (const p of players.filter((x) => x.team === team)) {
+          const line = document.createElement("div");
+          line.className = p.id === myId ? "me" : "";
+          line.textContent = `${p.name}${p.bot ? "" : p.id === myId ? " (you)" : ""} \u00b7 ${CLASSES[p.cls].name}`;
+          col.appendChild(line);
+        }
+        const join = document.createElement("button");
+        join.type = "button";
+        join.textContent = mine === team ? "Your team" : `Join ${team === 0 ? "Red" : "Blue"}`;
+        join.disabled = mine === team;
+        join.onclick = () => this.actions.onPickTeam(team);
+        col.appendChild(join);
+        cols.appendChild(col);
+      }
+      const either = players.filter((p) => p.team === null);
+      this.teamBox.appendChild(cols);
+      if (either.length) {
+        const note = document.createElement("div");
+        note.className = "team-either";
+        note.textContent = `Either team (balanced at the start): ${either.map((p) => p.name).join(", ")}`;
+        this.teamBox.appendChild(note);
+      }
+    }
+    // Bots: a class for each, and a team in team rounds.
+    this.botList.replaceChildren();
+    for (const p of players.filter((x) => x.bot)) {
+      const row = document.createElement("div");
+      row.className = "bot-row";
+      const name = document.createElement("span");
+      name.textContent = p.name;
+      const cls = document.createElement("select");
+      for (const c of CLASS_IDS) {
+        const o = document.createElement("option");
+        o.value = c;
+        o.textContent = CLASSES[c].name;
+        o.selected = c === p.cls;
+        cls.appendChild(o);
+      }
+      cls.onchange = () => this.actions.onBotSet(p.id, { cls: cls.value as ClassId });
+      row.append(name, cls);
+      if (next === "teams") {
+        for (const team of [0, 1] as const) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = `team-dot team-${team}${p.team === team ? " on" : ""}`;
+          b.title = team === 0 ? "Red team" : "Blue team";
+          b.textContent = team === 0 ? "R" : "B";
+          b.onclick = () => this.actions.onBotSet(p.id, { team });
+          row.appendChild(b);
+        }
+      }
+      this.botList.appendChild(row);
+    }
   }
 
   // Who has voted to start the next round.
@@ -587,6 +673,7 @@ export class RoyaleHud {
     monsters.hidden = true;
     panel.appendChild(monsters);
     this.side.remove();
+    this.match.remove();
     window.clearTimeout(this.calloutTimer);
     window.clearTimeout(this.bannerTimer);
     window.clearTimeout(this.hitTimer);

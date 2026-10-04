@@ -84,7 +84,7 @@ export class RoyaleBot extends BotWalker {
   // Bots in a room take turns: Knight, Rogue, Wizard, Knight... and the
   // Wizards take turns with spells (Frost, Spark, Bolt). Six bots = two of
   // each class.
-  readonly cls: ClassId;
+  cls: ClassId; // can be changed from the Esc panel (RoyaleRoom.setBot)
   readonly primary: PrimarySpell;
   private target: number | null = null; // player id in sight
   private sightCheckAt = 0;
@@ -162,6 +162,8 @@ export class RoyaleBot extends BotWalker {
       action.ability = { slot: 0, d: [-fx, 0, -fz] };
     } else if (this.cls === "knight") {
       action.ability = { slot: 1, d: [fx, 0, fz] };
+    } else if (this.cls === "cleric") {
+      action.ability = { slot: 0, d: [fx, 0, fz] }; // Healing Light
     } else {
       return false;
     }
@@ -264,9 +266,9 @@ export class RoyaleBot extends BotWalker {
     // How close to fight: Knights get in sword reach; Rogues stay far;
     // Spark Volley only reaches 20 m.
     const [far, near] =
-      this.cls === "knight" ? [1.8, 0] : this.cls === "rogue" ? [28, 14] : this.primary === "spark" ? [13, 6] : [22, 9];
+      this.cls === "knight" || this.cls === "cleric" ? [1.8, 0] : this.cls === "rogue" ? [28, 14] : this.primary === "spark" ? [13, 6] : [22, 9];
     const forward = d > far ? Math.min(4, d) : d < near ? -3 : 0;
-    const side = this.cls === "knight" && d < 4 ? 1.2 : 4; // knights circle tight
+    const side = (this.cls === "knight" || this.cls === "cleric") && d < 4 ? 1.2 : 4; // melee classes circle tight
     const goal: Vec2 = [me.p[0] + fx * forward - fz * side * this.strafeSide, me.p[2] + fz * forward + fx * side * this.strafeSide];
     this.planTo(goal, now, 700);
   }

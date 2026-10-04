@@ -540,7 +540,31 @@ body.spectating #royale-bottom { opacity: 0.4; }
 #tooltip .tip-row strong { text-align: right; font-weight: 600; }
 #tooltip .tip-text { margin-top: 6px; opacity: 0.85; line-height: 1.35; }
 
-/* The ready vote's button, at the top of the arena column. */
+/* The match column (left) and the bot list (right). */
+#arena-match { text-align: left; margin-top: 14px; padding-top: 12px; border-top: 1px solid #3d3263; display: grid; gap: 10px; }
+#arena-match #arena-vote { margin-top: 0; }
+.section-title { margin: 4px 0 2px; }
+#arena-side .section-title { margin-top: 14px; padding-top: 12px; border-top: 1px solid #3d3263; }
+#mode-box .mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#mode-box .mode-row button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; }
+#team-box[hidden], #mode-box[hidden] { display: none; }
+.team-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.team-col { display: grid; gap: 3px; align-content: start; padding: 8px; border-radius: 8px; font-size: 12px; }
+.team-col strong { font-size: 14px; }
+.team-col .me { font-weight: 700; }
+.team-col button { margin-top: 4px; padding: 4px 6px; font-size: 12px; }
+.team-0 { background: rgba(255, 74, 74, 0.14); border: 1px solid rgba(255, 74, 74, 0.45); }
+.team-1 { background: rgba(74, 140, 255, 0.14); border: 1px solid rgba(74, 140, 255, 0.45); }
+.team-either { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+#bot-list { display: grid; gap: 4px; margin-top: 6px; }
+.bot-row { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.bot-row span { flex: 1; }
+.bot-row select { background: rgba(255, 255, 255, 0.08); color: var(--ink); border: 1px solid #5b4a8f; border-radius: 6px; padding: 2px 4px; }
+.bot-row select option { background: #241c3a; }
+.bot-row .team-dot { width: 26px; height: 24px; padding: 0; font-size: 12px; opacity: 0.45; }
+.bot-row .team-dot.on { opacity: 1; font-weight: 800; }
+
+/* The ready vote's button, at the top of the match column. */
 #ready-button { width: 100%; margin-bottom: 8px; background: #3d6b4a; color: #fff; font-weight: 700; }
 #ready-button.on { background: #2a4a34; box-shadow: 0 0 0 1px #7dffb0 inset; }
 #ready-button[hidden] { display: none; }
@@ -610,12 +634,14 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
 #pause-help { margin: 10px 0 0; line-height: 1.5; }
 #pause-help:empty { display: none; }
 
-/* The arena's pause panel holds a lot (class, vote, bots): two columns on
-   wide screens, and it scrolls instead of running off short ones. */
+/* The arena's pause panel: two even columns on wide screens. Left: the menu,
+   then the match (ready, mode, teams, next arena, monsters). Right: your
+   class and abilities, then the bots. It scrolls on short screens. */
 #overlay .panel { max-height: calc(100vh - 32px); overflow-y: auto; box-sizing: border-box; }
 @media (min-width: 860px) {
-  body.in-royale #overlay .panel { width: min(860px, calc(100vw - 32px)); }
-  #arena-side { float: right; width: 52%; margin-left: 28px; text-align: left; }
+  body.in-royale #overlay .panel { width: min(940px, calc(100vw - 32px)); }
+  #arena-side { float: right; width: 49%; margin-left: 24px; text-align: left; }
+  body.in-royale #overlay .panel > #arena-match { display: flow-root; }
   #arena-side > :first-child { margin-top: 0; padding-top: 0; border-top: none; }
   /* Blocks next to a float still stretch underneath it (and would swallow
      clicks on the class buttons); flow-root keeps them beside it. */

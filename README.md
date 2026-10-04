@@ -478,13 +478,15 @@ don't play Clerics.
   **Enter** between rounds, or the button at the top of the Esc panel's
   column. Bots don't count. `ready-check` tests it (the test server runs
   with `ROUND_READY=off` otherwise, so other checks start rounds on their own).
-- **Team rounds:** between rounds you vote for the next arena and for the
-  mode, **Free-for-all** or **Teams** (Teams needs more votes than
-  Free-for-all). A team round splits everyone into Red and Blue (people
-  spread evenly, then bots), shown as colored rings at their feet. You
+- **Teams or Free-for-all:** a switch in the Esc panel (anyone can flip
+  it; it applies from the next round). In Teams, each player picks Red or
+  Blue there (or leaves it to be balanced at the start), and each bot's team
+  is set in the bot list. Teams show as colored rings at players' feet. You
   can't hurt teammates (your spells pass through them), and the last team
-  standing wins: 50 XP each for the winners. `teams-check` tests it
-  (`ROYALE_TEAMS=1` pins team rounds, testing only).
+  standing wins: 50 XP each for the winners. `teams-check` and `ready-check`
+  test it (`ROYALE_TEAMS=1` pins team rounds, testing only).
+- **Bots' classes** are set per bot in the Esc panel's bot list (any class,
+  Cleric included: bot Clerics fight up close and heal when hurt).
 - **Bots** take turns: Knight, Rogue, Wizard (six bots = two of each).
   Knights charge in and raise the shield when hurt at range, Rogues keep
   their distance and pull daggers up close, Wizards cast and use the staff

@@ -70,9 +70,25 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "ready":
       return { t: "ready" };
-    case "modeVote":
+    case "mode":
       if (msg.mode !== "ffa" && msg.mode !== "teams") return null;
-      return { t: "modeVote", mode: msg.mode };
+      return { t: "mode", mode: msg.mode };
+    case "pickTeam":
+      if (msg.team !== 0 && msg.team !== 1 && msg.team !== null) return null;
+      return { t: "pickTeam", team: msg.team };
+    case "botSet": {
+      if (!Number.isSafeInteger(msg.id)) return null;
+      const out: { t: "botSet"; id: number; cls?: ClassId; team?: 0 | 1 } = { t: "botSet", id: msg.id as number };
+      if (msg.cls !== undefined) {
+        if (!CLASS_IDS.includes(msg.cls as ClassId)) return null;
+        out.cls = msg.cls as ClassId;
+      }
+      if (msg.team !== undefined) {
+        if (msg.team !== 0 && msg.team !== 1) return null;
+        out.team = msg.team;
+      }
+      return out;
+    }
     case "vote":
       if (typeof msg.arena !== "string" || !ROOM_PATTERN.test(msg.arena)) return null;
       return { t: "vote", arena: msg.arena };
