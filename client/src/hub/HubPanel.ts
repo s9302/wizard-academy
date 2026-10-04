@@ -6,6 +6,20 @@
 // saves them; the panel redraws when the server confirms.
 
 import { SPELLS } from "../../../shared/src/combat.ts";
+import {
+  FACE_NAMES,
+  FACES,
+  HAIR_COLOR_VALUES,
+  HAIR_COLORS,
+  HAIR_NAMES,
+  HAIRS,
+  LOCKED_OUTFITS,
+  OUTFIT_NAMES,
+  OUTFITS,
+  SKIN_COLORS,
+  SKINS,
+} from "../../../shared/src/appearance.ts";
+import { WardrobePreview } from "./WardrobePreview.ts";
 import type { Station } from "../../../shared/src/levels/types.ts";
 import { CHAPTERS, chaptersDone, TABLETS } from "../../../shared/src/story.ts";
 import {
@@ -23,6 +37,7 @@ import {
   UNLOCKS,
   unlocksFor,
   unlocksForChapter,
+  lookOf,
 } from "../../../shared/src/unlocks.ts";
 
 export type PanelProfile = { xp: number; bestTimes: Record<string, number>; loadout: Loadout; isAdmin: boolean };
@@ -46,13 +61,22 @@ export class HubPanel {
   private body: HTMLElement;
   private station: Station | null = null;
   private profile: PanelProfile;
-  private save: (loadout: Loadout) => void;
+  private sendLoadout: (loadout: Loadout) => void;
   private onClose: () => void;
+  private myId: () => number;
+  // Wardrobe: what you're trying on (saved shortly after you stop clicking,
+  // since the server takes one save every 400 ms), the preview, the tab.
+  private draft: Loadout | null = null;
+  private saveTimer: number | undefined;
+  private pendingSave = false;
+  private preview: WardrobePreview | null = null;
+  private tab = "outfit";
 
-  constructor(profile: PanelProfile, save: (loadout: Loadout) => void, onClose: () => void) {
+  constructor(profile: PanelProfile, save: (loadout: Loadout) => void, onClose: () => void, myId: () => number = () => 1) {
     this.profile = profile;
-    this.save = save;
+    this.sendLoadout = save;
     this.onClose = onClose;
+    this.myId = myId;
     this.root = document.getElementById("hub-panel")!;
     this.body = document.getElementById("hub-panel-body")!;
     document.getElementById("hub-panel-close")!.onclick = () => this.close(true);
@@ -65,25 +89,65 @@ export class HubPanel {
   open(station: Station): void {
     this.station = station;
     this.root.hidden = false;
+    this.root.classList.toggle("wide", station.kind === "wardrobe");
     this.render();
+  }
+
+  // The Wardrobe from anywhere in the hub (the pause panel's button).
+  openWardrobe(): void {
+    this.open({ id: "wardrobe", kind: "wardrobe", pos: [0, 0, 0], label: "Wardrobe" });
   }
 
   // relock: closed with the button (a click, so the mouse can be captured again).
   close(relock = false): void {
     if (!this.station) return;
+    this.flushSave();
     this.station = null;
     this.root.hidden = true;
+    this.preview?.dispose();
+    this.preview = null;
     if (relock) this.onClose();
+  }
+
+  private save(loadout: Loadout): void {
+    this.draft = loadout;
+    this.pendingSave = true;
+    window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => this.flushSave(), 450);
+    if (this.station?.kind === "wardrobe") {
+      this.preview?.setLook(lookOf(loadout));
+      this.render();
+    } else this.flushSave();
+  }
+
+  private flushSave(): void {
+    window.clearTimeout(this.saveTimer);
+    if (this.draft && this.pendingSave) this.sendLoadout(this.draft);
+    this.pendingSave = false;
   }
 
   // The server saved a new loadout (or XP changed): redraw.
   update(profile: PanelProfile): void {
     this.profile = profile;
+    // Nothing waiting to be sent: show what the server saved (it may have
+    // refused something locked).
+    if (!this.pendingSave) this.draft = null;
     if (this.station) this.render();
+  }
+
+  private get current(): Loadout {
+    return this.draft ?? this.profile.loadout;
   }
 
   private render(): void {
     const s = this.station!;
+    if (s.kind !== "wardrobe" && this.preview) {
+      this.preview.dispose();
+      this.preview = null;
+    }
+    // Keep the preview canvas across redraws (it's a WebGL context).
+    const keep = this.preview?.canvas;
+    keep?.remove();
     this.body.replaceChildren();
     if (s.kind === "spellbook") this.spellbook();
     else if (s.kind === "wardrobe") this.wardrobe();
@@ -150,17 +214,72 @@ export class HubPanel {
 
   private wardrobe(): void {
     const b = this.body;
-    const look = this.profile.loadout;
+    const look = this.current;
     el("h2", b, "Wardrobe");
-    el("h3", b, "Hat");
-    for (const hat of HATS as Hat[]) {
-      this.choice(b, HAT_NAMES[hat], "", `hat:${hat}`, look.hat === hat, () => this.save({ ...look, hat }));
+    const layout = el("div", b, "", "wardrobe");
+    const left = el("div", layout, "", "wardrobe-left");
+    if (!this.preview) this.preview = new WardrobePreview(this.myId(), lookOf(look));
+    left.appendChild(this.preview.canvas);
+    el("div", left, "Drag to turn", "panel-hint");
+    const right = el("div", layout, "", "wardrobe-right");
+    const tabs = el("div", right, "", "wardrobe-tabs");
+    const TABS: [string, string][] = [
+      ["outfit", "Outfit"],
+      ["robe", "Color"],
+      ["hat", "Hat"],
+      ["hair", "Hair"],
+      ["hairColor", "Hair color"],
+      ["skin", "Skin"],
+      ["face", "Face"],
+    ];
+    for (const [id, name] of TABS) {
+      const t = el("button", tabs, name, id === this.tab ? "tab on" : "tab");
+      t.type = "button";
+      t.onclick = () => {
+        this.tab = id;
+        this.render();
+      };
     }
-    el("h3", b, "Robe");
-    for (const robe of ROBES as Robe[]) {
-      const swatch = robe === "auto" ? "linear-gradient(90deg, #e86f6f, #6fe8a8, #6f8fe8)" : ROBE_COLORS[robe];
-      this.choice(b, ROBE_NAMES[robe], "", `robe:${robe}`, look.robe === robe, () => this.save({ ...look, robe }), swatch);
+    const list = el("div", right, "", "wardrobe-options");
+    // A chip: a choice, with a swatch, maybe locked.
+    const chip = (label: string, on: boolean, pick: () => void, swatch?: string, unlockId?: string) => {
+      const lock = unlockId ? this.lockText(unlockId) : null;
+      const button = el("button", list, "", `chip${on ? " on" : ""}${lock ? " locked" : ""}`);
+      button.type = "button";
+      if (swatch) el("span", button, "", "swatch").style.background = swatch;
+      el("span", button, label);
+      if (lock) {
+        el("small", button, lock);
+        button.disabled = true;
+      } else button.onclick = pick;
+    };
+    switch (this.tab) {
+      case "outfit":
+        for (const o of OUTFITS) chip(OUTFIT_NAMES[o], look.outfit === o, () => this.save({ ...look, outfit: o }), undefined, LOCKED_OUTFITS[o]);
+        break;
+      case "robe":
+        for (const robe of ROBES as Robe[]) {
+          const swatch = robe === "auto" ? "linear-gradient(90deg, #e86f6f, #6fe8a8, #6f8fe8)" : ROBE_COLORS[robe];
+          chip(ROBE_NAMES[robe], look.robe === robe, () => this.save({ ...look, robe }), swatch, `robe:${robe}`);
+        }
+        break;
+      case "hat":
+        for (const hat of HATS as Hat[]) chip(HAT_NAMES[hat], look.hat === hat, () => this.save({ ...look, hat }), undefined, `hat:${hat}`);
+        break;
+      case "hair":
+        for (const h of HAIRS) chip(HAIR_NAMES[h], look.hair === h, () => this.save({ ...look, hair: h }));
+        break;
+      case "hairColor":
+        for (const c of HAIR_COLORS) chip(c[0].toUpperCase() + c.slice(1), look.hairColor === c, () => this.save({ ...look, hairColor: c }), HAIR_COLOR_VALUES[c]);
+        break;
+      case "skin":
+        SKINS.forEach((sk, i) => chip(`Tone ${i + 1}`, look.skin === sk, () => this.save({ ...look, skin: sk }), SKIN_COLORS[sk]));
+        break;
+      case "face":
+        for (const f of FACES) chip(FACE_NAMES[f], look.face === f, () => this.save({ ...look, face: f }));
+        break;
     }
+    el("p", right, "Changes save automatically. Everyone sees your new look right away.", "panel-hint");
   }
 
   private chronicle(): void {

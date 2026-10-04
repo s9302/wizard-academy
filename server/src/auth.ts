@@ -109,6 +109,7 @@ export function pinPage(message = ""): string {
 <meta name="robots" content="noindex">
 <title>Wizard Academy</title>
 <link rel="stylesheet" href="/auth/pin.css">
+<link rel="icon" type="image/svg+xml" href="/auth/favicon.svg">
 </head>
 <body>
 <form method="post" action="/auth/pin">

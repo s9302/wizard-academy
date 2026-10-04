@@ -4,7 +4,8 @@
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { CLASS_IDS, type ClassId } from "../../shared/src/classes.ts";
-import { type Hat, HATS, type PrimarySpell, PRIMARY_SPELLS, type Robe, ROBES } from "../../shared/src/unlocks.ts";
+import { allUnlocks, type Hat, HATS, type PrimarySpell, PRIMARY_SPELLS, type Robe, ROBES } from "../../shared/src/unlocks.ts";
+import { sanitizeAppearance } from "../../shared/src/appearance.ts";
 
 // The world is small; anything outside this box is garbage or an attack.
 const MAX_COORD = 1000;
@@ -89,7 +90,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       // Shape only; whether each choice is unlocked is checked when saving.
       if (!PRIMARY_SPELLS.includes(msg.primary as PrimarySpell)) return null;
       if (!HATS.includes(msg.hat as Hat) || !ROBES.includes(msg.robe as Robe)) return null;
-      return { t: "loadout", primary: msg.primary as PrimarySpell, hat: msg.hat as Hat, robe: msg.robe as Robe };
+      // Appearance: unknown values fall back to defaults (older clients send none).
+      const look = sanitizeAppearance(msg, allUnlocks());
+      return { t: "loadout", primary: msg.primary as PrimarySpell, hat: msg.hat as Hat, robe: msg.robe as Robe, ...look };
     }
     case "tag":
       if (!Number.isSafeInteger(msg.target) || (msg.target as number) < 1) return null;

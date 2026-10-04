@@ -14,6 +14,17 @@ import { segmentHitsLevel } from "../../../shared/src/levels/geometry.ts";
 import type { Box } from "../../../shared/src/levels/types.ts";
 import type { Vec3 } from "../../../shared/src/protocol.ts";
 import type { ServerClock } from "../ServerClock.ts";
+import { particles } from "../graphics/Particles.ts";
+import { ultra } from "../quality.ts";
+
+// Trail and burst colors per spell: [core, edge].
+const SPARKS: Record<SpellId, [string, string]> = {
+  bolt: ["#e6d4ff", "#8f5bff"],
+  frost: ["#ffffff", "#7fd8ff"],
+  spark: ["#fffbd0", "#ffd23a"],
+  fireball: ["#ffe08a", "#ff3c0a"],
+  arrow: ["#fff3d6", "#c9a36b"],
+};
 
 const TRAIL = 4; // ghost copies behind each spell
 const BLAST_MS = 450;
@@ -71,7 +82,12 @@ export class Spells {
     this.scene = scene;
     this.clock = clock;
     this.boxes = boxes;
-    const glow = (color: string) => new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    // toneMapped off and (on Ultra) brighter than white, so bloom makes them shine.
+    const glow = (color: string) => {
+      const m = new THREE.MeshBasicMaterial({ color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+      if (ultra()) m.color.multiplyScalar(2.5);
+      return m;
+    };
     this.materials = {
       arrow: glow(SPELLS.arrow.color),
       bolt: glow(SPELLS.bolt.color),
@@ -125,6 +141,10 @@ export class Spells {
     if (flying) this.remove(flying);
     this.byId.delete(id);
     const def = SPELLS[spell];
+    const [core, edge] = SPARKS[spell];
+    const big = spell === "fireball";
+    particles.emit({ at: p, count: big ? 70 : spell === "arrow" ? 6 : 22, color: core, color2: edge, speed: big ? 9 : 4.5, life: big ? 0.9 : 0.45, size: big ? 0.5 : 0.18, gravity: big ? -1 : 3, drag: 2.5 });
+    if (big) particles.emit({ at: p, count: 30, color: "#5a4a48", color2: "#2a2224", speed: 2.5, up: 1.5, life: 1.6, size: 0.9, drag: 1.2 });
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), this.materials[spell].clone());
     mesh.position.set(...p);
     this.scene.add(mesh);
@@ -133,6 +153,7 @@ export class Spells {
 
   // A puff of smoke (a Shadow Step's start and end).
   puff(p: Vec3, color = "#2b2140"): void {
+    particles.emit({ at: p, count: 26, color: "#6a4fa0", color2: "#20142e", speed: 2.4, up: 0.8, spread: 0.6, life: 0.8, size: 0.45, drag: 2 });
     const material = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false });
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), material);
     mesh.position.set(...p);
@@ -172,8 +193,22 @@ export class Spells {
     this.boxes = boxes;
   }
 
+  // Glowing sparks shed behind each spell in flight.
+  private trail(flying: Flying): void {
+    const head = flying.group.children[0];
+    if (!head?.visible) return;
+    const [core, edge] = SPARKS[flying.spell];
+    if (flying.spell === "arrow") {
+      if (Math.random() < 0.3) particles.emit({ at: head.position, count: 1, color: core, speed: 0.1, life: 0.3, size: 0.06 });
+      return;
+    }
+    particles.emit({ at: head.position, count: flying.spell === "fireball" ? 4 : 2, color: core, color2: edge, speed: 0.6, spread: 0.15, life: 0.35, size: flying.spell === "fireball" ? 0.35 : 0.16, gravity: flying.spell === "frost" ? 2 : 0, drag: 2 });
+  }
+
   update(): void {
     const now = this.clock.now();
+    for (const f of this.byId.values()) this.trail(f);
+    for (const f of this.mine.values()) this.trail(f);
     for (const [id, flying] of this.byId) {
       if (!this.place(flying, now)) {
         this.remove(flying);

@@ -1,15 +1,19 @@
 // Graphics quality, chosen in the pause panel and remembered in this browser.
-// "high": sharper shadows, clouds, grass and pebbles. "low": for slower
+// "ultra": everything in "high", plus post-processing (bloom, ambient
+// occlusion, filmic color), soft 4K shadows, torchlight and more particles.
+// "high": surface detail, clouds, grass and pebbles. "low": for slower
 // laptops. The game plays the same either way.
 
-export type Quality = "high" | "low";
+export type Quality = "ultra" | "high" | "low";
+export const QUALITIES: Quality[] = ["low", "high", "ultra"];
+export const QUALITY_NAMES: Record<Quality, string> = { low: "Low", high: "High", ultra: "Ultra" };
 
 const KEY = "wa.quality";
 
 export function getQuality(): Quality {
   try {
     const saved = localStorage.getItem(KEY);
-    if (saved === "high" || saved === "low") return saved;
+    if (saved === "high" || saved === "low" || saved === "ultra") return saved;
   } catch {
     // storage blocked: use the default
   }
@@ -30,3 +34,7 @@ let current: Quality | null = null;
 export function quality(): Quality {
   return (current ??= getQuality());
 }
+
+// At least "high" (detail, decor, clouds).
+export const fancy = (): boolean => quality() !== "low";
+export const ultra = (): boolean => quality() === "ultra";

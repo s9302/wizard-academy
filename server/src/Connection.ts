@@ -4,7 +4,8 @@
 
 import { WebSocket } from "ws";
 import type { ServerMsg } from "../../shared/src/protocol.ts";
-import type { Look } from "../../shared/src/unlocks.ts";
+import { DEFAULT_LOOK, type Look, lookOf } from "../../shared/src/unlocks.ts";
+import { randomAppearance } from "../../shared/src/appearance.ts";
 import type { Account } from "./accounts.ts";
 import { TokenBucket } from "./limits.ts";
 import type { Room } from "./rooms/Room.ts";
@@ -54,7 +55,7 @@ export class Connection implements Peer {
     this.ip = ip;
     this.account = account;
     this.name = account.username;
-    this.look = { hat: account.loadout.hat, robe: account.loadout.robe };
+    this.look = lookOf(account.loadout);
     this.isAdmin = account.isAdmin;
   }
 
@@ -81,13 +82,15 @@ export class BotPeer implements Peer {
   readonly isBot = true;
   readonly account = null;
   name: string;
-  look: Look = { hat: "classic", robe: "auto" };
+  look: Look;
   readonly isAdmin = false;
   room: Room | null = null;
 
   constructor(name: string) {
     this.id = nextId++;
     this.name = name;
+    // Every bot looks a little different.
+    this.look = { ...DEFAULT_LOOK, ...randomAppearance(this.id * 7919) };
   }
 
   send(): void {}

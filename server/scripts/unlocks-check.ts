@@ -12,7 +12,7 @@
 import WebSocket from "ws";
 import { trial1 } from "../../shared/src/levels/trial1.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
-import { sanitizeLoadout, unlockedSet } from "../../shared/src/unlocks.ts";
+import { DEFAULT_LOADOUT, sanitizeLoadout, unlockedSet } from "../../shared/src/unlocks.ts";
 import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
@@ -43,7 +43,15 @@ check("level 3 unlocks Double Jump", unlockedSet(250, {}).has("perk:doubleJump")
 check("Chapter I unlocks Frost Shard and the garden", unlockedSet(0, { trial1: 30000 }).has("spell:frost") && unlockedSet(0, { trial1: 30000 }).has("area:garden"));
 check(
   "a loadout with locked or made-up choices falls back to defaults",
-  JSON.stringify(sanitizeLoadout({ primary: "frost", hat: "crown", robe: "<script>" }, fresh)) === JSON.stringify({ primary: "bolt", hat: "classic", robe: "auto", cls: "wizard" }),
+  JSON.stringify(sanitizeLoadout({ primary: "frost", hat: "crown", robe: "<script>" }, fresh)) === JSON.stringify(DEFAULT_LOADOUT),
+);
+check(
+  "appearance: free choices stick, a locked outfit or a made-up hairstyle falls back",
+  (() => {
+    const l = sanitizeLoadout({ skin: "deep", hair: "<b>", hairColor: "teal", face: "wink", outfit: "battlemage" }, fresh);
+    const ok = sanitizeLoadout({ outfit: "battlemage" }, unlockedSet(10_000, {}));
+    return l.skin === "deep" && l.hair === "short" && l.hairColor === "teal" && l.face === "wink" && l.outfit === "robe" && ok.outfit === "battlemage";
+  })(),
 );
 
 // ---- Against the server ----

@@ -585,3 +585,41 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
   body.in-royale #overlay .panel > p { display: flow-root; }
   body.in-royale #overlay .panel > p[hidden], body.in-royale #overlay .panel > p:empty { display: none; }
 }
+
+/* ---- Phase 15: the Wardrobe ---- */
+#hub-panel.wide .panel { width: min(820px, calc(100vw - 32px)); }
+.wardrobe { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+.wardrobe-left { display: grid; gap: 4px; justify-items: center; }
+.wardrobe-preview {
+  width: 300px;
+  height: 384px;
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 40%, #3d2f6b, #17112b 75%);
+  cursor: grab;
+  touch-action: none;
+}
+.wardrobe-right { display: grid; gap: 10px; align-content: start; }
+.wardrobe-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.wardrobe-tabs .tab { padding: 5px 10px; font-size: 13px; background: rgba(255, 255, 255, 0.07); color: var(--ink); font-weight: 600; }
+.wardrobe-tabs .tab.on { background: var(--accent); color: #1c1630; }
+.wardrobe-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  font-weight: 600;
+  text-align: left;
+  min-height: 44px;
+}
+.chip .swatch { width: 26px; height: 16px; border-radius: 4px; }
+.chip.on { border-color: #7dffb0; box-shadow: 0 0 0 2px #7dffb0 inset; }
+.chip.locked { opacity: 0.5; cursor: not-allowed; }
+.chip small { font-weight: 400; font-size: 11px; opacity: 0.85; }
+@media (max-width: 700px) {
+  .wardrobe { grid-template-columns: 1fr; }
+  .wardrobe-preview { width: 220px; height: 282px; }
+}

@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-export type SkyStyle = "day" | "dusk";
+export type SkyStyle = "day" | "dusk" | "golden" | "night";
 
 type Preset = {
   top: string;
@@ -21,6 +21,12 @@ type Preset = {
   sunAzimuth: number; // degrees, 0 = north (-Z), clockwise
   sunLight: string; // the directional light's color
   cloud: string;
+  hemiSky: string; // light from the sky dome (Game.ts's hemisphere light)
+  hemiGround: string;
+  hemi: number;
+  sunIntensity: number;
+  stars?: boolean;
+  fog: [number, number]; // near and far, meters
 };
 
 const PRESETS: Record<SkyStyle, Preset> = {
@@ -33,6 +39,11 @@ const PRESETS: Record<SkyStyle, Preset> = {
     sunAzimuth: 115,
     sunLight: "#fff4d6",
     cloud: "#ffffff",
+    hemiSky: "#dfe9ff",
+    hemiGround: "#4d6b3c",
+    hemi: 1.6,
+    sunIntensity: 2.2,
+    fog: [60, 260],
   },
   dusk: {
     top: "#27306e",
@@ -43,6 +54,45 @@ const PRESETS: Record<SkyStyle, Preset> = {
     sunAzimuth: 250,
     sunLight: "#ffb987",
     cloud: "#f7c6c9",
+    hemiSky: "#c9b6e8",
+    hemiGround: "#4d3c5c",
+    hemi: 1.3,
+    sunIntensity: 2.2,
+    stars: true,
+    fog: [60, 260],
+  },
+  // Late afternoon: long shadows and warm light (the academy).
+  golden: {
+    top: "#3d6fc9",
+    horizon: "#ffd9a6",
+    ground: "#a88f7a",
+    sun: "#ffe2a8",
+    sunElevation: 26,
+    sunAzimuth: 235,
+    sunLight: "#ffd9a0",
+    cloud: "#fff0dc",
+    hemiSky: "#d6e2ff",
+    hemiGround: "#5a6b3c",
+    hemi: 1.45,
+    sunIntensity: 2.6,
+    fog: [70, 280],
+  },
+  // Moonlit: deep blue, stars, cool light.
+  night: {
+    top: "#060a24",
+    horizon: "#28325e",
+    ground: "#141a33",
+    sun: "#dfe8ff",
+    sunElevation: 38,
+    sunAzimuth: 160,
+    sunLight: "#9fb4ff",
+    cloud: "#6a7399",
+    hemiSky: "#6f7fc0",
+    hemiGround: "#202842",
+    hemi: 0.9,
+    sunIntensity: 0.9,
+    stars: true,
+    fog: [45, 200],
   },
 };
 
@@ -54,6 +104,7 @@ export class Sky {
   readonly sunDirection: THREE.Vector3;
   readonly sunColor: THREE.Color;
   readonly horizon: THREE.Color;
+  readonly preset: Preset;
   private dome: THREE.Mesh;
   private clouds: THREE.Group[] = [];
 
@@ -66,6 +117,7 @@ export class Sky {
     this.sunDirection = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
     this.sunColor = new THREE.Color(p.sunLight);
     this.horizon = new THREE.Color(p.horizon);
+    this.preset = p;
 
     this.dome = new THREE.Mesh(
       new THREE.SphereGeometry(DOME_RADIUS, 32, 16),
@@ -106,9 +158,10 @@ export class Sky {
     this.dome.frustumCulled = false;
     parent.add(this.dome);
     scene.background = null;
-    scene.fog = new THREE.Fog(this.horizon, 60, 260);
+    scene.fog = new THREE.Fog(this.horizon, p.fog[0], p.fog[1]);
 
     if (clouds) this.makeClouds(parent, p.cloud);
+    if (clouds && p.stars) this.makeStars(parent, p.sunElevation < 20 ? 0.45 : 1);
   }
 
   // Each cloud is a handful of squashed, flat-shaded blobs merged into one mesh.
@@ -134,8 +187,36 @@ export class Sky {
     }
   }
 
+  // Stars: points on the upper dome, fading toward the horizon.
+  private stars: THREE.Points | null = null;
+  private makeStars(parent: THREE.Object3D, brightness: number): void {
+    const n = 1400;
+    const pos = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    let seed = 99;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < n; i++) {
+      const y = 0.08 + rand() * 0.92;
+      const a = rand() * Math.PI * 2;
+      const r = Math.sqrt(1 - y * y);
+      const d = DOME_RADIUS * 0.9;
+      pos.set([Math.cos(a) * r * d, y * d, Math.sin(a) * r * d], i * 3);
+      const b = (0.4 + rand() * 0.6) * brightness * Math.min(1, y * 3);
+      const tint = rand();
+      col.set([b * (0.85 + tint * 0.15), b * 0.9, b], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    this.stars = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, fog: false, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending }));
+    this.stars.renderOrder = -1;
+    this.stars.frustumCulled = false;
+    parent.add(this.stars);
+  }
+
   update(camera: THREE.Camera, dt: number): void {
     this.dome.position.copy(camera.position);
+    this.stars?.position.copy(camera.position);
     for (const cloud of this.clouds) {
       cloud.position.x += CLOUD_DRIFT * dt;
       if (cloud.position.x > CLOUD_RANGE) cloud.position.x -= CLOUD_RANGE * 2;

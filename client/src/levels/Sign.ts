@@ -22,7 +22,7 @@ export class Sign {
     this.ctx = canvas.getContext("2d")!;
     this.texture = new THREE.CanvasTexture(canvas);
     this.texture.colorSpace = THREE.SRGBColorSpace;
-    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.texture, depthWrite: false }));
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.texture, depthWrite: false, toneMapped: false }));
     this.sprite.scale.set(width, (width * H) / W, 1);
     this.draw(text);
   }

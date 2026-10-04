@@ -24,7 +24,10 @@ import { HubPanel, type PanelProfile } from "./hub/HubPanel.ts";
 import { Portals } from "./levels/Portals.ts";
 import { StoryCard } from "./StoryCard.ts";
 import { addDecor, onGrass } from "./levels/Decor.ts";
-import { quality } from "./quality.ts";
+import { fancy, quality, ultra } from "./quality.ts";
+import { PostFX } from "./graphics/PostFX.ts";
+import { Particles, particles } from "./graphics/Particles.ts";
+import { addProps } from "./levels/Props.ts";
 import { Sky } from "./Sky.ts";
 import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
@@ -32,6 +35,8 @@ import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
 import { Royale } from "./royale/Royale.ts";
 import { ServerClock } from "./ServerClock.ts";
+import { animateAvatar, createAvatar, disposeAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
+import { lookOf } from "../../shared/src/unlocks.ts";
 import { sound } from "./audio/Sound.ts";
 import { moodFor } from "./audio/tracks.ts";
 
@@ -46,6 +51,7 @@ const SUN_DISTANCE = 45; // the shadow-casting light sits this far toward the su
 // The controls line at the bottom left, per mode.
 const MOVE_HELP = "WASD move \u00b7 Shift run \u00b7 Space jump";
 const HELP: Record<string, string> = {
+  // (V third person is added to every mode in applyPerks)
   hub: "E use",
   parkour: "R restart run",
   tag: "Click tag",
@@ -78,6 +84,15 @@ export class Game {
   private camera = new THREE.PerspectiveCamera(75, 1, 0.1, 500);
   private sun = new THREE.DirectionalLight("#fff4d6", 2.2);
   private sky!: Sky;
+  private postfx: PostFX | null = null;
+  private particleSystem: Particles;
+  private props: { update(time: number, dt: number): void } | null = null;
+  // Third person (V): your own body, and a camera over your shoulder.
+  private thirdPerson = false;
+  private selfAvatar: THREE.Group | null = null;
+  private selfLast = new THREE.Vector3();
+  private selfSpeed = 0;
+  private camDistance = 3.4;
   private sunOffset = new THREE.Vector3();
   private world!: RAPIER.World;
   // Everything that belongs to the current level (blocks, sky, grass), so
@@ -146,12 +161,17 @@ export class Game {
     this.showXp();
     sound.music(moodFor(room.mode));
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    // Low quality draws at 1 pixel per CSS pixel (much less work on high-DPI screens).
-    this.renderer.setPixelRatio(quality() === "high" ? Math.min(window.devicePixelRatio, 2) : 1);
+    // Ultra anti-aliases in its post-processing chain instead (PostFX.ts).
+    this.renderer = new THREE.WebGLRenderer({ antialias: !ultra(), powerPreference: "high-performance" });
+    // Low quality draws at 1 pixel per CSS pixel (much less work on high-DPI
+    // screens); Ultra caps at 1.5 because its extra passes cost per pixel.
+    const dpr = window.devicePixelRatio;
+    this.renderer.setPixelRatio(quality() === "high" ? Math.min(dpr, 2) : ultra() ? Math.min(dpr, 1.5) : 1);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = ultra() ? THREE.VSMShadowMap : THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
+    this.particleSystem = new Particles(this.scene);
+    particles.set(this.particleSystem);
 
     this.camera.rotation.order = "YXZ"; // yaw first, then pitch: standard FPS camera
     this.setupScene();
@@ -188,6 +208,7 @@ export class Game {
         this.profile,
         (loadout) => this.net.send({ t: "loadout", ...loadout }),
         () => this.input.lock(),
+        () => this.myId,
       );
       this.stationHint = document.createElement("div");
       this.stationHint.id = "station-hint";
@@ -198,6 +219,7 @@ export class Game {
     hud.appendChild(this.perkEl);
     this.applyPerks();
 
+    if (ultra()) this.postfx = new PostFX(this.renderer, this.scene, this.camera);
     this.resize();
     window.addEventListener("resize", this.onResize);
 
@@ -236,14 +258,21 @@ export class Game {
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
     // The player's own world: barriers they've opened are left out.
     this.markers = buildLevel(this.levelRoot, this.world, level, unlocksFor(this.profile));
-    if (quality() === "high") addDecor(this.levelRoot, level);
+    if (fancy()) addDecor(this.levelRoot, level);
     const style = level.skyStyle ?? "day";
-    this.sky = new Sky(this.levelRoot, this.scene, style, quality() === "high");
+    this.sky = new Sky(this.levelRoot, this.scene, style, fancy());
     this.sun.color.copy(this.sky.sunColor);
+    this.sun.intensity = this.sky.preset.sunIntensity;
     this.sunOffset.copy(this.sky.sunDirection).multiplyScalar(SUN_DISTANCE);
     // Light from the whole sky (blue-ish from above, earthy from below).
-    this.hemi.color.set(style === "dusk" ? "#c9b6e8" : "#dfe9ff");
-    this.hemi.intensity = style === "dusk" ? 1.3 : 1.6;
+    this.hemi.color.set(this.sky.preset.hemiSky);
+    this.hemi.groundColor.set(this.sky.preset.hemiGround);
+    this.hemi.intensity = this.sky.preset.hemi;
+    this.props = addProps(this.levelRoot, level, {
+      sunDir: this.sky.sunDirection,
+      sky: this.sky.horizon,
+      lightBudget: 16 - (level.lights?.length ?? 0) - (level.portals?.length ?? 0),
+    });
     this.world.step(); // builds the collision lookup structures before the first move
     this.player = new PlayerController(this.world, level.killY);
     if (old) {
@@ -306,8 +335,14 @@ export class Game {
     // The sun follows the player (see frame()), so shadows work anywhere on
     // a long course without needing a huge, blurry shadow map.
     this.sun.castShadow = true;
-    const size = quality() === "high" ? 2048 : 1024;
+    const size = ultra() ? 4096 : quality() === "high" ? 2048 : 1024;
     this.sun.shadow.mapSize.set(size, size);
+    if (ultra()) {
+      // Soft-edged shadows (variance shadow maps blur well).
+      this.sun.shadow.radius = 6;
+      this.sun.shadow.blurSamples = 12;
+      this.sun.shadow.bias = -0.0004;
+    }
     const s = this.sun.shadow.camera;
     s.left = -SHADOW_RANGE;
     s.right = SHADOW_RANGE;
@@ -323,6 +358,9 @@ export class Game {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.postfx?.setPixelRatio(this.renderer.getPixelRatio());
+    this.postfx?.setSize(w, h);
+    this.particleSystem.resize(h * this.renderer.getPixelRatio(), this.camera.fov);
   }
 
   private onServerMessage(msg: ServerMsg): void {
@@ -427,7 +465,11 @@ export class Game {
         this.player.bounce();
         break;
       case "loadoutSaved":
-        this.profile.loadout = { primary: msg.primary, hat: msg.hat, robe: msg.robe, cls: msg.cls };
+        {
+          const { t: _t, ...saved } = msg;
+          this.profile.loadout = saved;
+          if (this.selfAvatar) setAvatarLook(this.selfAvatar, this.myId, lookOf(saved));
+        }
         this.hubPanel?.update(this.profile);
         this.onProfile(this.profile);
         break;
@@ -483,7 +525,7 @@ export class Game {
     const allowed = this.room.mode !== "parkour";
     this.player.perks = { doubleJump: allowed && unlocked.has("perk:doubleJump"), dash: allowed && unlocked.has("perk:dash") };
     const extra = [HELP[this.room.mode], this.player.perks.dash ? "Q dash" : "", this.profile.isAdmin ? "F fly" : ""].filter(Boolean);
-    const help = [MOVE_HELP, ...extra, "Esc pause"].join(" \u00b7 ");
+    const help = [MOVE_HELP, ...extra, "V view", "Esc pause"].join(" \u00b7 ");
     document.getElementById("help")!.textContent = help;
     document.getElementById("pause-help")!.textContent = help;
     if (this.perkEl) {
@@ -501,6 +543,13 @@ export class Game {
   // Is a station's window open? (main.ts keeps the pause panel hidden then.)
   get panelOpen(): boolean {
     return this.hubPanel?.isOpen ?? false;
+  }
+
+  // The pause panel's "Customize your wizard" (hub only).
+  openWardrobe(): boolean {
+    if (!this.hubPanel) return false;
+    this.hubPanel.openWardrobe();
+    return true;
   }
 
   // Esc while a station's window is open closes it.
@@ -544,8 +593,12 @@ export class Game {
 
     this.royale?.dispose();
     this.story?.dispose();
+    this.postfx?.dispose();
+    this.particleSystem.dispose();
+    particles.set(null);
     this.hubPanel?.close();
     this.remotes.clear();
+    if (this.selfAvatar) disposeAvatar(this.selfAvatar);
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry.dispose();
@@ -569,6 +622,61 @@ export class Game {
     // Wait for the server to drop us from this room before anyone joins the
     // next one (otherwise it looks like a second tab and kicks this one).
     await closed;
+  }
+
+  // ---- Third person ----
+
+  private setThirdPerson(on: boolean): void {
+    this.thirdPerson = on;
+    if (on && !this.selfAvatar) {
+      this.selfAvatar = createAvatar(this.myId, this.name, lookOf(this.profile.loadout), this.profile.isAdmin, { nameTag: false });
+      this.scene.add(this.selfAvatar);
+    }
+    if (this.selfAvatar) this.selfAvatar.visible = on;
+    this.royale?.setThirdPerson(on);
+    this.addFeed(on ? "Third person (V to switch back)" : "First person");
+  }
+
+  // Your body follows you; the camera pulls back behind your shoulder,
+  // stopping short of any wall in the way.
+  private updateSelf(pos: THREE.Vector3, dt: number): void {
+    if (!this.thirdPerson || !this.selfAvatar) return;
+    const a = this.selfAvatar;
+    a.position.copy(pos);
+    a.rotation.y = this.input.yaw;
+    const moved = Math.hypot(pos.x - this.selfLast.x, pos.z - this.selfLast.z);
+    this.selfLast.copy(pos);
+    const speed = dt > 0 && moved / dt < 30 ? moved / dt : 0;
+    this.selfSpeed += (speed - this.selfSpeed) * Math.min(1, dt * 10);
+    animateAvatar(a, performance.now(), this.selfSpeed);
+    setAvatarWeapon(a, this.royale ? this.royale.currentWeapon : null);
+
+    const eye = this.camera.position.clone();
+    const back = new THREE.Vector3(0, 0, 1).applyEuler(this.camera.rotation); // behind the view
+    const right = new THREE.Vector3(1, 0, 0).applyEuler(this.camera.rotation);
+    const want = back.multiplyScalar(this.camDistance).add(right.multiplyScalar(0.55)).add(new THREE.Vector3(0, 0.25, 0));
+    const len = want.length();
+    const dir = want.clone().divideScalar(len);
+    const handle = this.player.colliderHandle;
+    const hit = this.world.castRay(new RAPIER.Ray(eye, dir), len, true, undefined, undefined, undefined, undefined, (c) => c.handle !== handle);
+    const dist = hit ? Math.max(0.3, hit.timeOfImpact - 0.25) : len;
+    this.camera.position.addScaledVector(dir, dist);
+  }
+
+  // Where spells and attacks come from (your eyes) and go (where the
+  // crosshair points: in third person, toward what the camera's ray hits).
+  private aim(): { origin: THREE.Vector3; dir: THREE.Vector3 } {
+    const camDir = this.camera.getWorldDirection(new THREE.Vector3());
+    const p = this.player.interpolate(this.accumulator / FIXED_DT);
+    const origin = new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z);
+    if (!this.thirdPerson) return { origin, dir: camDir };
+    const handle = this.player.colliderHandle;
+    const hit = this.world.castRay(new RAPIER.Ray(this.camera.position, camDir), 120, true, undefined, undefined, undefined, undefined, (c) => c.handle !== handle);
+    const target = this.camera.position.clone().addScaledVector(camDir, hit ? hit.timeOfImpact : 120);
+    const dir = target.sub(origin);
+    // Something between you and the camera: aim straight ahead instead.
+    if (dir.dot(camDir) <= 0.1) return { origin, dir: camDir };
+    return { origin, dir: dir.normalize() };
   }
 
   // Footsteps, jumps and landings: only your own (others' would be noise).
@@ -612,7 +720,10 @@ export class Game {
     if (r && this.parkour) this.net.send({ t: "restart" });
     if (this.royale) {
       const e = this.input.consumeInteract();
-      if (e || r) this.royale.ability(e ? 0 : 1, this.camera.position, this.camera.getWorldDirection(new THREE.Vector3()));
+      if (e || r) {
+        const { origin, dir } = this.aim();
+        this.royale.ability(e ? 0 : 1, origin, dir);
+      }
     }
     // Admins: F toggles flying (Space up, C down, passes through walls).
     if (this.input.consumeFly() && this.profile.isAdmin) {
@@ -629,8 +740,8 @@ export class Game {
     // along where you're looking.
     const rightClicked = this.input.consumeRightClick();
     if (this.royale && (clicked || rightClicked)) {
-      const dir = this.camera.getWorldDirection(new THREE.Vector3());
-      this.royale.attack(clicked ? "primary" : "fireball", this.camera.position, dir);
+      const { origin, dir } = this.aim();
+      this.royale.attack(clicked ? "primary" : "fireball", origin, dir);
     }
 
     // Fell off the level: freeze and ask the server to respawn us (retrying
@@ -653,6 +764,8 @@ export class Game {
     const pos = this.player.interpolate(this.accumulator / FIXED_DT);
     this.camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
     this.camera.rotation.set(this.input.pitch, this.input.yaw, 0);
+    if (this.input.consumeView()) this.setThirdPerson(!this.thirdPerson);
+    this.updateSelf(pos, dt);
     this.sun.target.position.copy(pos);
     this.sun.position.copy(pos).add(this.sunOffset);
     this.sky.update(this.camera, dt);
@@ -698,6 +811,9 @@ export class Game {
       this.statusEl.textContent = `${this.name}${where} \u00b7 ${total} wizard${total === 1 ? "" : "s"} here`;
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.props?.update(now / 1000, dt);
+    this.particleSystem.update(dt);
+    if (this.postfx) this.postfx.render(dt);
+    else this.renderer.render(this.scene, this.camera);
   }
 }

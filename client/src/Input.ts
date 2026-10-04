@@ -27,6 +27,7 @@ export class Input {
       if (e.code === "KeyQ" && !e.repeat && this.locked) this.dashQueued = true;
       if (e.code === "KeyE" && !e.repeat && this.locked) this.interactQueued = true;
       if (e.code === "KeyF" && !e.repeat && this.locked) this.flyQueued = true;
+      if (e.code === "KeyV" && !e.repeat && this.locked) this.viewQueued = true;
       if (e.code === "Digit1" && this.locked) this.handQueued = "main";
       if (e.code === "Digit2" && this.locked) this.handQueued = "backup";
       this.keys.add(e.code);
@@ -120,6 +121,14 @@ export class Input {
   consumeHand(): "main" | "backup" | "toggle" | null {
     const queued = this.handQueued;
     this.handQueued = null;
+    return queued;
+  }
+
+  private viewQueued = false;
+  // Returns true once per V press (first / third person).
+  consumeView(): boolean {
+    const queued = this.viewQueued;
+    this.viewQueued = false;
     return queued;
   }
 

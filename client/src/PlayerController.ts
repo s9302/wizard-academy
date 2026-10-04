@@ -90,6 +90,11 @@ export class PlayerController {
     return this.velocityY;
   }
 
+  // The player's own collider (the third-person camera's ray skips it).
+  get colliderHandle(): number {
+    return this.collider.handle;
+  }
+
   get isGrounded(): boolean {
     return this.grounded;
   }

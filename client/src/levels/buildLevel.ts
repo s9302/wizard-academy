@@ -9,6 +9,8 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
 import { requirementText, UNLOCKS } from "../../../shared/src/unlocks.ts";
 import { Sign } from "./Sign.ts";
+import { addSurfaceAttributes, withSurfaceDetail } from "../graphics/surface.ts";
+import { quality } from "../quality.ts";
 
 // A stable pseudo-random number for a box (so colors don't change between visits).
 function hash(box: Box): number {
@@ -21,9 +23,10 @@ function hash(box: Box): number {
 // same color don't look flat. The box's color is baked into its vertex
 // colors, and the box is moved into place, so that every solid box in the
 // level can be merged into ONE mesh (see buildLevel).
-function shadedBox(box: Box, matrix: THREE.Matrix4): THREE.BufferGeometry {
+function shadedBox(box: Box, matrix: THREE.Matrix4, detail: boolean): THREE.BufferGeometry {
   const [w, h, d] = box.size;
   const geometry = new THREE.BoxGeometry(w, h, d);
+  if (detail) addSurfaceAttributes(geometry, box);
   const base = new THREE.Color(box.color).multiplyScalar(0.95 + hash(box) * 0.1);
   const pos = geometry.getAttribute("position");
   const colors = new Float32Array(pos.count * 3);
@@ -108,19 +111,48 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
   // Game-dev note: drawing each box separately costs one "draw call" each
   // (twice, with shadows), and a level has hundreds. Merged into one mesh,
   // the whole level is a single draw call.
+  //
+  // Glowing boxes (windows, crystals, lava) are a second merged mesh, drawn
+  // unlit and extra bright. On High and Ultra, solid boxes get surface
+  // detail (bricks, planks, grass; see graphics/surface.ts).
+  const q = quality();
+  const detail = q !== "low";
   const solid: THREE.BufferGeometry[] = [];
+  const glowing: THREE.BufferGeometry[] = [];
   for (const box of level.boxes) {
     if (box.gate && unlocked.has(box.gate)) continue; // opened: not there at all
     addCollider(world, box);
+    if (box.invisible) continue;
     if (box.gate) addBarrier(scene, box);
-    else solid.push(shadedBox(box, boxMatrix(box)));
+    else if (box.glow) {
+      const g = new THREE.BoxGeometry(...box.size);
+      g.deleteAttribute("uv");
+      const c = new THREE.Color(box.color).multiplyScalar(q === "ultra" ? box.glow : 1);
+      const colors = new Float32Array(g.getAttribute("position").count * 3);
+      for (let i = 0; i < colors.length; i += 3) colors.set([c.r, c.g, c.b], i);
+      g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      g.applyMatrix4(boxMatrix(box));
+      glowing.push(g);
+    } else solid.push(shadedBox(box, boxMatrix(box), detail));
   }
   if (solid.length) {
-    const mesh = new THREE.Mesh(mergeGeometries(solid), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+    const material =
+      q === "ultra"
+        ? withSurfaceDetail(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 }), true)
+        : q === "high"
+          ? withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), true)
+          : new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    const mesh = new THREE.Mesh(mergeGeometries(solid), material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
     for (const g of solid) g.dispose();
+  }
+  if (glowing.length) {
+    const mesh = new THREE.Mesh(mergeGeometries(glowing), new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
+    mesh.castShadow = true;
+    scene.add(mesh);
+    for (const g of glowing) g.dispose();
   }
   for (const label of level.labels ?? []) {
     const locked = label.unlock && !unlocked.has(label.unlock);

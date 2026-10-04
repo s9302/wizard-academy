@@ -3,6 +3,7 @@
 // into one. Decoration only; the arches themselves are level boxes.
 
 import * as THREE from "three";
+import { particles } from "../graphics/Particles.ts";
 import { PORTAL_HEIGHT, PORTAL_STEP, PORTAL_WIDTH, inPortal, portalPoint, type Portal } from "../../../shared/src/levels/types.ts";
 import type { Vec3 } from "../../../shared/src/protocol.ts";
 import { findRoom } from "../../../shared/src/rooms.ts";
@@ -111,9 +112,16 @@ export class Portals {
     return inside.portal.room;
   }
 
-  // Swirl and shimmer.
+  // Swirl and shimmer, and sparks drifting up out of the opening.
+  private lastSpark = 0;
   update(time: number): void {
+    const spark = time - this.lastSpark > 1 / 20;
+    if (spark) this.lastSpark = time;
     this.views.forEach((view, i) => {
+      if (spark) {
+        const p = portalPoint(view.portal, (Math.random() - 0.5) * PORTAL_WIDTH * 0.8, PORTAL_STEP + Math.random() * PORTAL_HEIGHT * 0.6, 0.1);
+        particles.emit({ at: p, count: 1, color: view.portal.color, color2: "#ffffff", speed: 0.3, up: 0.9, life: 1.4, size: 0.14 });
+      }
       view.rings.forEach((ring, j) => {
         ring.rotation.z = time * (j % 2 ? -0.9 : 0.6) + i;
         ring.material.opacity = 0.55 + 0.3 * Math.sin(time * 2.4 + j * 1.3 + i);

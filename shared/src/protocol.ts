@@ -5,6 +5,7 @@ import type { ClassId, Hand, WeaponId } from "./classes.ts";
 import type { PickupKind, SpellId } from "./combat.ts";
 import type { Box } from "./levels/types.ts";
 import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
+import type { Appearance } from "./appearance.ts";
 
 export type Vec3 = [number, number, number];
 
@@ -38,7 +39,7 @@ export type CastMsg = { t: "cast"; spell: SpellId; o: Vec3; d: Vec3; seq: number
 
 // Change what you use and wear (the Spellbook and Wardrobe in the hub). The
 // server checks each choice is unlocked, saves it, and shows others your look.
-export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: Robe };
+export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: Robe } & Appearance;
 
 // Battle royale classes: use the weapon in your hand (a swing, or a bow
 // shot from o along d), switch hands, or pick a class.
@@ -140,7 +141,7 @@ export type BounceMsg = { t: "bounce" };
 // Someone changed their hat or robe.
 export type LookMsg = { t: "look"; id: number; look: Look };
 // To one player: your saved loadout (after a "loadout" request).
-export type LoadoutSavedMsg = { t: "loadoutSaved"; primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId };
+export type LoadoutSavedMsg = { t: "loadoutSaved"; primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId } & Appearance;
 
 // ---- Progression (server -> one player) ----
 // total = your XP after this award. The client works out the level from it.

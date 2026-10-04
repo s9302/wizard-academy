@@ -6,6 +6,7 @@
 
 import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import { saveLoadout } from "../accounts.ts";
+import { lookOf } from "../../../shared/src/unlocks.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import { portalPoint } from "../../../shared/src/levels/types.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
@@ -53,11 +54,12 @@ export class HubRoom extends Room {
     if (!account || now - (this.lastSave.get(conn.id) ?? 0) < LOADOUT_SAVE_MS) return;
     this.lastSave.set(conn.id, now);
     // Checked against fresh unlocks: anything locked falls back to the default.
-    saveLoadout(account.id, msg)
+    // The class isn't part of this message: keep the saved one.
+    saveLoadout(account.id, { ...msg, cls: account.loadout.cls })
       .then(({ loadout, unlocked }) => {
         account.loadout = loadout;
         account.unlocked = unlocked;
-        conn.look = { hat: loadout.hat, robe: loadout.robe };
+        conn.look = lookOf(loadout);
         conn.send({ t: "loadoutSaved", ...loadout });
         if (conn.room === this) this.broadcast({ t: "look", id: conn.id, look: conn.look }, conn.id);
       })

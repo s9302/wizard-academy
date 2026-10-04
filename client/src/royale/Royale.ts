@@ -78,6 +78,17 @@ export class Royale {
     this.applyLoadout();
   }
 
+  // What's in hand (the third-person body holds it too).
+  get currentWeapon(): WeaponId {
+    return this.weapon;
+  }
+
+  private thirdPerson = false;
+  setThirdPerson(on: boolean): void {
+    this.thirdPerson = on;
+    this.viewmodel.setVisible(!on && (this.state !== "playing" || this.alive.has(this.hooks.myId())));
+  }
+
   private get weapon(): WeaponId {
     return weaponOf(this.cls, this.hand);
   }
@@ -117,7 +128,7 @@ export class Royale {
         else if (this.state === "playing" && msg.ids.length < this.alive.size) sound.play("bell2", { volume: 0.35, rate: 1.5 });
         this.alive = new Set(msg.ids);
         this.hud.alive(msg.ids.length, this.alive.has(me));
-        this.viewmodel.setVisible(this.state !== "playing" || this.alive.has(me));
+        this.viewmodel.setVisible(!this.thirdPerson && (this.state !== "playing" || this.alive.has(me)));
         this.refreshVisibility();
         return true;
       case "health":

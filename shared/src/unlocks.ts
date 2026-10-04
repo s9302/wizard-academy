@@ -6,6 +6,7 @@
 // Shared so the client can show what's unlocked and the server can check it
 // (an equipped spell or hat must really be unlocked).
 
+import { type Appearance, DEFAULT_APPEARANCE, sanitizeAppearance } from "./appearance.ts";
 import { CLASS_IDS, type ClassId } from "./classes.ts";
 import { levelInfo } from "./progression.ts";
 import { type ChapterId, chaptersDone } from "./story.ts";
@@ -19,7 +20,7 @@ export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold
 export type Unlock = {
   id: string;
   name: string;
-  kind: "spell" | "perk" | "hat" | "robe" | "area";
+  kind: "spell" | "perk" | "hat" | "robe" | "area" | "outfit";
   requires: Requirement;
   description: string;
 };
@@ -31,6 +32,7 @@ export const UNLOCKS: Unlock[] = [
   { id: "perk:dash", name: "Blink Dash", kind: "perk", requires: { level: 5 }, description: "Press Q for a quick burst forward (every 2 s)." },
   { id: "hat:tall", name: "Tall hat", kind: "hat", requires: { level: 6 }, description: "More hat." },
   { id: "robe:midnight", name: "Midnight robe", kind: "robe", requires: { level: 7 }, description: "A robe the color of the night sky." },
+  { id: "outfit:battlemage", name: "Battlemage armor", kind: "outfit", requires: { level: 8 }, description: "Plate shoulders and a belted coat." },
   { id: "robe:gold", name: "Gold robe", kind: "robe", requires: { level: 10 }, description: "For the truly dedicated." },
   { id: "spell:frost", name: "Frost Shard", kind: "spell", requires: { chapter: 1 }, description: "14 damage and slows whoever it hits for 1.5 s." },
   { id: "area:garden", name: "The Spell Garden", kind: "area", requires: { chapter: 1 }, description: "A walled garden in the hub." },
@@ -42,6 +44,7 @@ export const UNLOCKS: Unlock[] = [
   { id: "robe:ivory", name: "Ivory robe", kind: "robe", requires: { chapter: 3 }, description: "The Headmaster's colors." },
   { id: "area:trial5", name: "Trial V", kind: "area", requires: { chapter: 4 }, description: "The portal to the Hollow Stair." },
   { id: "robe:storm", name: "Storm robe", kind: "robe", requires: { chapter: 4 }, description: "The storm's colors." },
+  { id: "outfit:archmage", name: "Archmage regalia", kind: "outfit", requires: { chapter: 4 }, description: "A high collar and a long mantle." },
   { id: "area:trial6", name: "Trial VI", kind: "area", requires: { chapter: 5 }, description: "The portal to the Eye of the Storm." },
   { id: "robe:ember", name: "Ember robe", kind: "robe", requires: { chapter: 5 }, description: "Still warm from the hollow." },
   { id: "hat:storm", name: "Stormcaller's hat", kind: "hat", requires: { chapter: 6 }, description: "It crackles." },
@@ -86,9 +89,10 @@ export function unlocksForChapter(chapter: ChapterId): Unlock[] {
 
 // ---- Loadout: what you've chosen to use and wear ----
 
-// cls: battle royale class (all three are available to everyone).
-export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId };
-export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard" };
+// cls: battle royale class (all three are available to everyone). The rest
+// of the look (skin, hair, face, outfit) is in appearance.ts.
+export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId } & Appearance;
+export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard", ...DEFAULT_APPEARANCE };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
 export const HATS: Hat[] = ["classic", "tall", "starry", "crown", "storm"];
@@ -131,8 +135,14 @@ export function sanitizeLoadout(raw: unknown, unlocked: Set<string>): Loadout {
     hat: pick(r.hat, HATS, "hat", DEFAULT_LOADOUT.hat),
     robe: pick(r.robe, ROBES, "robe", DEFAULT_LOADOUT.robe),
     cls: typeof r.cls === "string" && (CLASS_IDS as string[]).includes(r.cls) ? (r.cls as ClassId) : DEFAULT_LOADOUT.cls,
+    ...sanitizeAppearance(r, unlocked),
   };
 }
 
 // What other players see of you.
-export type Look = { hat: Hat; robe: Robe };
+export type Look = { hat: Hat; robe: Robe } & Appearance;
+export const DEFAULT_LOOK: Look = { hat: "classic", robe: "auto", ...DEFAULT_APPEARANCE };
+
+export function lookOf(l: Loadout): Look {
+  return { hat: l.hat, robe: l.robe, skin: l.skin, hair: l.hair, hairColor: l.hairColor, face: l.face, outfit: l.outfit };
+}

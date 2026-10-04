@@ -16,6 +16,45 @@ export type Box = {
   // A bridge or arch you can also walk under. Server-side bots plan on one
   // floor per spot, so they treat these as not there (they walk under).
   overhead?: boolean;
+  // Glows (windows, crystals, lava): drawn unlit and this many times as
+  // bright, so the Ultra setting's bloom makes it shine.
+  glow?: number;
+  // Solid but not drawn: a prop (a tree, say) stands where it is.
+  invisible?: boolean;
+};
+
+// Decoration the client draws; the server never looks at it. Anything solid
+// about a prop is a separate (often invisible) box.
+export type PropKind =
+  | "tree" // round, leafy
+  | "pine"
+  | "bush"
+  | "rock"
+  | "flowers" // a bed of flowers, size = [width, depth]
+  | "torch" // a standing torch (pos = its foot); light: also a real light on Ultra
+  | "sconce" // a torch on a wall (pos = the flame), facing yaw
+  | "lamp" // a lantern on a post (pos = its foot)
+  | "banner" // hangs from pos (its top middle), facing yaw; size = [width, height]
+  | "cone" // a pointed roof: pos = its base center, size = [radius, height]
+  | "water" // animated water surface at pos, size = [width, depth]
+  | "fountain" // spray rising from pos
+  | "crystal" // a glowing, slowly spinning crystal
+  | "window" // stained glass at pos facing yaw, size = [width, height]
+  | "student" // an academy student wandering near pos (client-side only)
+  | "npc"; // someone to talk to (see `talk`)
+
+export type Prop = {
+  kind: PropKind;
+  pos: Vec3;
+  yaw?: number;
+  scale?: number;
+  color?: string;
+  size?: [number, number];
+  light?: boolean;
+  // For "npc": their name and look, and the id of their lines (shared/src/npcs.ts).
+  name?: string;
+  talk?: string;
+  look?: string; // an outfit preset id
 };
 
 // Something to walk up to and press E at (hub only).
@@ -73,7 +112,7 @@ export type Level = {
   spawnPoints?: Vec3[]; // if set, players spawn at a random one of these instead
   killY: number; // falling below this height means you fell off
   sky: string; // fallback color
-  skyStyle?: "day" | "dusk"; // the sky dome preset (client/src/Sky.ts); default day
+  skyStyle?: "day" | "dusk" | "golden" | "night"; // the sky dome preset (client/src/Sky.ts); default day
   boxes: Box[];
   course?: Course; // parkour levels only
   portals?: Portal[]; // the hub only
@@ -81,6 +120,7 @@ export type Level = {
   stations?: Station[]; // the hub only
   labels?: Label[];
   lights?: PointLightDef[];
+  props?: Prop[];
   // Battle royale arenas: size class, and the storm's starting radius and
   // how much to scale its stages (1 = the medium arena).
   arena?: { size: "small" | "medium" | "large"; stormRadius: number; stormScale: number };

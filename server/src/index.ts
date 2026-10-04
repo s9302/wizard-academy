@@ -8,6 +8,7 @@ import { WebSocketServer } from "ws";
 import { MAX_MESSAGE_BYTES } from "../../shared/src/constants.ts";
 import { accountFromRequest } from "./accounts.ts";
 import { handleApi } from "./api.ts";
+import { FAVICON_SVG } from "../../shared/src/favicon.ts";
 import { clientIp, hasValidSession, originAllowed, PIN_CSS, pinMatches, pinPage, sessionCookie } from "./auth.ts";
 import { config } from "./config.ts";
 import { migrate, waitForDb } from "./db.ts";
@@ -112,6 +113,9 @@ const http = createServer((req, res) => {
   } else if (path === "/auth/pin.css") {
     res.writeHead(200, { "content-type": "text/css; charset=utf-8", "cache-control": "public, max-age=3600" });
     res.end(PIN_CSS);
+  } else if (path === "/auth/favicon.svg") {
+    res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" });
+    res.end(FAVICON_SVG);
   } else if (path === "/auth/pin" && req.method === "POST") {
     handlePinPost(req, res).catch((err) => {
       console.error("PIN handler error:", err);

@@ -35,6 +35,9 @@ type Remote = {
   name: string;
   avatar: THREE.Group;
   snapshots: Snapshot[]; // oldest first
+  speed: number; // smoothed ground speed, m/s (for the walk animation)
+  lastX: number;
+  lastZ: number;
 };
 
 function lerpAngle(a: number, b: number, t: number): number {
@@ -65,7 +68,7 @@ export class RemotePlayers {
     this.remove(info.id);
     const avatar = createAvatar(info.id, info.name, info.look, info.admin);
     this.scene.add(avatar);
-    const remote: Remote = { name: info.name, avatar, snapshots: [] };
+    const remote: Remote = { name: info.name, avatar, snapshots: [], speed: 0, lastX: info.p[0], lastZ: info.p[2] };
     this.remotes.set(info.id, remote);
     setAvatarStatus(avatar, this.statuses.get(info.id) ?? "runner");
     this.push(info.id, info.p, info.ry, serverTime);
@@ -178,8 +181,11 @@ export class RemotePlayers {
     }
   }
 
+  private lastUpdate = performance.now();
+
   update(): void {
     if (!this.clock.ready) return;
+    const frameStart = performance.now();
     const renderTime = this.clock.now() - INTERP_DELAY_MS;
 
     for (const remote of this.remotes.values()) {
@@ -205,7 +211,16 @@ export class RemotePlayers {
         from.p[2] + (to.p[2] - from.p[2]) * t,
       );
       remote.avatar.rotation.y = lerpAngle(from.ry, to.ry, t);
-      animateAvatar(remote.avatar, performance.now());
+      const now = performance.now();
+      const dt = Math.max(1e-3, (now - this.lastUpdate) / 1000);
+      const moved = Math.hypot(remote.avatar.position.x - remote.lastX, remote.avatar.position.z - remote.lastZ);
+      remote.lastX = remote.avatar.position.x;
+      remote.lastZ = remote.avatar.position.z;
+      // Teleports (respawns) aren't walking.
+      const speed = moved / dt < 30 ? moved / dt : 0;
+      remote.speed += (speed - remote.speed) * Math.min(1, dt * 10);
+      animateAvatar(remote.avatar, now, remote.speed);
     }
+    this.lastUpdate = frameStart;
   }
 }

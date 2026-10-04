@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { type PickupKind, PICKUPS } from "../../../shared/src/combat.ts";
 import type { PickupInfo } from "../../../shared/src/protocol.ts";
+import { particles } from "../graphics/Particles.ts";
 
 function makeItem(kind: PickupKind): THREE.Group {
   const color = new THREE.Color(PICKUPS[kind].color);
@@ -36,7 +37,8 @@ function makeItem(kind: PickupKind): THREE.Group {
 
 export class Pickups {
   private scene: THREE.Scene;
-  private items = new Map<number, { group: THREE.Group; baseY: number }>();
+  private items = new Map<number, { group: THREE.Group; baseY: number; color: string }>();
+  private lastSpark = 0;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -54,13 +56,16 @@ export class Pickups {
       const group = makeItem(p.kind);
       group.position.set(...p.p);
       this.scene.add(group);
-      this.items.set(p.id, { group, baseY: p.p[1] });
+      this.items.set(p.id, { group, baseY: p.p[1], color: PICKUPS[p.kind].color });
     }
   }
 
   update(time: number): void {
     let i = 0;
-    for (const { group, baseY } of this.items.values()) {
+    const spark = time - this.lastSpark > 0.1;
+    if (spark) this.lastSpark = time;
+    for (const { group, baseY, color } of this.items.values()) {
+      if (spark) particles.emit({ at: group.position, count: 1, color, color2: "#ffffff", speed: 0.4, up: 0.6, spread: 0.6, life: 1, size: 0.1 });
       const bob = Math.sin(time * 2 + i++) * 0.12;
       group.position.y = baseY + bob;
       for (const child of group.children) {

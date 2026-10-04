@@ -7,7 +7,7 @@ import { findRoom, HUB_ROOM, ROOMS, type RoomInfo } from "../../shared/src/rooms
 import { CHAPTERS, chaptersDone } from "../../shared/src/story.ts";
 import { type Loadout, UNLOCKS, unlocksFor } from "../../shared/src/unlocks.ts";
 import { Game } from "./Game.ts";
-import { quality, setQuality } from "./quality.ts";
+import { QUALITIES, QUALITY_NAMES, quality, setQuality } from "./quality.ts";
 import { Input } from "./Input.ts";
 import { formatTime } from "./ParkourHud.ts";
 import { sound } from "./audio/Sound.ts";
@@ -30,6 +30,7 @@ const logoutButton = $<HTMLButtonElement>("logout-button");
 const message = $("overlay-message");
 const resumeHint = $("resume-hint");
 const exitButton = $<HTMLButtonElement>("exit-button");
+const wardrobeButton = $<HTMLButtonElement>("wardrobe-button");
 const fade = $("fade");
 const hud = $("hud");
 
@@ -193,6 +194,7 @@ function startGame(room: RoomInfo, from?: string): Game | null {
   hud.hidden = false;
   exitButton.hidden = false;
   exitButton.textContent = room.id === HUB_ROOM ? "Exit to menu" : "Back to the Academy";
+  wardrobeButton.hidden = room.id !== HUB_ROOM;
   game = new Game(container, input, {
     name: profile.username,
     profile: { xp: profile.xp, bestTimes: profile.bestTimes, loadout: profile.loadout, isAdmin: profile.isAdmin },
@@ -276,6 +278,7 @@ async function backToMenu(reason = ""): Promise<void> {
   fade.classList.remove("show");
   hud.hidden = true;
   exitButton.hidden = true;
+  wardrobeButton.hidden = true;
   sound.music("academy");
   resumeHint.hidden = true;
   overlay.hidden = false;
@@ -293,12 +296,18 @@ async function backToMenu(reason = ""): Promise<void> {
 
 // Graphics quality: remembered in this browser, used from the next room on.
 const qualityButton = $<HTMLButtonElement>("quality-button");
-const showQuality = (note = "") => (qualityButton.textContent = `Graphics: ${quality() === "high" ? "High" : "Low"}${note}`);
+const showQuality = (note = "") => (qualityButton.textContent = `Graphics: ${QUALITY_NAMES[quality()]}${note}`);
 showQuality();
+qualityButton.title = "Low: fastest. High: detailed surfaces, clouds, grass. Ultra: glow, soft shadows, ambient occlusion, torchlight (needs a good graphics card).";
 qualityButton.addEventListener("click", (e) => {
   e.stopPropagation();
-  setQuality(quality() === "high" ? "low" : "high");
+  setQuality(QUALITIES[(QUALITIES.indexOf(quality()) + 1) % QUALITIES.length]);
   showQuality(game ? " (from the next room)" : "");
+});
+
+wardrobeButton.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (game?.openWardrobe()) overlay.hidden = true;
 });
 
 exitButton.addEventListener("click", () => {
