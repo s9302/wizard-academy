@@ -13,6 +13,7 @@
 //   The server's movement check already allows short bursts (it's built for
 //   lag spikes), so a dash fits inside it.
 
+import { CLIMB_SPEED, type JumpPad, type Ladder, onLadder, onPad, PAD_RADIUS } from "../../shared/src/levels/types.ts";
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import {
@@ -58,7 +59,10 @@ export class PlayerController {
   private dashDir = { x: 0, z: 0 };
   dashCooldown = 0; // seconds until the dash is ready
   // What happened since the game last looked (for sounds): read, then reset.
-  events = { jumped: false, dashed: false, landed: 0, walked: 0 };
+  events = { jumped: false, dashed: false, landed: 0, walked: 0, padded: false, climbing: false };
+  // Ladders and jump pads in this level (Phase 16).
+  ladders: Ladder[] = [];
+  jumpPads: JumpPad[] = [];
   private slowLeft = 0; // seconds of Frost Shard slow remaining
   private slowFactor = 1;
   private previous = new THREE.Vector3();
@@ -206,6 +210,25 @@ export class PlayerController {
 
     // Gravity.
     this.velocityY = Math.max(this.velocityY - GRAVITY * dt, -TERMINAL_FALL_SPEED);
+
+    // Ladders: W climbs, S goes down, nothing holds on. Jumping lets go.
+    const here: [number, number, number] = [this.current.x, this.current.y, this.current.z];
+    const ladder = this.ladders.find((l) => onLadder(here, l));
+    if (ladder && this.timeSinceJumpPressed > 0.05) {
+      const climb = input.forward * CLIMB_SPEED;
+      if (climb !== 0 || !this.grounded) {
+        this.velocityY = climb;
+        this.events.climbing = climb !== 0;
+      }
+    }
+    // Jump pads: straight up.
+    if (this.grounded && this.velocityY <= 0) {
+      const pad = this.jumpPads.find((j) => onPad(here, j.pos, PAD_RADIUS));
+      if (pad) {
+        this.velocityY = pad.power;
+        this.events.padded = true;
+      }
+    }
 
     const desired = { x: hx * dt, y: this.velocityY * dt, z: hz * dt };
     this.controller.computeColliderMovement(this.collider, desired);

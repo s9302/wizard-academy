@@ -6,6 +6,8 @@ import type { PickupKind, SpellId } from "./combat.ts";
 import type { Box } from "./levels/types.ts";
 import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 import type { Appearance } from "./appearance.ts";
+import type { MonsterKind, MonsterState } from "./monsters.ts";
+import type { BossKind, BossShot } from "./bosses.ts";
 
 export type Vec3 = [number, number, number];
 
@@ -50,8 +52,10 @@ export type ClassMsg = { t: "class"; cls: ClassId };
 export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3 };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
+// Battle royale: add or remove a monster.
+export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg;
 
 // ---- Server -> Client ----
 
@@ -66,7 +70,7 @@ export type LeaveMsg = { t: "leave"; id: number };
 // (ms) when the server received it, which clients use for interpolation.
 export type MovedMsg = { t: "moved"; id: number; p: Vec3; ry: number; time: number };
 // The server moves your player: a respawn, or a snap back after a rejected move.
-export type TeleportMsg = { t: "teleport"; p: Vec3; tp: number };
+export type TeleportMsg = { t: "teleport"; p: Vec3; tp: number; yaw?: number };
 export type ErrorMsg = { t: "error"; message: string };
 // A line of text for everyone in the room ("Alice finished in 41.23 s").
 export type AnnounceMsg = { t: "announce"; text: string };
@@ -137,6 +141,26 @@ export type AbilityFailedMsg = { t: "abilityFailed"; slot: 0 | 1; reason: string
 // You landed on someone: bounce off.
 export type BounceMsg = { t: "bounce" };
 
+// ---- Phase 16: arena features, monsters, bosses, trial tasks ----
+// Someone stepped on a teleporter (everyone sees the flash at both ends).
+export type WarpMsg = { t: "warp"; id: number; from: Vec3; to: Vec3 };
+// Every monster, ~10 times a second while there are any.
+export type MonstersMsg = { t: "monsters"; list: MonsterState[] };
+// One went down (by: who finished it off, if anyone).
+export type MonsterDiedMsg = { t: "monsterDied"; id: number; kind: MonsterKind; by: number | null };
+export type MonsterCountMsg = { t: "monsterCount"; count: number; max: number };
+// A trial's boss: where it is, its health, and what it's doing.
+export type BossMsg = { t: "boss"; kind: BossKind; p: Vec3; ry: number; hp: number; max: number; state: "sleep" | "fight" | "dead"; windup: boolean };
+export type BossShotMsg = { t: "bossShot"; shot: BossShot };
+export type BossShotEndMsg = { t: "bossShotEnd"; id: number; p: Vec3 };
+export type BossWaveMsg = { t: "bossWave"; o: Vec3; time: number };
+export type BossStrikeMsg = { t: "bossStrike"; p: Vec3; at: number };
+// To one player: hearts left in a boss fight.
+export type HeartsMsg = { t: "hearts"; hearts: number; max: number };
+// To one player: progress on a trial task (orbs collected, runes in order,
+// a boss beaten). got: which orbs/runes so far; done: all of it.
+export type TaskMsg = { t: "task"; id: string; got: number[]; done: boolean; wrong?: boolean };
+
 // ---- Looks and loadout ----
 // Someone changed their hat or robe.
 export type LookMsg = { t: "look"; id: number; look: Look };
@@ -185,4 +209,15 @@ export type ServerMsg =
   | UnconjureMsg
   | EffectMsg
   | AbilityFailedMsg
+  | WarpMsg
+  | MonstersMsg
+  | MonsterDiedMsg
+  | MonsterCountMsg
+  | BossMsg
+  | BossShotMsg
+  | BossShotEndMsg
+  | BossWaveMsg
+  | BossStrikeMsg
+  | HeartsMsg
+  | TaskMsg
   | XpMsg;

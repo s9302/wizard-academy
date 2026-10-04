@@ -105,6 +105,17 @@ export class NavGrid {
       }
     }
 
+    // Lava and void pits: nothing to stand on, with a margin.
+    for (const pit of level.pits ?? []) {
+      const hx = pit.size[0] / 2 + 0.6;
+      const hz = pit.size[1] / 2 + 0.6;
+      for (let i = 0; i < this.floor.length; i++) {
+        const [x, z] = this.center(i);
+        // (A bridge over it is still fine to walk on.)
+        if (Math.abs(x - pit.pos[0]) < hx && Math.abs(z - pit.pos[2]) < hz && !(this.floor[i] > pit.pos[1] + 0.15)) this.floor[i] = NaN;
+      }
+    }
+
     // Keep a body's width from walls: a cell next to a much higher one (a
     // wall face) is off limits.
     const nearWall = new Uint8Array(this.cols * this.rows);

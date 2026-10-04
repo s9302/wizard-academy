@@ -8,7 +8,7 @@
 // at most 1 m; drops bots take are at most 3 m (anything higher has a ramp).
 
 import type { Vec3 } from "../protocol.ts";
-import type { Box, Level } from "./types.ts";
+import type { Box, JumpPad, Ladder, Level, Pit, Prop, Teleporter } from "./types.ts";
 import { FALL_RESPAWN_Y } from "../constants.ts";
 
 export type ArenaSize = "small" | "medium" | "large";
@@ -18,6 +18,11 @@ export class ArenaKit {
   readonly spawns: Vec3[] = [];
   readonly pickups: Vec3[] = [];
   readonly half: number;
+  readonly ladders: Ladder[] = [];
+  readonly teleporters: Teleporter[] = [];
+  readonly pits: Pit[] = [];
+  readonly pads: JumpPad[] = [];
+  readonly props: Prop[] = [];
 
   // A walled square arena, 2*half wide, with a floor of `ground` color.
   constructor(half: number, ground: string, wall: string, wallHeight = 6) {
@@ -93,6 +98,43 @@ export class ArenaKit {
     return this;
   }
 
+  // A ladder up a wall: (x, z) at the wall's face, `yaw` facing the wall.
+  ladder(x: number, z: number, height: number, yaw: number, floor = 0): this {
+    this.ladders.push({ pos: [x, floor, z], height, yaw });
+    return this;
+  }
+
+  // A pair of teleporter pads. You arrive 2.5 m in front of the other pad
+  // (on the side facing back toward where you came from, which is usually
+  // the open middle of the arena), facing away from it.
+  teleporterPair(a: [number, number, number], b: [number, number, number], color = "#5ac8ff"): this {
+    const out = (from: Vec3, to: Vec3): { p: Vec3; yaw: number } => {
+      const dx = to[0] - from[0];
+      const dz = to[2] - from[2];
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len;
+      const uz = dz / len;
+      // Facing (-ux, -uz): yaw 0 faces -Z, and forward = (-sin yaw, -cos yaw).
+      return { p: [to[0] - ux * 2.5, to[1] + 1, to[2] - uz * 2.5], yaw: Math.atan2(ux, uz) };
+    };
+    const ab = out(a, b);
+    const ba = out(b, a);
+    this.teleporters.push({ pos: a, to: ab.p, yaw: ab.yaw, color }, { pos: b, to: ba.p, yaw: ba.yaw, color });
+    return this;
+  }
+
+  // A pool of lava (or the void) on the floor at height `floor`.
+  pit(x: number, z: number, w: number, d: number, kind: Pit["kind"] = "lava", floor = 0): this {
+    this.pits.push({ pos: [x, floor + 0.02, z], size: [w, d], kind });
+    return this;
+  }
+
+  // A jump pad that throws you `power` m/s upward (16 clears about 6.4 m).
+  pad(x: number, z: number, power: number, floor = 0): this {
+    this.pads.push({ pos: [x, floor, z], power });
+    return this;
+  }
+
   // A pickup floating over the floor at (x, z), floor height `floor`.
   pickup(x: number, z: number, floor = 0): this {
     this.pickups.push([x, floor + 0.9, z]);
@@ -113,7 +155,7 @@ export class ArenaKit {
     return this;
   }
 
-  level(id: string, name: string, size: ArenaSize, sky: "day" | "dusk", stormRadius: number): Level {
+  level(id: string, name: string, size: ArenaSize, sky: "day" | "dusk" | "golden" | "night", stormRadius: number): Level {
     return {
       id,
       name,
@@ -121,10 +163,15 @@ export class ArenaKit {
       spawnSpread: 0.5,
       spawnPoints: this.spawns,
       killY: FALL_RESPAWN_Y,
-      sky: sky === "dusk" ? "#e3b7c8" : "#a9c8f5",
+      sky: sky === "dusk" ? "#e3b7c8" : sky === "night" ? "#28325e" : "#a9c8f5",
       skyStyle: sky,
       boxes: this.boxes,
       pickupSpots: this.pickups,
+      ladders: this.ladders.length ? this.ladders : undefined,
+      teleporters: this.teleporters.length ? this.teleporters : undefined,
+      pits: this.pits.length ? this.pits : undefined,
+      jumpPads: this.pads.length ? this.pads : undefined,
+      props: this.props.length ? this.props : undefined,
       arena: { size, stormRadius, stormScale: stormRadius / 46 },
     };
   }

@@ -16,6 +16,8 @@ import { RoyaleHud } from "./RoyaleHud.ts";
 import { Spells } from "./Spells.ts";
 import { Storm } from "./Storm.ts";
 import { Viewmodel } from "./Viewmodel.ts";
+import { MonsterViews } from "./Monsters.ts";
+import { isMonsterId } from "../../../shared/src/monsters.ts";
 import { sound } from "../audio/Sound.ts";
 import type { SynthId } from "../audio/synth.ts";
 
@@ -43,6 +45,7 @@ export class Royale {
   private storm: Storm;
   private pickups: Pickups;
   private viewmodel: Viewmodel;
+  private monsters: MonsterViews;
   private remotes: RemotePlayers;
   private hooks: RoyaleHooks;
   private state: RoundState = "waiting";
@@ -70,8 +73,10 @@ export class Royale {
     this.spells = new Spells(scene, clock, level.boxes);
     this.pickups = new Pickups(scene);
     this.viewmodel = new Viewmodel(camera);
+    this.monsters = new MonsterViews(scene);
     this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, {
       onBots: (action) => hooks.send({ t: "bots", action }),
+      onMonsters: (action) => hooks.send({ t: "monsters", action }),
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
     });
@@ -123,6 +128,16 @@ export class Royale {
       case "botCount":
         this.hud.botCount(msg.count, msg.max);
         return true;
+      case "monsterCount":
+        this.hud.monsterCount(msg.count, msg.max);
+        return true;
+      case "monsters":
+        this.monsters.set(msg.list);
+        return true;
+      case "monsterDied":
+        this.monsters.died(msg.id);
+        if (msg.by === me) this.hud.hitMarker();
+        return true;
       case "alive":
         if (this.state === "playing" && this.alive.has(me) && !msg.ids.includes(me)) sound.fx("defeat");
         else if (this.state === "playing" && msg.ids.length < this.alive.size) sound.play("bell2", { volume: 0.35, rate: 1.5 });
@@ -156,7 +171,7 @@ export class Royale {
       case "melee":
         this.meleeSounds(msg.id, me, msg.hits, msg.blocked, msg.backstabs);
         if (msg.id !== me) this.remotes.swing(msg.id);
-        for (const id of msg.hits) if (id !== me) this.remotes.flash(id);
+        for (const id of msg.hits) if (id !== me && !this.monsters.flash(id)) this.remotes.flash(id);
         if (msg.id === me && msg.hits.length) this.hud.hitMarker();
         if (msg.id === me && msg.backstabs.length) this.hud.callout("Backstab!");
         if (msg.id === me && msg.blocked.length) this.hud.callout("Blocked");
@@ -211,7 +226,7 @@ export class Royale {
       case "spellEnd":
         this.impactSound(msg.id, msg.p, msg.hit, me);
         this.spells.ended(msg.id, msg.p);
-        if (msg.hit !== null && msg.hit !== me) this.remotes.flash(msg.hit);
+        if (msg.hit !== null && msg.hit !== me && !(isMonsterId(msg.hit) && this.monsters.flash(msg.hit))) this.remotes.flash(msg.hit);
         if (msg.hit !== null && this.myShots.has(msg.id)) this.hud.hitMarker();
         this.myShots.delete(msg.id);
         return true;
@@ -359,6 +374,7 @@ export class Royale {
     this.spells.update();
     this.pickups.update(time);
     this.viewmodel.update(moving, time);
+    this.monsters.update();
     const c = this.storm.circle(serverNow);
     const inStorm = !!c && Math.hypot(me.x - c[0], me.z - c[1]) > c[2];
     this.inStorm = inStorm;
@@ -383,6 +399,7 @@ export class Royale {
 
   dispose(): void {
     this.spells.clear();
+    this.monsters.clear();
     this.viewmodel.dispose();
     this.hud.dispose();
     this.hooks.onSpeed(1);

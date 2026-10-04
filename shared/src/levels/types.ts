@@ -77,6 +77,50 @@ export type PointLightDef = { pos: Vec3; color: string; intensity: number; dista
 // An axis-aligned box in space, used as a trigger area.
 export type Zone = { min: Vec3; max: Vec3 };
 
+// ---- Arena features (Phase 16) ----
+
+// A ladder against a wall. pos: the bottom middle, at the wall's face, on
+// the floor; yaw: the way you face while climbing (toward the wall).
+// Walk into it holding W to climb, S to go down, Space to let go.
+export type Ladder = { pos: Vec3; height: number; yaw: number; width?: number };
+// A teleporter pad on the floor at pos; stepping on it sends you to `to`
+// (capsule center), facing yaw. Each pad goes one way: pair them up.
+export type Teleporter = { pos: Vec3; to: Vec3; yaw?: number; color?: string };
+// A pool of lava or a void on the floor: pos is the middle of its surface.
+// Touch it and you're out (or back to the start, outside the arena).
+export type Pit = { pos: Vec3; size: [number, number]; kind: "lava" | "void" };
+// A jump pad on the floor: throws you straight up at `power` m/s.
+export type JumpPad = { pos: Vec3; power: number };
+
+export const TELEPORT_RADIUS = 0.9;
+export const PAD_RADIUS = 1.0;
+export const CLIMB_SPEED = 3.2;
+const FEET = 0.9; // capsule center to feet
+
+// Is a player (capsule center p) on the ladder?
+export function onLadder(p: Vec3, l: Ladder): boolean {
+  const s = Math.sin(l.yaw);
+  const c = Math.cos(l.yaw);
+  const dx = p[0] - l.pos[0];
+  const dz = p[2] - l.pos[2];
+  const out = s * dx + c * dz; // how far in front of the wall (opposite the facing)
+  const side = c * dx - s * dz;
+  const up = p[1] - FEET - l.pos[1];
+  return Math.abs(side) < (l.width ?? 1) / 2 + 0.25 && out > -0.3 && out < 0.95 && up > -0.3 && up < l.height + 0.2;
+}
+
+// Standing on a round pad?
+export function onPad(p: Vec3, pos: Vec3, radius: number): boolean {
+  const feet = p[1] - FEET - pos[1];
+  return Math.hypot(p[0] - pos[0], p[2] - pos[2]) < radius && feet > -0.3 && feet < 0.6;
+}
+
+// Touching a pit? (A little inside its edge, so brushing the lip is safe.)
+export function inPit(p: Vec3, pit: Pit): boolean {
+  const feet = p[1] - FEET - pit.pos[1];
+  return Math.abs(p[0] - pit.pos[0]) < pit.size[0] / 2 - 0.25 && Math.abs(p[2] - pit.pos[2]) < pit.size[1] / 2 - 0.25 && feet < 0.2 && feet > -3;
+}
+
 export type Checkpoint = {
   zone: Zone;
   respawn: Vec3; // where you reappear after falling (capsule center)
@@ -121,6 +165,10 @@ export type Level = {
   labels?: Label[];
   lights?: PointLightDef[];
   props?: Prop[];
+  ladders?: Ladder[];
+  teleporters?: Teleporter[];
+  pits?: Pit[];
+  jumpPads?: JumpPad[];
   // Battle royale arenas: size class, and the storm's starting radius and
   // how much to scale its stages (1 = the medium arena).
   arena?: { size: "small" | "medium" | "large"; stormRadius: number; stormScale: number };

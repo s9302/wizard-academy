@@ -62,6 +62,7 @@ export class RoyaleHud {
   private stormEl: HTMLElement;
   private crosshairEl: HTMLElement;
   private bots: BotControls;
+  private monsterControls: BotControls;
   private state: RoundState = "waiting";
   private lastBeep = 0;
   private endsAt: number | null = null;
@@ -78,7 +79,7 @@ export class RoyaleHud {
     clock: ServerClock,
     storm: Storm,
     roomName: string,
-    actions: { onBots: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void; onVote: (arena: string) => void },
+    actions: { onBots: (action: "add" | "remove") => void; onMonsters: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void; onVote: (arena: string) => void },
   ) {
     this.clock = clock;
     this.onVote = actions.onVote;
@@ -97,7 +98,8 @@ export class RoyaleHud {
     this.votePanel.id = "arena-vote";
     this.votePanel.hidden = true;
     this.votePanel.onclick = (e) => e.stopPropagation();
-    this.side.append(this.picker, this.votePanel, document.getElementById("bot-controls")!);
+    this.monsterControls = new BotControls(actions.onMonsters, "monster");
+    this.side.append(this.picker, this.votePanel, document.getElementById("bot-controls")!, document.getElementById("monster-controls")!);
 
     document.body.classList.add("in-royale");
     this.crosshairEl = document.getElementById("crosshair")!;
@@ -334,6 +336,10 @@ export class RoyaleHud {
     this.bots.update(count, max);
   }
 
+  monsterCount(count: number, max: number): void {
+    this.monsterControls.update(count, max);
+  }
+
   result(title: string, lines: string[]): void {
     this.resultsEl.replaceChildren();
     const h = document.createElement("h2");
@@ -395,7 +401,11 @@ export class RoyaleHud {
 
   dispose(): void {
     // The bot buttons belong to the panel (tag and infection use them too).
-    document.querySelector("#overlay .panel")!.appendChild(document.getElementById("bot-controls")!);
+    const panel = document.querySelector("#overlay .panel")!;
+    panel.appendChild(document.getElementById("bot-controls")!);
+    const monsters = document.getElementById("monster-controls")!;
+    monsters.hidden = true;
+    panel.appendChild(monsters);
     this.side.remove();
     window.clearTimeout(this.calloutTimer);
     window.clearTimeout(this.bannerTimer);

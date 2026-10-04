@@ -4,7 +4,8 @@
 
 import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
-import type { Level } from "../../../shared/src/levels/types.ts";
+import { inPit, type Level, onPad, PAD_RADIUS, type Pit, TELEPORT_RADIUS } from "../../../shared/src/levels/types.ts";
+import { GRAVITY } from "../../../shared/src/constants.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
 import { awardXp } from "../accounts.ts";
 import type { Peer } from "../Connection.ts";
@@ -79,6 +80,13 @@ export abstract class Room {
   // After a move passed the sanity check: game rules that depend on where
   // players are (checkpoints, tag range, the zone) hook in here.
   protected onPlayerMoved(_player: Player, _from: Vec3, _to: Vec3, _now: number): void {}
+  // Touched a lava or void pit (default: back to a safe spot).
+  protected onPit(player: Player, pit: Pit): void {
+    this.teleport(player, this.respawnPoint(player));
+    player.conn.send({ t: "announce", text: pit.kind === "lava" ? "Too hot! Back you go." : "The void spat you back out." });
+  }
+  // Launched by a jump pad (the battle royale forgives the fall).
+  protected onJumpPad(_player: Player, _now: number): void {}
   // Mode-specific messages go here later.
   protected onMessage(_player: Player, _msg: ClientMsg): void {}
   // Called NET_RATE_HZ times per second.
@@ -131,6 +139,7 @@ export abstract class Room {
     const player = this.players.get(conn.id);
     if (!player) return;
     this.players.delete(conn.id);
+    this.warpReady.delete(conn.id);
     conn.room = null;
     this.broadcast({ t: "leave", id: conn.id });
     this.onPlayerLeft(player);
@@ -163,11 +172,11 @@ export abstract class Room {
 
   // Move a player. The client applies it and starts tagging its moves with
   // the new tp number; anything still in flight from before is ignored.
-  protected teleport(player: Player, p: Vec3): void {
+  protected teleport(player: Player, p: Vec3, yaw?: number): void {
     player.tp += 1;
     player.p = p;
     player.moveCheck.reset();
-    player.conn.send({ t: "teleport", p, tp: player.tp });
+    player.conn.send({ t: "teleport", p, tp: player.tp, yaw });
     this.relayMove(player, Date.now());
   }
 
@@ -195,6 +204,36 @@ export abstract class Room {
     player.ry = msg.ry;
     this.relayMove(player, now);
     this.onPlayerMoved(player, from, msg.p, now);
+    if (player.conn.room === this && this.players.get(player.conn.id) === player && player.tp === msg.tp) this.checkFeatures(player, now);
+  }
+
+  // ---- Arena features: teleporters, jump pads, pits ----
+
+  private warpReady = new Map<number, number>();
+
+  // Called for real players' accepted moves (bots never step on these).
+  private checkFeatures(player: Player, now: number): void {
+    const L = this.level;
+    const p = player.p;
+    for (const pad of L.jumpPads ?? []) {
+      if (!onPad(p, pad.pos, PAD_RADIUS + 0.3)) continue;
+      // The client launches itself; let the climb through the speed check.
+      player.moveCheck.grantUp((pad.power * pad.power) / (2 * GRAVITY) + 1.5);
+      this.onJumpPad(player, now);
+    }
+    for (const pit of L.pits ?? []) {
+      if (!inPit(p, pit)) continue;
+      this.onPit(player, pit);
+      return;
+    }
+    for (const t of L.teleporters ?? []) {
+      const id = player.conn.id;
+      if (!onPad(p, t.pos, TELEPORT_RADIUS) || now < (this.warpReady.get(id) ?? 0)) continue;
+      this.warpReady.set(id, now + 1500);
+      this.broadcast({ t: "warp", id, from: p, to: t.to });
+      this.teleport(player, t.to, t.yaw);
+      return;
+    }
   }
 
   // Tell everyone else where this player is now. (The battle royale skips

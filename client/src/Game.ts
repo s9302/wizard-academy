@@ -28,6 +28,7 @@ import { fancy, quality, ultra } from "./quality.ts";
 import { PostFX } from "./graphics/PostFX.ts";
 import { Particles, particles } from "./graphics/Particles.ts";
 import { addProps } from "./levels/Props.ts";
+import { addFeatures, type Features } from "./levels/Features.ts";
 import { Sky } from "./Sky.ts";
 import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
@@ -87,6 +88,7 @@ export class Game {
   private postfx: PostFX | null = null;
   private particleSystem: Particles;
   private props: { update(time: number, dt: number): void } | null = null;
+  private features: Features | null = null;
   // Third person (V): your own body, and a camera over your shoulder.
   private thirdPerson = false;
   private selfAvatar: THREE.Group | null = null;
@@ -268,6 +270,7 @@ export class Game {
     this.hemi.color.set(this.sky.preset.hemiSky);
     this.hemi.groundColor.set(this.sky.preset.hemiGround);
     this.hemi.intensity = this.sky.preset.hemi;
+    this.features = addFeatures(this.levelRoot, level);
     this.props = addProps(this.levelRoot, level, {
       sunDir: this.sky.sunDirection,
       sky: this.sky.horizon,
@@ -275,6 +278,8 @@ export class Game {
     });
     this.world.step(); // builds the collision lookup structures before the first move
     this.player = new PlayerController(this.world, level.killY);
+    this.player.ladders = level.ladders ?? [];
+    this.player.jumpPads = level.jumpPads ?? [];
     if (old) {
       this.player.perks = old.perks;
       this.player.speedMul = old.speedMul;
@@ -397,7 +402,15 @@ export class Game {
       case "teleport":
         this.teleportCount = msg.tp;
         this.player.teleport(...msg.p);
+        if (msg.yaw !== undefined) this.input.yaw = msg.yaw;
         this.respawnRequestedAt = null;
+        break;
+      case "warp":
+        // A teleporter: a flash where they left and where they arrive.
+        for (const at of [msg.from, msg.to]) {
+          particles.emit({ at, count: 40, color: "#5ac8ff", color2: "#ffffff", speed: 3, up: 1, spread: 0.6, life: 0.7, size: 0.2 });
+          sound.fx("portal", { at: msg.id === this.myId ? null : at, volume: 0.6 });
+        }
         break;
       case "announce":
         this.addFeed(msg.text);
@@ -681,7 +694,7 @@ export class Game {
 
   // Footsteps, jumps and landings: only your own (others' would be noise).
   private stepDistance = 0;
-  private movementSounds(): void {
+  private movementSounds(dt: number): void {
     const e = this.player.events;
     const dir = this.camera.getWorldDirection(this.tmpDir);
     const p = this.camera.position;
@@ -697,7 +710,13 @@ export class Game {
       const grassy = onGrass(this.level, f.x, f.y - 0.9, f.z);
       sound.play([...(grassy ? GRASS_STEPS : STEPS)], { volume: 0.35 });
     }
-    this.player.events = { jumped: false, dashed: false, landed: 0, walked: 0 };
+    if (e.padded) {
+      sound.fx("charge", { volume: 0.6, rate: 1.4 });
+      const p = this.player.position;
+      particles.emit({ at: [p.x, p.y - 0.8, p.z], count: 30, color: "#7dffb0", color2: "#ffffff", speed: 3, up: 2, life: 0.6, size: 0.18 });
+    }
+    if (e.climbing && Math.random() < dt * 3) sound.play("wood0", { volume: 0.25, rate: 1.3 });
+    this.player.events = { jumped: false, dashed: false, landed: 0, walked: 0, padded: false, climbing: false };
   }
   private tmpDir = new THREE.Vector3();
 
@@ -769,7 +788,7 @@ export class Game {
     this.sun.target.position.copy(pos);
     this.sun.position.copy(pos).add(this.sunOffset);
     this.sky.update(this.camera, dt);
-    this.movementSounds();
+    this.movementSounds(dt);
 
     // Send our position ~20 times a second.
     this.sendTimer += dt * 1000;
@@ -812,6 +831,7 @@ export class Game {
     }
 
     this.props?.update(now / 1000, dt);
+    this.features?.update(now / 1000, dt);
     this.particleSystem.update(dt);
     if (this.postfx) this.postfx.render(dt);
     else this.renderer.render(this.scene, this.camera);

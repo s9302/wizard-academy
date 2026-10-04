@@ -4,16 +4,21 @@
 
 const WAIT_MS = 1000;
 
+// The same control drives "Monsters [-] [+]" in the battle royale (prefix
+// "monster": the elements #monster-controls, #monster-count...).
 export class BotControls {
-  private countEl = document.getElementById("bot-count")!;
-  private addEl = document.getElementById("bot-add") as HTMLButtonElement;
-  private removeEl = document.getElementById("bot-remove") as HTMLButtonElement;
+  private countEl: HTMLElement;
+  private addEl: HTMLButtonElement;
+  private removeEl: HTMLButtonElement;
   private count = 0;
   private max = 0;
   private waiting: number | undefined;
 
-  constructor(onBots: (action: "add" | "remove") => void) {
-    const controls = document.getElementById("bot-controls")!;
+  constructor(onBots: (action: "add" | "remove") => void, prefix = "bot") {
+    this.countEl = document.getElementById(`${prefix}-count`)!;
+    this.addEl = document.getElementById(`${prefix}-add`) as HTMLButtonElement;
+    this.removeEl = document.getElementById(`${prefix}-remove`) as HTMLButtonElement;
+    const controls = document.getElementById(`${prefix}-controls`)!;
     controls.hidden = false;
     // Clicks here shouldn't fall through to "click to resume". Assigned with
     // onclick (not addEventListener) so the next room's controls replace them.

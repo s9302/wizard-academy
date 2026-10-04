@@ -44,12 +44,17 @@ export class MoveCheck {
     this.horizontal += meters;
   }
 
+  // Allow this much extra climb (a jump pad's launch).
+  grantUp(meters: number): void {
+    this.up = Math.max(this.up, meters);
+  }
+
   // Returns true if moving from `from` to `to` is plausible.
   allow(from: Vec3, to: Vec3, now = Date.now()): boolean {
     const seconds = Math.max(0, (now - this.last) / 1000);
     this.last = now;
     this.horizontal = Math.max(this.horizontal, Math.min(HORIZONTAL.cap, this.horizontal + HORIZONTAL.rate * seconds));
-    this.up = Math.min(UP.cap, this.up + UP.rate * seconds);
+    this.up = Math.max(this.up, Math.min(UP.cap, this.up + UP.rate * seconds)); // a grant can go over the cap
     this.down = Math.min(DOWN.cap, this.down + DOWN.rate * seconds);
 
     const horizontal = Math.hypot(to[0] - from[0], to[2] - from[2]);

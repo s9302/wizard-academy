@@ -94,6 +94,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       const look = sanitizeAppearance(msg, allUnlocks());
       return { t: "loadout", primary: msg.primary as PrimarySpell, hat: msg.hat as Hat, robe: msg.robe as Robe, ...look };
     }
+    case "monsters":
+      if (msg.action !== "add" && msg.action !== "remove") return null;
+      return { t: "monsters", action: msg.action };
     case "tag":
       if (!Number.isSafeInteger(msg.target) || (msg.target as number) < 1) return null;
       return { t: "tag", target: msg.target as number };

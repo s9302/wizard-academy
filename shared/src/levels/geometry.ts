@@ -71,6 +71,13 @@ export function segmentHitsPlayer(from: Vec3, to: Vec3, p: Vec3, radius: number)
   return dist <= radius + PLAYER_RADIUS ? s : null;
 }
 
+// The same for any upright capsule: center c, `half` from center to each
+// end sphere's center, `r` thick (monsters come in all sizes).
+export function segmentHitsCapsule(from: Vec3, to: Vec3, c: Vec3, half: number, r: number, radius: number): number | null {
+  const [s, dist] = closestBetweenSegments(from, to, [c[0], c[1] - half, c[2]], [c[0], c[1] + half, c[2]]);
+  return dist <= radius + r ? s : null;
+}
+
 // Closest points between segments p1-q1 and p2-q2 (Ericson, "Real-Time
 // Collision Detection" 5.1.9). Returns [s along the first, distance].
 function closestBetweenSegments(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3): [number, number] {

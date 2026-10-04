@@ -7,6 +7,7 @@
 
 import { arena as ruins } from "./arena.ts";
 import { ArenaKit } from "./arenaKit.ts";
+import { ARENAS2 } from "./arenas2.ts";
 import type { Level } from "./types.ts";
 
 const SAND = "#b9a27a";
@@ -420,7 +421,7 @@ function rooftops(): Level {
   return k.level("rooftops", "The Rooftops", "large", "day", 72);
 }
 
-export const ARENAS: Level[] = [thePit(), twinTowers(), ziggurat(), ruins, skyBridges(), canyon(), highlands(), fortress(), rooftops()];
+export const ARENAS: Level[] = [thePit(), twinTowers(), ziggurat(), ruins, skyBridges(), canyon(), highlands(), fortress(), rooftops(), ...ARENAS2];
 
 export function arenasOfSize(size: "small" | "medium" | "large"): Level[] {
   return ARENAS.filter((a) => a.arena?.size === size);
