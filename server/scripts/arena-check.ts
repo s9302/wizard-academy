@@ -1,7 +1,6 @@
 // Checks Phase 11's arena features: the vote between rounds (one arena of
 // each size on offer, the winner loads, spawns are in it, the storm fits
-// it), fall damage (a real fall hurts, walking down doesn't), and landing on
-// someone (hurts them, bounces you, no fall damage for you).
+// it), no fall damage, and landing on someone (hurts them, bounces you).
 //
 // The server has no collision for movement (by design), so the test
 // "climbs" by sending moves straight up at a legal speed.
@@ -134,8 +133,7 @@ let mark = a.msgs.length;
 await a.moveY(floor, 16); // and drop
 await a.hold(400);
 const lost = before - (b.hp.get(a.id) ?? before);
-check("an 8 m fall hurts: (8 - 4) x 8 = 32", lost === 32, `lost ${lost}`);
-check("...and says so", a.since("announce", mark).some((m) => m.text.includes("fall")));
+check("an 8 m fall doesn't hurt (no fall damage)", lost === 0, `lost ${lost}`);
 await a.moveY(floor + 8, 5);
 await a.hold(400);
 before = b.hp.get(a.id)!;

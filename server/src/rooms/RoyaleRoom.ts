@@ -96,13 +96,8 @@ const STORM_TICK_MS = 500; // storm damage is dealt twice a second (half the dps
 const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle (medium arena)
 const RESULTS_MS = 12_000 * SCALE; // long enough to vote for the next arena
 
-// Falling: more than SAFE_FALL meters hurts, FALL_DAMAGE per meter beyond.
-// Only real falls count (moving down faster than FALL_SPEED at some point),
-// so walking down a ramp never does. Landing on someone (a "stomp") hurts
-// them instead, and you bounce off.
-const SAFE_FALL = 4;
-const FALL_DAMAGE = 8;
-const FALL_SPEED = 9; // m/s
+// Falling never hurts. Landing on someone (a "stomp": coming down faster
+// than STOMP_SPEED onto their head) hurts them, and you bounce off.
 const STOMP_SPEED = 6; // m/s
 const STOMP_DAMAGE = 25;
 const STOMP_PER_METER = 3;
@@ -1717,16 +1712,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       if (!fall.stomped && fall.speed >= STOMP_SPEED && this.stomp(player, from, to, fall.peak - to[1])) fall.stomped = true;
       return;
     }
-    if (f) {
-      // Stopped going down: landed.
-      this.falls.delete(id);
-      const drop = f.peak - to[1];
-      const padded = now < (this.padGrace.get(id) ?? 0);
-      if (!f.stomped && !padded && f.speed >= FALL_SPEED && drop > SAFE_FALL) {
-        this.damage(player, Math.round((drop - SAFE_FALL) * FALL_DAMAGE), null);
-        player.conn.send({ t: "announce", text: `Ouch! A ${drop.toFixed(1)} m fall.` });
-      }
-    }
+    // Stopped going down: landed. (Falling doesn't hurt; only landing on
+    // someone does, to them.)
+    if (f) this.falls.delete(id);
   }
 
   // Did this bit of falling land on someone's head? Hurts them, not you.
