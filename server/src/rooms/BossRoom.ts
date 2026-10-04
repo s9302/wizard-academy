@@ -10,6 +10,7 @@
 // fight alone, or bring friends; bots added from the Esc panel fight on your
 // side. The Tyrant has more health the more of you there are.
 
+import { DECOY_ID_BASE } from "../../../shared/src/abilities.ts";
 import { BOSS_BODY_ID, BOSSES } from "../../../shared/src/bosses.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg } from "../../../shared/src/protocol.ts";
@@ -148,7 +149,10 @@ export class BossRoom extends RoyaleRoom {
 
   // Bots are on your side: they fight the boss and its wolves, wherever they are.
   protected override botEnemies(): Player[] {
-    return this.bodies().map(bodyAsEnemy);
+    // (Not a Rogue's copies: those are on your side too.)
+    return this.bodies()
+      .filter((b) => b.id < DECOY_ID_BASE || b.id >= DECOY_ID_BASE + 1_000_000)
+      .map(bodyAsEnemy);
   }
 
   protected override onRoundMessage(player: Player, msg: ClientMsg): void {

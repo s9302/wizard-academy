@@ -20,6 +20,7 @@ import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
 import { SPELLS } from "../../shared/src/combat.ts";
 import { chapterForTrial } from "../../shared/src/story.ts";
 import { unlocksAtLevel, unlocksFor } from "../../shared/src/unlocks.ts";
+import { GIANT, GLIDE } from "../../shared/src/abilities.ts";
 import { HubPanel, type PanelProfile } from "./hub/HubPanel.ts";
 import { Portals } from "./levels/Portals.ts";
 import { StoryCard } from "./StoryCard.ts";
@@ -100,6 +101,8 @@ export class Game {
   // Third person (V): your own body, and a camera over your shoulder.
   private thirdPerson = false;
   private selfAvatar: THREE.Group | null = null;
+  private invertUntil = 0; // Inversion: the camera rolled upside down until then
+  private giantUntil = 0; // your own Giant Form
   private selfLast = new THREE.Vector3();
   private selfSpeed = 0;
   private camDistance = 3.4;
@@ -207,6 +210,12 @@ export class Game {
         onConjure: (id, box) => this.addConjured(id, box),
         onUnconjure: (id) => this.removeConjured(id),
         onCharge: (dir, speed, seconds) => this.player.burst(dir.x, dir.z, speed, seconds),
+        onKnock: (v, seconds) => this.player.knock(v[0], v[1], v[2], seconds),
+        onGlide: (seconds) => this.player.glide(seconds, GLIDE.lift, GLIDE.fall, GLIDE.speed),
+        onInvert: (ms) => (this.invertUntil = performance.now() + ms),
+        onGiant: (ms) => (this.giantUntil = performance.now() + ms),
+        selfClone: () => createAvatar(this.myId, this.name, lookOf(this.profile.loadout), this.profile.isAdmin),
+        unlocked: () => unlocksFor(this.profile),
         onArena: (id) => {
           const next = LEVELS[id];
           if (next && next !== this.level) this.loadLevel(next);
@@ -705,6 +714,9 @@ export class Game {
     const speed = dt > 0 && moved / dt < 30 ? moved / dt : 0;
     this.selfSpeed += (speed - this.selfSpeed) * Math.min(1, dt * 10);
     animateAvatar(a, performance.now(), this.selfSpeed);
+    const scale = performance.now() < this.giantUntil ? GIANT.scale : 1;
+    a.scale.setScalar(a.scale.x + (scale - a.scale.x) * 0.15);
+    a.position.y += (a.scale.x - 1) * 0.9;
     setAvatarWeapon(a, this.royale ? this.royale.currentWeapon : null);
 
     const eye = this.camera.position.clone();
@@ -829,7 +841,8 @@ export class Game {
     // Camera follows the interpolated player position.
     const pos = this.player.interpolate(this.accumulator / FIXED_DT);
     this.camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
-    this.camera.rotation.set(this.input.pitch, this.input.yaw, 0);
+    this.camera.rotation.set(this.input.pitch, this.input.yaw, performance.now() < this.invertUntil ? Math.PI : 0);
+    if (performance.now() < this.giantUntil) this.camera.position.y += 1.1; // see over things
     if (this.input.consumeView()) this.setThirdPerson(!this.thirdPerson);
     this.updateSelf(pos, dt);
     this.sun.target.position.copy(pos);

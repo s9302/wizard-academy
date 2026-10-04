@@ -1,6 +1,7 @@
 // Turns raw WebSocket text into a typed message, or null if it is malformed.
 // Nothing from a client is trusted until it has passed through here.
 
+import { type AbilityId, CLASS_ABILITY_POOL } from "../../shared/src/abilities.ts";
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { CLASS_IDS, type ClassId } from "../../shared/src/classes.ts";
@@ -76,6 +77,13 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case "class":
       if (!CLASS_IDS.includes(msg.cls as ClassId)) return null;
       return { t: "class", cls: msg.cls as ClassId };
+    case "abilities": {
+      // Shape only; whether they're this class's and unlocked is checked when used.
+      if (!CLASS_IDS.includes(msg.cls as ClassId)) return null;
+      const pool = CLASS_ABILITY_POOL[msg.cls as ClassId] as string[];
+      if (typeof msg.e !== "string" || typeof msg.r !== "string" || !pool.includes(msg.e) || !pool.includes(msg.r) || msg.e === msg.r) return null;
+      return { t: "abilities", cls: msg.cls as ClassId, e: msg.e as AbilityId, r: msg.r as AbilityId };
+    }
     case "cast": {
       // Arrows only come from the bow ("attack"), never cast directly.
       if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || !isVec3(msg.o) || !isVec3(msg.d)) return null;

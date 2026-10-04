@@ -23,5 +23,17 @@ export const ICONS: Record<string, string> = {
   blink: svg('<path d="M4 12h9M6 8h6M6 16h6"/><circle cx="17.5" cy="12" r="3.5" fill="currentColor" fill-opacity="0.3"/>'),
   stealth: svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/>'),
   charge: svg('<path d="M4 6l6 6-6 6M12 6l6 6-6 6"/>'),
+  // Level 11+ abilities
+  tornado: svg('<path d="M3 4h18M5 8h14M7.5 12h10M10 16h6M12 20h2"/>'),
+  flames: svg('<path d="M3 20h18"/><path d="M6 20c-1.5-2-1-4 .5-5.5.3 1.2 1 1.8 1.6 2 0-2 .8-3.6 2.4-4.5-.3 2.4 1.5 3.5 1.5 5.5 0 1.2-.6 2-1.5 2.5M14 20c-1-1.6-.6-3.2.6-4.4.2 1 .8 1.4 1.3 1.6 0-1.6.6-2.9 1.9-3.6-.2 1.9 1.2 2.8 1.2 4.4 0 1-.5 1.6-1.2 2"/>'),
+  hellpit: svg('<ellipse cx="12" cy="15" rx="9" ry="4" fill="currentColor" fill-opacity="0.35"/><path d="M8 13c.5-2 1.5-3 1-5M12 12c.6-2.5 2-3.5 1.2-6.5M16 13c.4-1.6 1.2-2.4.8-4"/>'),
+  invert: svg('<path d="M12 3v18"/><path d="M8 7l4-4 4 4M8 17l4 4 4-4"/><path d="M4 12a8 8 0 0 0 16 0" stroke-dasharray="2 2.5"/>'),
+  shockwave: svg('<circle cx="12" cy="12" r="2.5" fill="currentColor" fill-opacity="0.4"/><path d="M6.5 6.5a7.8 7.8 0 0 0 0 11M17.5 6.5a7.8 7.8 0 0 1 0 11M3.5 3.5a12 12 0 0 0 0 17M20.5 3.5a12 12 0 0 1 0 17"/>'),
+  nullzone: svg('<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/><path d="M12 7.5l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" fill="currentColor" fill-opacity="0.3"/>'),
+  giant: svg('<circle cx="8" cy="7" r="2"/><path d="M8 9.5v5M5.5 12h5M6.5 20l1.5-5.5 1.5 5.5"/><circle cx="16.5" cy="5" r="2.5"/><path d="M16.5 8v7M13 11h7M14.5 21l2-6 2 6"/>'),
+  chain: svg('<rect x="2.5" y="9.5" width="7" height="5" rx="2.5"/><rect x="8.5" y="9.5" width="7" height="5" rx="2.5"/><path d="M15.5 12h3M18.5 8.5l3 3.5-3 3.5"/>'),
+  decoys: svg('<circle cx="12" cy="6" r="2.2"/><path d="M12 8.5v6M9 11h6M10 20l2-5.5 2 5.5"/><circle cx="5" cy="8" r="1.6" stroke-dasharray="1.5 1.5"/><path d="M5 10v4.5M4 19l1-4.5 1 4.5" stroke-dasharray="1.5 1.5"/><circle cx="19" cy="8" r="1.6" stroke-dasharray="1.5 1.5"/><path d="M19 10v4.5M18 19l1-4.5 1 4.5" stroke-dasharray="1.5 1.5"/>'),
+  glide: svg('<path d="M2.5 12c3-4 6.5-5 9.5-5s6.5 1 9.5 5c-2-1-4-1.3-5.5-.6L12 16l-4-4.6c-1.5-.7-3.5-.4-5.5.6z" fill="currentColor" fill-opacity="0.2"/><path d="M12 16v4"/>'),
+  smoke: svg('<circle cx="8" cy="13" r="4" fill="currentColor" fill-opacity="0.2"/><circle cx="15" cy="11" r="5" fill="currentColor" fill-opacity="0.2"/><circle cx="13" cy="17" r="3.5" fill="currentColor" fill-opacity="0.2"/>'),
   fortify: svg('<path d="M12 2.5l8 3v6c0 5-3.4 8.8-8 10.5C7.4 20.3 4 16.5 4 11.5v-6z" fill="currentColor" fill-opacity="0.2"/><path d="M12 8.5v7M8.5 12h7"/>'),
 };

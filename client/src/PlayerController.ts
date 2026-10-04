@@ -56,6 +56,9 @@ export class PlayerController {
   private airJumpUsed = false;
   private dashLeft = 0; // seconds of dash (or charge) remaining
   private burstSpeed = DASH_SPEED;
+  private glideLeft = 0;
+  private glideFall = 0;
+  private glideSpeed = 1;
   private dashDir = { x: 0, z: 0 };
   dashCooldown = 0; // seconds until the dash is ready
   // What happened since the game last looked (for sounds): read, then reset.
@@ -124,6 +127,26 @@ export class PlayerController {
     this.dashLeft = seconds;
   }
 
+  // Thrown by an ability (a shockwave, a tornado, a chain): flat (vx, vz)
+  // for `seconds`, and launched up at vy.
+  knock(vx: number, vy: number, vz: number, seconds: number): void {
+    const speed = Math.hypot(vx, vz);
+    if (speed > 0.1 && seconds > 0) this.burst(vx, vz, speed, seconds);
+    if (vy > 0) this.velocityY = Math.max(this.velocityY, vy);
+  }
+
+  // Glide (Rogue): a leap up, then a slow fall and more speed for `seconds`.
+  glide(seconds: number, lift: number, fall: number, speedMul: number): void {
+    this.glideLeft = seconds;
+    this.glideFall = fall;
+    this.glideSpeed = speedMul;
+    this.velocityY = Math.max(this.velocityY, lift);
+  }
+
+  get gliding(): boolean {
+    return this.glideLeft > 0;
+  }
+
   // Landed on someone's head: bounce off them.
   bounce(): void {
     this.velocityY = JUMP_SPEED * 1.1;
@@ -157,10 +180,11 @@ export class PlayerController {
     this.previous.copy(this.current);
     if (this.flying) return this.fly(dt, input);
     this.slowLeft = Math.max(0, this.slowLeft - dt);
+    this.glideLeft = Math.max(0, this.glideLeft - dt);
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 
     // Horizontal movement relative to where the camera faces.
-    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1);
+    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1) * (this.glideLeft > 0 ? this.glideSpeed : 1);
     const sin = Math.sin(input.yaw);
     const cos = Math.cos(input.yaw);
     let dx = -sin * input.forward + cos * input.strafe;
@@ -209,7 +233,7 @@ export class PlayerController {
     }
 
     // Gravity.
-    this.velocityY = Math.max(this.velocityY - GRAVITY * dt, -TERMINAL_FALL_SPEED);
+    this.velocityY = Math.max(this.velocityY - GRAVITY * dt, -(this.glideLeft > 0 ? this.glideFall : TERMINAL_FALL_SPEED));
 
     // Ladders: W climbs, S goes down, nothing holds on. Jumping lets go.
     const here: [number, number, number] = [this.current.x, this.current.y, this.current.z];

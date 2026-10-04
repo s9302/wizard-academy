@@ -33,6 +33,9 @@ type Snapshot = { time: number; p: Vec3; ry: number };
 
 type Remote = {
   name: string;
+  info: PlayerInfo; // for copies of them (a Rogue's Mirror Images)
+  scale: number; // a Knight's Giant Form
+  scaleUntil: number;
   avatar: THREE.Group;
   snapshots: Snapshot[]; // oldest first
   speed: number; // smoothed ground speed, m/s (for the walk animation)
@@ -68,7 +71,7 @@ export class RemotePlayers {
     this.remove(info.id);
     const avatar = createAvatar(info.id, info.name, info.look, info.admin);
     this.scene.add(avatar);
-    const remote: Remote = { name: info.name, avatar, snapshots: [], speed: 0, lastX: info.p[0], lastZ: info.p[2] };
+    const remote: Remote = { name: info.name, info, scale: 1, scaleUntil: 0, avatar, snapshots: [], speed: 0, lastX: info.p[0], lastZ: info.p[2] };
     this.remotes.set(info.id, remote);
     setAvatarStatus(avatar, this.statuses.get(info.id) ?? "runner");
     this.push(info.id, info.p, info.ry, serverTime);
@@ -90,6 +93,20 @@ export class RemotePlayers {
   }
 
   // ---- Battle royale ----
+
+  // A copy of someone's avatar (name tag and all), for Mirror Images.
+  cloneOf(id: number): THREE.Group | null {
+    const remote = this.remotes.get(id);
+    return remote ? createAvatar(id, remote.info.name, remote.info.look, remote.info.admin) : null;
+  }
+
+  // Giant Form: drawn `scale` times bigger for `ms` (the feet stay on the floor).
+  setScale(id: number, scale: number, ms: number): void {
+    const remote = this.remotes.get(id);
+    if (!remote) return;
+    remote.scale = scale;
+    remote.scaleUntil = performance.now() + ms;
+  }
 
   // Hide players who are out of the round (they're spectating).
   setVisible(id: number, visible: boolean): void {
@@ -129,7 +146,10 @@ export class RemotePlayers {
   // Someone changed hat or robe.
   setLook(id: number, look: Look): void {
     const remote = this.remotes.get(id);
-    if (remote) setAvatarLook(remote.avatar, id, look);
+    if (remote) {
+      setAvatarLook(remote.avatar, id, look);
+      remote.info = { ...remote.info, look };
+    }
   }
 
   flash(id: number): void {
@@ -211,6 +231,11 @@ export class RemotePlayers {
         from.p[2] + (to.p[2] - from.p[2]) * t,
       );
       remote.avatar.rotation.y = lerpAngle(from.ry, to.ry, t);
+      // Giant Form: grow and shrink smoothly; the avatar's origin is its middle, so lift it.
+      const want = performance.now() < remote.scaleUntil ? remote.scale : 1;
+      const s = remote.avatar.scale.x + (want - remote.avatar.scale.x) * 0.15;
+      remote.avatar.scale.setScalar(s);
+      remote.avatar.position.y += (s - 1) * 0.9;
       const now = performance.now();
       const dt = Math.max(1e-3, (now - this.lastUpdate) / 1000);
       const moved = Math.hypot(remote.avatar.position.x - remote.lastX, remote.avatar.position.z - remote.lastZ);

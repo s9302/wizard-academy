@@ -7,6 +7,7 @@
 // (an equipped spell or hat must really be unlocked).
 
 import { type Appearance, DEFAULT_APPEARANCE, sanitizeAppearance } from "./appearance.ts";
+import { type AbilityId, CLASS_ABILITIES, CLASS_ABILITY_POOL, MASTER_LEVEL } from "./abilities.ts";
 import { CLASS_IDS, type ClassId } from "./classes.ts";
 import { levelInfo } from "./progression.ts";
 import { type ChapterId, chaptersDone } from "./story.ts";
@@ -20,7 +21,7 @@ export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold
 export type Unlock = {
   id: string;
   name: string;
-  kind: "spell" | "perk" | "hat" | "robe" | "area" | "outfit";
+  kind: "spell" | "perk" | "hat" | "robe" | "area" | "outfit" | "abilities";
   requires: Requirement;
   description: string;
 };
@@ -34,6 +35,10 @@ export const UNLOCKS: Unlock[] = [
   { id: "robe:midnight", name: "Midnight robe", kind: "robe", requires: { level: 7 }, description: "A robe the color of the night sky." },
   { id: "outfit:battlemage", name: "Battlemage armor", kind: "outfit", requires: { level: 8 }, description: "Plate shoulders and a belted coat." },
   { id: "robe:gold", name: "Gold robe", kind: "robe", requires: { level: 10 }, description: "For the truly dedicated." },
+  // Over-the-top E/R abilities for each class (battle royale; pick them in the Esc panel).
+  { id: "abilities:wizard", name: "Wizard mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Tornado, Wall of Flame, Pit to Hell, Inversion and Shockwave for E and R." },
+  { id: "abilities:knight", name: "Knight mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Null Zone, Giant Form and Chain Pull for E and R." },
+  { id: "abilities:rogue", name: "Rogue mastery", kind: "abilities", requires: { level: MASTER_LEVEL }, description: "Mirror Images, Glide and Smoke Bomb for E and R." },
   { id: "spell:frost", name: "Frost Shard", kind: "spell", requires: { chapter: 1 }, description: "14 damage and slows whoever it hits for 1.5 s." },
   { id: "area:garden", name: "The Spell Garden", kind: "area", requires: { chapter: 1 }, description: "A walled garden in the hub." },
   { id: "spell:spark", name: "Spark Volley", kind: "spell", requires: { chapter: 2 }, description: "Three sparks in a fan, 9 damage each. Short range." },
@@ -93,7 +98,8 @@ export function unlocksForChapter(chapter: ChapterId): Unlock[] {
 
 // cls: battle royale class (all three are available to everyone). The rest
 // of the look (skin, hair, face, outfit) is in appearance.ts.
-export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId } & Appearance;
+// abil: each class's chosen E and R abilities (missing: CLASS_ABILITIES).
+export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId; abil?: Partial<Record<ClassId, [AbilityId, AbilityId]>> } & Appearance;
 export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard", ...DEFAULT_APPEARANCE };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
@@ -138,8 +144,32 @@ export function sanitizeLoadout(raw: unknown, unlocked: Set<string>): Loadout {
     hat: pick(r.hat, HATS, "hat", DEFAULT_LOADOUT.hat),
     robe: pick(r.robe, ROBES, "robe", DEFAULT_LOADOUT.robe),
     cls: typeof r.cls === "string" && (CLASS_IDS as string[]).includes(r.cls) ? (r.cls as ClassId) : DEFAULT_LOADOUT.cls,
+    ...sanitizeAbilities(r.abil, unlocked),
     ...sanitizeAppearance(r, unlocked),
   };
+}
+
+// Can this class use this ability? (The defaults always; the rest from level 11.)
+export function abilityAllowed(cls: ClassId, id: AbilityId, unlocked: Set<string>): boolean {
+  if (!CLASS_ABILITY_POOL[cls].includes(id)) return false;
+  return CLASS_ABILITIES[cls].includes(id) || unlocked.has(`abilities:${cls}`);
+}
+
+// A class's E and R, from a loadout (falling back to the defaults).
+export function abilitiesFor(l: Loadout | undefined, cls: ClassId): [AbilityId, AbilityId] {
+  return l?.abil?.[cls] ?? CLASS_ABILITIES[cls];
+}
+
+// { abil } if any class has a valid pick, else nothing (so a plain loadout stays plain).
+function sanitizeAbilities(raw: unknown, unlocked: Set<string>): Pick<Loadout, "abil"> {
+  const out: Partial<Record<ClassId, [AbilityId, AbilityId]>> = {};
+  if (typeof raw !== "object" || raw === null) return {};
+  for (const cls of CLASS_IDS) {
+    const pair = (raw as Record<string, unknown>)[cls];
+    if (!Array.isArray(pair) || pair.length !== 2 || pair[0] === pair[1]) continue;
+    if (pair.every((id) => typeof id === "string" && abilityAllowed(cls, id as AbilityId, unlocked))) out[cls] = [pair[0], pair[1]] as [AbilityId, AbilityId];
+  }
+  return Object.keys(out).length ? { abil: out } : {};
 }
 
 // What other players see of you.

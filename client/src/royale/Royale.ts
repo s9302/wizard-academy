@@ -4,7 +4,7 @@
 // draw and what to send.
 
 import * as THREE from "three";
-import { ABILITIES, CHARGE_SPEED, CHARGE_TIME, CLASS_ABILITIES } from "../../../shared/src/abilities.ts";
+import { ABILITIES, type AbilityId, CHARGE_SPEED, CHARGE_TIME, CLASS_ABILITIES, GIANT, SHOCKWAVE } from "../../../shared/src/abilities.ts";
 import { type ClassId, type Hand, moveSpeed, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
 import { castDirections, MAX_SHIELD, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
@@ -17,6 +17,10 @@ import { Spells } from "./Spells.ts";
 import { Storm } from "./Storm.ts";
 import { Viewmodel } from "./Viewmodel.ts";
 import { MonsterViews } from "./Monsters.ts";
+import { Fields } from "./Fields.ts";
+import { Decoys } from "./Decoys.ts";
+import { particles } from "../graphics/Particles.ts";
+import { glowMat } from "../bosses/BossView.ts";
 import { isMonsterId } from "../../../shared/src/monsters.ts";
 import { sound } from "../audio/Sound.ts";
 import type { SynthId } from "../audio/synth.ts";
@@ -37,6 +41,13 @@ export type RoyaleHooks = {
   onConjure: (id: number, box: Box) => void; // a wizard's wall or pillar appeared
   onUnconjure: (id: number) => void;
   onCharge: (dir: THREE.Vector3, speed: number, seconds: number) => void; // rush forward (Knight)
+  // Level 11+ abilities.
+  onKnock: (v: Vec3, seconds: number) => void; // thrown by a shockwave, tornado or chain
+  onGlide: (seconds: number) => void;
+  onInvert: (ms: number) => void; // the world upside down
+  onGiant: (ms: number) => void; // your own Giant Form (third-person body)
+  selfClone: () => THREE.Group; // an avatar of you (your Mirror Images)
+  unlocked: () => Set<string>;
 };
 
 export class Royale {
@@ -46,6 +57,11 @@ export class Royale {
   private pickups: Pickups;
   private viewmodel: Viewmodel;
   private monsters: MonsterViews;
+  private fields: Fields;
+  private decoys: Decoys;
+  private scene: THREE.Scene;
+  private chosen: [AbilityId, AbilityId]; // on E and R (the server says, with "abilitySet")
+  private lastUpdate = performance.now();
   private remotes: RemotePlayers;
   private hooks: RoyaleHooks;
   private state: RoundState = "waiting";
@@ -74,11 +90,20 @@ export class Royale {
     this.pickups = new Pickups(scene);
     this.viewmodel = new Viewmodel(camera);
     this.monsters = new MonsterViews(scene);
+    this.scene = scene;
+    this.chosen = CLASS_ABILITIES[cls];
+    this.fields = new Fields(scene, clock);
+    this.decoys = new Decoys(scene, (owner) => (owner === hooks.myId() ? hooks.selfClone() : remotes.cloneOf(owner)));
     this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, {
       onBots: (action) => hooks.send({ t: "bots", action }),
       onMonsters: (action) => hooks.send({ t: "monsters", action }),
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
+      onAbilities: (e, r) => {
+        this.chosen = [e, r];
+        this.applyLoadout();
+        hooks.send({ t: "abilities", cls: this.cls, e, r });
+      },
     }, !!level.bossFight);
     this.applyLoadout();
   }
@@ -103,6 +128,7 @@ export class Royale {
     this.hud.loadout(this.cls, this.hand, this.primary, SPELLS[this.primary].name, SPELLS[this.primary].cooldownMs);
     this.viewmodel.show(this.weapon, SPELLS[this.primary].color);
     this.hooks.onSpeed(moveSpeed(this.cls, this.hand));
+    this.hud.showAbilities(this.cls, this.chosen, this.hooks.unlocked());
   }
 
   // Returns true if it was a royale message.
@@ -198,6 +224,22 @@ export class Royale {
       case "effect":
         this.effect(msg.id === me, msg.id, msg.kind, msg.ms, msg.from, msg.to);
         return true;
+      case "field":
+        this.fields.add(msg.field);
+        return true;
+      case "fieldEnd":
+        this.fields.remove(msg.id);
+        return true;
+      case "knock":
+        this.hooks.onKnock(msg.v, msg.s);
+        return true;
+      case "decoys":
+        this.decoys.set(msg.list);
+        return true;
+      case "abilitySet":
+        this.chosen = [msg.e, msg.r];
+        this.applyLoadout();
+        return true;
       case "arenaVote":
         this.hud.vote(msg.options, msg.votes);
         return true;
@@ -253,7 +295,11 @@ export class Royale {
   ability(slot: 0 | 1, origin: THREE.Vector3, dir: THREE.Vector3): void {
     const now = performance.now();
     if (!this.hud.canAct || now < this.abilityReadyAt[slot]) return;
-    const id = CLASS_ABILITIES[this.cls][slot];
+    const id = this.chosen[slot];
+    if (this.cls !== "knight" && this.fields.inNullZone(origin)) {
+      this.hud.callout("No magic here!");
+      return;
+    }
     this.abilityReadyAt[slot] = now + ABILITIES[id].cooldownMs;
     const o: Vec3 = [round3(origin.x), round3(origin.y), round3(origin.z)];
     this.hooks.send({ t: "ability", slot, o, d: [dir.x, dir.y, dir.z] });
@@ -314,6 +360,66 @@ export class Royale {
       this.remotes.glow(id, "#c9a227", ms);
     }
     if (mine && kind === "fortify") this.hud.callout("Fortified!");
+    this.masteryEffect(mine, id, kind, ms, at, from, to);
+  }
+
+  // Level 11+ ability effects.
+  private masteryEffect(mine: boolean, id: number, kind: string, ms: number, at: Vec3 | null, from?: Vec3, to?: Vec3): void {
+    const where = at ?? this.remotes.positionOf(id);
+    if (kind === "invert") {
+      sound.fx("stealth", { at, rate: 0.6 });
+      if (mine) {
+        this.hooks.onInvert(ms);
+        this.hud.callout("Cursed!");
+      } else this.remotes.glow(id, "#b48cff", ms);
+    } else if (kind === "giant") {
+      sound.fx("fortify", { at, rate: 0.5 });
+      sound.fx("rumble", { at });
+      if (mine) {
+        this.hooks.onGiant(ms);
+        this.hud.callout("Giant!");
+      } else this.remotes.setScale(id, GIANT.scale, ms);
+    } else if (kind === "glide") {
+      sound.fx("blink", { at, rate: 0.7 });
+      if (mine) this.hooks.onGlide(ms / 1000);
+      if (where) particles.emit({ at: where, count: 30, color: "#d8d0ff", speed: 3, up: 2, life: 0.7, size: 0.2 });
+    } else if (kind === "shockwave" && from) {
+      // A ring blasting outward.
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.25, 6, 40), glowMat("#9fdcff", 2.5));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(from[0], from[1] - 0.6, from[2]);
+      this.scene.add(ring);
+      const start = performance.now();
+      const grow = () => {
+        const k = (performance.now() - start) / 350;
+        ring.scale.setScalar(1 + k * SHOCKWAVE.radius);
+        (ring.material as THREE.MeshBasicMaterial).opacity = 1 - k;
+        (ring.material as THREE.MeshBasicMaterial).transparent = true;
+        if (k < 1) requestAnimationFrame(grow);
+        else {
+          this.scene.remove(ring);
+          ring.geometry.dispose();
+        }
+      };
+      requestAnimationFrame(grow);
+      particles.emit({ at: from, count: 60, color: "#9fdcff", color2: "#ffffff", speed: 9, life: 0.5, size: 0.25 });
+      sound.fx("explosion", { at: mine ? null : from, volume: 0.8 });
+    } else if (kind === "chain" && from && to) {
+      // A chain from the Knight to whoever they hooked, for a moment.
+      const a = new THREE.Vector3(from[0], from[1] + 0.3, from[2]);
+      const b = new THREE.Vector3(to[0], to[1] + 0.3, to[2]);
+      const len = a.distanceTo(b);
+      const link = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, len, 5), new THREE.MeshLambertMaterial({ color: "#8a8a96" }));
+      link.position.copy(a).add(b).multiplyScalar(0.5);
+      link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      this.scene.add(link);
+      setTimeout(() => {
+        this.scene.remove(link);
+        link.geometry.dispose();
+      }, Math.max(250, ms));
+      sound.play("chop", { at: mine ? null : to });
+      if (mine) this.hud.callout("Hooked!");
+    }
   }
 
   // The class picker. Mid-round (while still in it) the change waits for the
@@ -340,6 +446,10 @@ export class Royale {
   attack(button: "primary" | "fireball", origin: THREE.Vector3, dir: THREE.Vector3): void {
     const now = performance.now();
     if (!this.hud.canAct || now < this.handReadyAt) return;
+    if ((button === "fireball" || WEAPONS[this.weapon].kind === "spell") && this.fields.inNullZone(origin)) {
+      this.hud.callout("No magic here!");
+      return;
+    }
     const o: Vec3 = [round3(origin.x), round3(origin.y), round3(origin.z)];
     const d: Vec3 = [dir.x, dir.y, dir.z];
     if (button === "fireball") {
@@ -380,7 +490,10 @@ export class Royale {
     this.inStorm = inStorm;
     const now = performance.now();
     this.hud.update(Math.max(0, this.readyAt.primary - now), Math.max(0, this.handReadyAt - now), inStorm);
-    const abilities = CLASS_ABILITIES[this.cls];
+    const abilities = this.chosen;
+    this.fields.update(Math.min(0.1, (now - this.lastUpdate) / 1000));
+    this.lastUpdate = now;
+    this.decoys.update();
     this.hud.abilities(
       [...abilities],
       this.abilityReadyAt.map((t, i) => Math.max(0, t - now) / ABILITIES[abilities[i]].cooldownMs),
@@ -400,6 +513,8 @@ export class Royale {
   dispose(): void {
     this.spells.clear();
     this.monsters.clear();
+    this.fields.clear();
+    this.decoys.clear();
     this.viewmodel.dispose();
     this.hud.dispose();
     this.hooks.onSpeed(1);

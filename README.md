@@ -84,7 +84,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
 `hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `story-check`, `admin-check`,
-`trials-check`, `features-check`, `boss-check` (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
+`trials-check`, `features-check`, `boss-check`, `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -403,6 +403,22 @@ Every class has two, on **E** and **R** (cooldowns show in their HUD slots):
 | **Rogue** | **Shadow Step**: teleport up to 12 m where you look, not through walls. 9 s | **Vanish**: invisible for 4 s, or until you attack. 16 s |
 | **Knight** | **Charge**: rush 8 m; the first enemy you run into takes 20. 10 s | **Fortify**: half damage for 5 s. 18 s |
 
+**From level 11 (Mastery)**, each class has more to choose from, and you pick
+which two go on E and R in the Esc panel (under Class; saved per class in
+your loadout as `abil`). They're deliberately over the top, and bots never
+get them (they keep the defaults above). Numbers in `shared/src/abilities.ts`.
+
+| Class | Mastery abilities |
+|---|---|
+| **Wizard** | **Tornado** (rolls 30 m; 25 damage and throws you up), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 5 s), **Shockwave** (9 m blast: 18 damage, thrown back) |
+| **Knight** | **Null Zone** (7 m, 7 s: no spells or Wizard/Rogue abilities inside; spells flying in fizzle), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
+| **Rogue** | **Mirror Images** (two copies run off for 7 s; one hit breaks one), **Glide** (leap up, 9 s of slow falling and 35% more speed, no fall damage), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
+
+Being thrown (Shockwave, Tornado, Chain Pull, the pit's drag) is a "knock"
+message to that player's own client, which moves them; the server grants
+the extra distance in their movement check. Check script: `mastery-check`
+(needs an admin account, since admins have every unlock).
+
 What the server does (all of it):
 - **Walls and pillars** are placed where your aim meets something to stand
   on; one that would land on someone isn't placed (and costs nothing).
@@ -524,6 +540,7 @@ looks.
 | Tall hat | Level 6 |
 | Midnight robe | Level 7 |
 | Gold robe | Level 10 |
+| **Mastery abilities** for every class (pick them for E and R in the arena's Esc panel) | Level 11 |
 | **Frost Shard**, the Spell Garden | Chapter I (clear Trial I) |
 | **Spark Volley**, the Observatory, Starry hat | Chapter II |
 | The Sanctum (and Trial IV), Headmaster's crown, Ivory robe | Chapter III |

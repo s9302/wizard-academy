@@ -8,6 +8,7 @@ import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 import type { Appearance } from "./appearance.ts";
 import type { MonsterKind, MonsterState } from "./monsters.ts";
 import type { BossKind, BossShot, StrikeKind } from "./bosses.ts";
+import type { AbilityId, FieldInfo } from "./abilities.ts";
 
 export type Vec3 = [number, number, number];
 
@@ -50,12 +51,14 @@ export type HandMsg = { t: "hand"; hand: Hand };
 export type ClassMsg = { t: "class"; cls: ClassId };
 // Use a class ability: slot 0 is E, 1 is R. o and d: your eyes and aim.
 export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3 };
+// Choose a class's E and R abilities (level 11+ gives more to choose from).
+export type AbilitiesMsg = { t: "abilities"; cls: ClassId; e: AbilityId; r: AbilityId };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
 // Battle royale: add or remove a monster.
 export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg;
 
 // ---- Server -> Client ----
 
@@ -135,7 +138,18 @@ export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<st
 export type ConjureMsg = { t: "conjure"; id: number; box: Box; ms: number };
 export type UnconjureMsg = { t: "unconjure"; id: number };
 // Someone vanished, fortified, charged or shadow-stepped (ms 0: it ended).
-export type EffectMsg = { t: "effect"; id: number; kind: "stealth" | "fortify" | "charge" | "blink"; ms: number; from?: Vec3; to?: Vec3 };
+export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain";
+// id: who it's on (for chain: who was pulled; from = the Knight's position).
+export type EffectMsg = { t: "effect"; id: number; kind: EffectKind; ms: number; from?: Vec3; to?: Vec3 };
+// Level 11+ abilities: areas on the ground, being thrown, and Rogue copies.
+export type FieldMsg = { t: "field"; field: FieldInfo };
+export type FieldEndMsg = { t: "fieldEnd"; id: number };
+// To one player: you're thrown (horizontal velocity for `s` seconds, and up).
+export type KnockMsg = { t: "knock"; v: Vec3; s: number };
+export type DecoyState = { id: number; owner: number; p: Vec3; ry: number };
+export type DecoysMsg = { t: "decoys"; list: DecoyState[] };
+// To one player: the abilities you have on E and R (after picking, or joining).
+export type AbilitySetMsg = { t: "abilitySet"; e: AbilityId; r: AbilityId };
 // To one player: an ability you tried didn't work (cooldown refunded).
 export type AbilityFailedMsg = { t: "abilityFailed"; slot: 0 | 1; reason: string };
 // You landed on someone: bounce off.
@@ -209,6 +223,11 @@ export type ServerMsg =
   | ConjureMsg
   | UnconjureMsg
   | EffectMsg
+  | FieldMsg
+  | FieldEndMsg
+  | KnockMsg
+  | DecoysMsg
+  | AbilitySetMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg

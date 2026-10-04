@@ -3,7 +3,8 @@
 // marker when your spell lands, and a purple haze while you're in the storm.
 // Like the other HUDs, it only shows what the server decided.
 
-import { ABILITIES, type AbilityId } from "../../../shared/src/abilities.ts";
+import { ABILITIES, type AbilityId, CLASS_ABILITY_POOL, MASTER_LEVEL } from "../../../shared/src/abilities.ts";
+import { abilityAllowed } from "../../../shared/src/unlocks.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
@@ -48,6 +49,8 @@ export class RoyaleHud {
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
   private boss: boolean;
+  private abilityPicker: HTMLElement;
+  private onAbilities: (e: AbilityId, r: AbilityId) => void;
   private side: HTMLElement; // pause panel column: class, vote, bots
   private votePanel: HTMLElement; // in the pause panel: buttons
   private voteCard: HTMLElement; // on screen: the tally
@@ -80,7 +83,13 @@ export class RoyaleHud {
     clock: ServerClock,
     storm: Storm,
     roomName: string,
-    actions: { onBots: (action: "add" | "remove") => void; onMonsters: (action: "add" | "remove") => void; onClass: (cls: ClassId) => void; onVote: (arena: string) => void },
+    actions: {
+      onBots: (action: "add" | "remove") => void;
+      onMonsters: (action: "add" | "remove") => void;
+      onClass: (cls: ClassId) => void;
+      onVote: (arena: string) => void;
+      onAbilities: (e: AbilityId, r: AbilityId) => void;
+    },
     boss = false, // Trial VII: a boss fight, not a battle royale (other words; no monster buttons)
   ) {
     this.clock = clock;
@@ -97,6 +106,11 @@ export class RoyaleHud {
     this.side.id = "arena-side";
     pausePanel.insertBefore(this.side, pausePanel.firstChild);
     this.picker = this.makePicker(actions.onClass);
+    this.onAbilities = actions.onAbilities;
+    this.abilityPicker = document.createElement("div");
+    this.abilityPicker.id = "ability-picker";
+    this.abilityPicker.onclick = (e) => e.stopPropagation();
+    this.picker.appendChild(this.abilityPicker);
     this.votePanel = document.createElement("div");
     this.votePanel.id = "arena-vote";
     this.votePanel.hidden = true;
@@ -200,6 +214,46 @@ export class RoyaleHud {
     this.showPicker();
   }
 
+  // Esc panel: which abilities go on E and R (this class's pool; the level
+  // 11 ones are greyed out until then). Picking one already on the other
+  // key swaps them.
+  showAbilities(cls: ClassId, chosen: [AbilityId, AbilityId], unlocked: Set<string>): void {
+    this.abilityPicker.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "picker-title";
+    title.textContent = "Abilities";
+    this.abilityPicker.appendChild(title);
+    (["E", "R"] as const).forEach((key, slot) => {
+      const row = document.createElement("div");
+      row.className = "ability-row";
+      const label = document.createElement("span");
+      label.className = "ability-key";
+      label.textContent = key;
+      row.appendChild(label);
+      for (const id of CLASS_ABILITY_POOL[cls]) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.innerHTML = ICONS[id] ?? "";
+        const allowed = abilityAllowed(cls, id, unlocked);
+        b.disabled = !allowed;
+        b.className = chosen[slot] === id ? "on" : "";
+        b.title = `${ABILITIES[id].name}: ${ABILITIES[id].description}${allowed ? "" : ` (reach level ${MASTER_LEVEL})`}`;
+        b.onclick = () => {
+          const next: [AbilityId, AbilityId] = [...chosen];
+          if (next[1 - slot] === id) next[1 - slot] = next[slot];
+          next[slot] = id;
+          this.onAbilities(next[0], next[1]);
+        };
+        row.appendChild(b);
+      }
+      this.abilityPicker.appendChild(row);
+    });
+    const names = document.createElement("div");
+    names.className = "ability-names";
+    names.textContent = `E: ${ABILITIES[chosen[0]].name} \u00b7 R: ${ABILITIES[chosen[1]].name}`;
+    this.abilityPicker.appendChild(names);
+  }
+
   // A class picked mid-round, waiting for the round to end (null: none).
   pending(cls: ClassId | null): void {
     this.pendingCls = cls;
@@ -213,7 +267,7 @@ export class RoyaleHud {
   }
 
   private showPicker(): void {
-    for (const b of this.picker.querySelectorAll<HTMLButtonElement>("button")) {
+    for (const b of this.picker.querySelectorAll<HTMLButtonElement>("button[data-cls]")) {
       b.classList.toggle("on", b.dataset.cls === this.cls);
       b.classList.toggle("next", b.dataset.cls === this.pendingCls && this.pendingCls !== this.cls);
     }
