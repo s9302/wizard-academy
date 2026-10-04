@@ -24,7 +24,7 @@ const SWAP_MS = 400;
 const POSE: Record<WeaponId, { pos: [number, number, number]; rot: [number, number, number]; scale: number }> = {
   sword: { pos: [0.42, -0.42, -0.7], rot: [-0.5, 0.2, -0.3], scale: 0.9 },
   shield: { pos: [-0.5, -0.45, -0.95], rot: [0.1, 0.4, 0.05], scale: 0.55 },
-  bow: { pos: [0.12, -0.2, -0.85], rot: [0.05, 0.25, 0.5], scale: 0.62 },
+  bow: { pos: [-0.3, -0.27, -0.85], rot: [0.05, -0.2, -0.45], scale: 0.42 },
   daggers: { pos: [0.05, -0.38, -0.6], rot: [-0.7, 0, 0], scale: 0.9 },
   staff: { pos: [0.45, -0.55, -0.7], rot: [-0.25, 0.1, -0.2], scale: 0.9 },
   spell: { pos: [0.34, -0.3, -0.8], rot: [0.1, 0, 0], scale: 0.55 },
