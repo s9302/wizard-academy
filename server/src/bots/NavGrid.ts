@@ -8,6 +8,7 @@
 // high to step onto, so paths go around them. Ramps have floors that rise a
 // little per cell, so bots walk up them like anyone else.
 
+import { segmentHitsBox } from "../../../shared/src/levels/geometry.ts";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
 
 const CELL = 0.5; // meters
@@ -60,6 +61,10 @@ export class NavGrid {
   private floor: Float32Array; // NaN = nothing to stand on
   private walkable: Uint8Array; // reachable on foot from the level's spawn
   private walkableCells: number[] = [];
+  // Temporary obstacles (a wizard's wall or pillar): cells they cover are
+  // closed until they're gone.
+  private closed: Uint8Array;
+  private obstacles = new Map<number, number[]>();
 
   constructor(level: Level) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -76,18 +81,27 @@ export class NavGrid {
     this.rows = Math.ceil((maxZ - minZ) / CELL);
     this.floor = new Float32Array(this.cols * this.rows).fill(NaN);
     this.walkable = new Uint8Array(this.cols * this.rows);
+    this.closed = new Uint8Array(this.cols * this.rows);
 
-    // Floor = the highest surface over each cell's center.
-    for (let r = 0; r < this.rows; r++) {
-      for (let c = 0; c < this.cols; c++) {
-        const [x, z] = this.center(r * this.cols + c);
-        let best = NaN;
-        for (const b of level.boxes) {
-          if (b.overhead) continue; // bridges and arches: bots walk under them
+    // Floor = the highest surface over each cell's center. Box by box, only
+    // over the cells a box could cover (its footprint, generously), which is
+    // much faster than testing every box at every cell.
+    for (const b of level.boxes) {
+      if (b.overhead) continue; // bridges and arches: bots walk under them
+      const reach = b.rot ? Math.hypot(b.size[0], b.size[1], b.size[2]) / 2 : 0;
+      const hx = b.rot ? reach : b.size[0] / 2;
+      const hz = b.rot ? reach : b.size[2] / 2;
+      const c0 = Math.max(0, Math.floor((b.pos[0] - hx - this.minX) / CELL));
+      const c1 = Math.min(this.cols - 1, Math.floor((b.pos[0] + hx - this.minX) / CELL));
+      const r0 = Math.max(0, Math.floor((b.pos[2] - hz - this.minZ) / CELL));
+      const r1 = Math.min(this.rows - 1, Math.floor((b.pos[2] + hz - this.minZ) / CELL));
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          const i = r * this.cols + c;
+          const [x, z] = this.center(i);
           const top = topAt(b, x, z);
-          if (top !== null && !(top <= best)) best = top;
+          if (top !== null && !(top <= this.floor[i])) this.floor[i] = top;
         }
-        this.floor[r * this.cols + c] = best;
       }
     }
 
@@ -150,6 +164,40 @@ export class NavGrid {
     return b - a <= CLIMB && a - b <= DROP;
   }
 
+  // Close the cells a box stands on (with a body's width around it).
+  addObstacle(id: number, box: Box): void {
+    const r = Math.hypot(box.size[0], box.size[2]) / 2 + 1;
+    const cells: number[] = [];
+    for (let x = box.pos[0] - r; x <= box.pos[0] + r; x += CELL) {
+      for (let z = box.pos[2] - r; z <= box.pos[2] + r; z += CELL) {
+        const i = this.cellAt(x, z);
+        if (i < 0 || cells.includes(i)) continue;
+        const [cx, cz] = this.center(i);
+        const floor = this.floor[i];
+        if (Number.isNaN(floor)) continue;
+        // Would a body standing here touch the box?
+        if (segmentHitsBox([cx, floor + 0.2, cz], [cx, floor + 1.7, cz], box, 0.4) === null) continue;
+        cells.push(i);
+        this.closed[i]++;
+      }
+    }
+    this.obstacles.set(id, cells);
+  }
+
+  removeObstacle(id: number): void {
+    for (const i of this.obstacles.get(id) ?? []) this.closed[i]--;
+    this.obstacles.delete(id);
+  }
+
+  clearObstacles(): void {
+    this.closed.fill(0);
+    this.obstacles.clear();
+  }
+
+  private open(i: number): boolean {
+    return this.walkable[i] === 1 && this.closed[i] === 0;
+  }
+
   get walkableCount(): number {
     return this.walkableCells.length;
   }
@@ -167,7 +215,7 @@ export class NavGrid {
   // The nearest walkable cell to (x, z), searching outward a few meters.
   private nearestWalkable(x: number, z: number): number {
     const i = this.cellAt(x, z);
-    if (i >= 0 && this.walkable[i]) return i;
+    if (i >= 0 && this.open(i)) return i;
     let best = -1;
     let bestD = Infinity;
     const reach = Math.ceil(4 / CELL);
@@ -177,7 +225,7 @@ export class NavGrid {
       for (let c = c0 - reach; c <= c0 + reach; c++) {
         if (r < 0 || c < 0 || r >= this.rows || c >= this.cols) continue;
         const j = r * this.cols + c;
-        if (!this.walkable[j]) continue;
+        if (!this.open(j)) continue;
         const d = (r - r0) ** 2 + (c - c0) ** 2;
         if (d < bestD) {
           bestD = d;
@@ -214,7 +262,7 @@ export class NavGrid {
       closed.add(i);
       const [ix, iz] = this.center(i);
       for (const j of this.neighbors(i)) {
-        if (!this.walkable[j] || closed.has(j) || !this.canStep(i, j)) continue;
+        if (!this.open(j) || closed.has(j) || !this.canStep(i, j)) continue;
         const [jx, jz] = this.center(j);
         const g = cost.get(i)! + Math.hypot(jx - ix, jz - iz) + Math.max(0, this.floor[j] - this.floor[i]);
         if (g < (cost.get(j) ?? Infinity)) {
@@ -254,7 +302,7 @@ export class NavGrid {
     const base = this.floor[a];
     for (let s = 1; s <= steps; s++) {
       const i = this.cellAt(ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps);
-      if (i < 0 || !this.walkable[i] || Math.abs(this.floor[i] - base) > 0.3) return false;
+      if (i < 0 || !this.open(i) || Math.abs(this.floor[i] - base) > 0.3) return false;
     }
     return true;
   }

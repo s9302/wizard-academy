@@ -10,7 +10,7 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS, TAG_RANGE } from "../../shared/src/constants.ts";
 import { LEVELS } from "../../shared/src/levels/index.ts";
-import type { Level } from "../../shared/src/levels/types.ts";
+import type { Box, Level } from "../../shared/src/levels/types.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import type { RoomInfo } from "../../shared/src/rooms.ts";
@@ -48,7 +48,7 @@ const HELP: Record<string, string> = {
   parkour: "R restart run",
   tag: "Click tag",
   infection: "Click curse",
-  royale: "Click attack \u00b7 1/2 swap \u00b7 Right-click Fireball",
+  royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
 
@@ -168,6 +168,9 @@ export class Game {
         onSlowed: (ms) => this.player.slow(ms / 1000, slowFactor),
         onSpeed: (m) => (this.player.speedMul = m),
         feed: (text) => this.addFeed(text),
+        onConjure: (id, box) => this.addConjured(id, box),
+        onUnconjure: (id) => this.removeConjured(id),
+        onCharge: (dir, speed, seconds) => this.player.burst(dir.x, dir.z, speed, seconds),
         onArena: (id) => {
           const next = LEVELS[id];
           if (next && next !== this.level) this.loadLevel(next);
@@ -221,6 +224,7 @@ export class Game {
       }
     });
     this.levelRoot.clear();
+    this.conjured?.clear(); // they were in the old world
     const old = this.player as PlayerController | undefined;
     this.world?.free();
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
@@ -243,6 +247,49 @@ export class Game {
       this.player.teleport(old.position.x, old.position.y, old.position.z);
     }
     this.royale?.setLevel(level);
+  }
+
+  // ---- Conjured walls and pillars (battle royale) ----
+
+  private conjured = new Map<number, { mesh: THREE.Mesh; collider: RAPIER.Collider; box: Box; born: number }>();
+
+  private addConjured(id: number, box: Box): void {
+    this.removeConjured(id);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(...box.size), new THREE.MeshLambertMaterial({ color: box.color, flatShading: true }));
+    mesh.position.set(...box.pos);
+    if (box.rot) mesh.rotation.set(...box.rot);
+    mesh.castShadow = mesh.receiveShadow = true;
+    this.levelRoot.add(mesh);
+    const q = mesh.quaternion;
+    const collider = this.world.createCollider(
+      RAPIER.ColliderDesc.cuboid(box.size[0] / 2, box.size[1] / 2, box.size[2] / 2)
+        .setTranslation(...box.pos)
+        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }),
+    );
+    this.conjured.set(id, { mesh, collider, box, born: performance.now() });
+    this.royale?.setBoxes([...this.level.boxes, ...[...this.conjured.values()].map((c) => c.box)]);
+  }
+
+  private removeConjured(id: number): void {
+    const c = this.conjured.get(id);
+    if (!c) return;
+    this.conjured.delete(id);
+    this.levelRoot.remove(c.mesh);
+    c.mesh.geometry.dispose();
+    (c.mesh.material as THREE.Material).dispose();
+    this.world.removeCollider(c.collider, false);
+    this.royale?.setBoxes([...this.level.boxes, ...[...this.conjured.values()].map((x) => x.box)]);
+  }
+
+  // Walls rise out of the ground over a quarter second.
+  private animateConjured(): void {
+    const now = performance.now();
+    for (const c of this.conjured.values()) {
+      const k = Math.min(1, (now - c.born) / 250);
+      const h = c.box.size[1];
+      c.mesh.scale.y = Math.max(0.05, k);
+      c.mesh.position.y = c.box.pos[1] - (h * (1 - c.mesh.scale.y)) / 2;
+    }
   }
 
   private setupScene(): void {
@@ -512,7 +559,13 @@ export class Game {
     const dt = Math.min((now - this.lastFrame) / 1000, MAX_FRAME_DT);
     this.lastFrame = now;
 
-    if (this.input.consumeRestart() && this.parkour) this.net.send({ t: "restart" });
+    // R: restart a trial run; in the battle royale, E and R are abilities.
+    const r = this.input.consumeRestart();
+    if (r && this.parkour) this.net.send({ t: "restart" });
+    if (this.royale) {
+      const e = this.input.consumeInteract();
+      if (e || r) this.royale.ability(e ? 0 : 1, this.camera.position, this.camera.getWorldDirection(new THREE.Vector3()));
+    }
     // Admins: F toggles flying (Space up, C down, passes through walls).
     if (this.input.consumeFly() && this.profile.isAdmin) {
       this.player.flying = !this.player.flying;
@@ -569,6 +622,7 @@ export class Game {
     this.markers.update(now / 1000);
     this.portals?.update(now / 1000);
     this.royale?.update(now / 1000, this.player.position, this.clock.now(), this.input.forward !== 0 || this.input.strafe !== 0);
+    this.animateConjured();
     // 1 / 2 / mouse wheel: switch hands (battle royale).
     const hand = this.input.consumeHand();
     if (hand && this.royale) this.royale.switchHand(hand);

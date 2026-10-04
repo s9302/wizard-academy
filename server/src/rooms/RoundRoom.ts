@@ -27,6 +27,11 @@ const BOT_NAMES = ["Bot Ash", "Bot Briar", "Bot Cinder", "Bot Dusk", "Bot Ember"
 
 // Bots' walking maps take a moment to build; share one per level.
 const navGrids = new Map<string, NavGrid>();
+// The walking map for a level, only if it's already been built (no work).
+export function navGridIfBuilt(level: Level): NavGrid | undefined {
+  return navGrids.get(level.id);
+}
+
 export function navGridFor(level: Level): NavGrid {
   let grid = navGrids.get(level.id);
   if (!grid) {
@@ -87,7 +92,7 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
     const from = me.p;
     me.p = p;
     me.ry = ry;
-    this.broadcast({ t: "moved", id: me.conn.id, p, ry, time: now }, me.conn.id);
+    this.relayMove(me, now);
     this.onPlayerMoved(me, from, p, now);
   }
 

@@ -233,6 +233,14 @@ export function animateAvatar(group: THREE.Group, now: number): void {
   hand.rotation.x = k >= 0 && k < 1 ? -Math.sin(k * Math.PI) * 1.4 : 0;
 }
 
+// A colored glow for a while (a Knight fortifying).
+export function glowAvatar(group: THREE.Group, color: string, ms: number): void {
+  const parts = group.userData.parts as AvatarParts;
+  parts.bodyMat.emissive.set(color);
+  window.clearTimeout(group.userData.glowTimer);
+  group.userData.glowTimer = window.setTimeout(() => parts.bodyMat.emissive.set("#000000"), ms);
+}
+
 // Frosted (hit by Frost Shard): a pale blue tint for a moment.
 export function chillAvatar(group: THREE.Group, ms: number): void {
   const parts = group.userData.parts as AvatarParts;

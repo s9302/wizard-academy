@@ -37,6 +37,8 @@ export class RoyaleHud {
   private classEl: HTMLElement;
   private slots: Record<Hand, { el: HTMLElement; name: HTMLElement; cooldown: HTMLElement }>;
   private fireSlot: HTMLElement;
+  private abilitySlots: { el: HTMLElement; name: HTMLElement; cooldown: HTMLElement }[] = [];
+  private stealthEl: HTMLElement;
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
   private votePanel: HTMLElement; // in the pause panel: buttons
@@ -96,6 +98,8 @@ export class RoyaleHud {
     this.resultsEl.hidden = true;
 
     this.calloutEl = el("div", "callout", hud);
+    this.stealthEl = el("div", "stealth-note", hud);
+    this.stealthEl.textContent = "Hidden";
     this.voteCard = el("div", "vote-card", hud);
     this.voteCard.hidden = true;
     const bottom = el("div", "royale-bottom", hud);
@@ -112,6 +116,8 @@ export class RoyaleHud {
       return { el: box, name, cooldown: el("div", "", box, "slot-cooldown") };
     };
     this.slots = { main: slot("1 · Main"), backup: slot("2 · Backup") };
+    this.abilitySlots = [slot("E · Ability"), slot("R · Ability")];
+    for (const a of this.abilitySlots) a.el.classList.add("ability");
     this.fireSlot = el("div", "", slots, "spell-slot fire");
     el("div", "", this.fireSlot, "slot-key").textContent = "Right-click";
     el("div", "", this.fireSlot, "slot-name").textContent = SPELLS.fireball.name;
@@ -218,6 +224,21 @@ export class RoyaleHud {
       line.textContent = `${size} \u00b7 ${label} \u2014 ${count}`;
       this.voteCard.appendChild(line);
     }
+  }
+
+  // E and R: names, and how much of each cooldown is left (0..1).
+  abilities(names: string[], cooling: number[]): void {
+    this.abilitySlots.forEach((slot, i) => {
+      if (slot.name.textContent !== names[i]) slot.name.textContent = names[i];
+      slot.cooldown.style.height = `${Math.min(1, cooling[i]) * 100}%`;
+      slot.el.classList.toggle("cooling", cooling[i] > 0);
+    });
+  }
+
+  // You've vanished (Rogue): darker screen edges and a note.
+  stealthed(on: boolean): void {
+    this.stealthEl.classList.toggle("show", on);
+    document.body.classList.toggle("stealthed", on);
   }
 
   // "Blocked!", "Backstab!" near the crosshair.
@@ -342,6 +363,6 @@ export class RoyaleHud {
     window.clearTimeout(this.bannerTimer);
     window.clearTimeout(this.hitTimer);
     window.clearTimeout(this.hurtTimer);
-    document.body.classList.remove("spectating");
+    document.body.classList.remove("spectating", "stealthed");
   }
 }

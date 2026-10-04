@@ -14,6 +14,7 @@ import {
   animateAvatar,
   type AvatarStatus,
   chillAvatar,
+  glowAvatar,
   createAvatar,
   disposeAvatar,
   flashAvatar,
@@ -110,6 +111,11 @@ export class RemotePlayers {
   swing(id: number): void {
     const remote = this.remotes.get(id);
     if (remote) swingAvatar(remote.avatar);
+  }
+
+  glow(id: number, color: string, ms: number): void {
+    const remote = this.remotes.get(id);
+    if (remote) glowAvatar(remote.avatar, color, ms);
   }
 
   chill(id: number, ms: number): void {

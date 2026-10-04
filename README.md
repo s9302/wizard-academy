@@ -1,9 +1,9 @@
 # Wizard Academy
 
 A small multiplayer low-poly 3D browser game: walk, run, and jump around in
-first person with friends. Built in phases. **Phase 11** added nine battle royale arenas
-(voted between rounds), fall damage, and landing on people; next up are
-wizard spells that reshape the arena.
+first person with friends. Built in phases. **Phase 12** added class abilities (wizards
+reshape the arena; rogues teleport and vanish; knights charge and fortify)
+and more story trials.
 
 - **Client:** TypeScript, Three.js (rendering), Rapier (physics and character
   controller), built with Vite.
@@ -83,7 +83,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 ```
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
-`hub-check`, `royale-check`, `classes-check`, `arena-check`, `unlocks-check`, `admin-check`,
+`hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `admin-check`,
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -307,8 +307,8 @@ countdown, then play until one wizard is left.
   up what you can use; a taken pickup comes back after 25 s.
 - **The storm.** The safe circle starts covering the whole arena, then
   shrinks in four stages to nothing. Each stage waits (the next circle shows
-  as a white ring on the ground), then closes in. Outside it you take 2, 4, 8,
-  then 15 damage a second, and the screen goes purple. About 3.5 minutes in
+  as a white ring on the ground), then closes in. Outside it you take 5, 8, 12,
+  then 20 damage a second (30 once it covers everything), and the screen goes purple. About 3.5 minutes in
   all; most rounds end sooner.
 - **Bots:** Esc, then Bots [+]. They head into the circle when the storm
   comes, strafe and shoot when they see someone (aiming a little ahead, with
@@ -383,6 +383,39 @@ GAME_PIN=... node server/scripts/arena-check.ts http://localhost:3000   # vote, 
 
 `royale-check`, `classes-check` and `bots-check` are written for The Ruins:
 run them against a server started with `ROYALE_ARENA=arena`.
+
+## Abilities (battle royale)
+
+Every class has two, on **E** and **R** (cooldowns show in their HUD slots):
+
+| | E | R |
+|---|---|---|
+| **Wizard** | **Stone Wall**: a 4.5 x 2.6 m wall where you aim (up to 18 m), for 15 s. Cooldown 12 s | **Earth Pillar**: a 3.5 m pillar where you aim, for 12 s; aim at your feet to ride it up. 14 s |
+| **Rogue** | **Shadow Step**: teleport up to 12 m where you look, not through walls. 9 s | **Vanish**: invisible for 4 s, or until you attack. 16 s |
+| **Knight** | **Charge**: rush 8 m; the first enemy you run into takes 20. 10 s | **Fortify**: half damage for 5 s. 18 s |
+
+What the server does (all of it):
+- **Walls and pillars** are placed where your aim meets something to stand
+  on; one that would land on someone isn't placed (and costs nothing).
+  While up, they're part of the level for everything: spells and arrows,
+  line of sight, melee, and the bots' walking map (bots go around them).
+- **Shadow Step** goes as far as your aim allows short of a wall, then comes
+  back half a meter at a time until there's room to stand.
+- **Vanish**: while hidden, the server doesn't send your position to anyone
+  (so a modified client can't see you either); attacking ends it.
+- **Charge** is your own movement, so the server allows the extra distance
+  for that moment and checks your path for the first enemy.
+- Bots use them too, when hurt: wizards wall off someone at range, rogues
+  step away from someone close, knights fortify.
+
+Numbers: `shared/src/abilities.ts`.
+
+```sh
+ROYALE_ARENA=arena ROYALE_STORM=off ROUND_TIME_SCALE=0.25 ... node server/src/index.ts
+GAME_PIN=... node server/scripts/abilities-check.ts http://localhost:3000
+```
+
+`ROYALE_STORM=off` (testing only) turns the storm off for exact damage checks.
 
 ## Classes (battle royale)
 

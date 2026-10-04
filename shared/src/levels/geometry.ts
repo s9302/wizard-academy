@@ -117,3 +117,32 @@ const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 export const lerp3 = (a: Vec3, b: Vec3, t: number): Vec3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+// The highest walkable surface at (x, z) no higher than `maxY` (a little
+// above the point you're asking about), or null if there's nothing below.
+// Handles ramps (rotated boxes) by intersecting with their top face.
+export function floorBelow(x: number, z: number, maxY: number, boxes: Box[]): number | null {
+  let best: number | null = null;
+  for (const box of boxes) {
+    const top = topOf(box, x, z);
+    if (top !== null && top <= maxY + 0.05 && (best === null || top > best)) best = top;
+  }
+  return best;
+}
+
+// Height of a box's top surface at (x, z), or null if (x, z) isn't over it.
+function topOf(box: Box, x: number, z: number): number | null {
+  const [w, h, d] = box.size;
+  if (!box.rot) {
+    if (Math.abs(x - box.pos[0]) > w / 2 || Math.abs(z - box.pos[2]) > d / 2) return null;
+    return box.pos[1] + h / 2;
+  }
+  // A rotated box: drop a vertical line through its top face.
+  const top = segmentHitsBox([x, box.pos[1] + 50, z], [x, box.pos[1] - 50, z], box);
+  return top === null ? null : box.pos[1] + 50 - top * 100;
+}
+
+// Does a box overlap a player standing at p (capsule center)?
+export function boxTouchesPlayer(box: Box, p: Vec3): boolean {
+  return segmentHitsBox([p[0], p[1] - PLAYER_HALF_HEIGHT, p[2]], [p[0], p[1] + PLAYER_HALF_HEIGHT, p[2]], box, PLAYER_RADIUS) !== null;
+}

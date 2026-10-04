@@ -62,17 +62,23 @@ export type RoyaleAction = {
   cast: { spell: SpellId; d: Vec3 } | null; // a spell (Wizard's, or a Fireball)
   attack: Vec3 | null; // use the weapon in hand, in this direction
   hand: Hand | null; // switch to this hand
+  ability: { slot: 0 | 1; d: Vec3 } | null; // E or R, aimed this way
 };
 
 const eye = (p: Vec3): Vec3 => [p[0], p[1] + EYE_HEIGHT, p[2]];
 
 export class RoyaleBot extends BotWalker {
-  private boxes: Box[];
+  private boxes: () => Box[]; // the level, plus any conjured walls
 
-  setLevel(grid: NavGrid, boxes: Box[]): void {
+  setLevel(grid: NavGrid): void {
     this.setGrid(grid);
-    this.boxes = boxes;
     this.target = null;
+  }
+
+  // A wall went up somewhere: plan again.
+  replan(): void {
+    this.path = [];
+    this.replanAt = 0;
   }
   // Each bot has one left-click spell, like a player picks in the Spellbook.
   // Bots in a room take turns: Knight, Rogue, Wizard, Knight... and the
@@ -83,12 +89,13 @@ export class RoyaleBot extends BotWalker {
   private target: number | null = null; // player id in sight
   private sightCheckAt = 0;
   private nextCastAt = 0;
+  private abilityAt = 0;
   private strafeSide = 1;
   private strafeFlipAt = 0;
   // Where each enemy was last tick, to guess where they're heading.
   private seen = new Map<number, { p: Vec3; time: number; v: Vec3 }>();
 
-  constructor(peer: BotPeer, grid: NavGrid, boxes: Box[], index: number) {
+  constructor(peer: BotPeer, grid: NavGrid, boxes: () => Box[], index: number) {
     super(peer, grid);
     this.boxes = boxes;
     this.cls = CLASS_IDS[index % CLASS_IDS.length];
@@ -103,7 +110,7 @@ export class RoyaleBot extends BotWalker {
     if (!view.fighting) {
       this.target = null;
       this.wander(now);
-      return { p: this.step(me.p, WANDER_SPEED, view.dt), ry: this.ry, cast: null, attack: null, hand: null };
+      return { p: this.step(me.p, WANDER_SPEED, view.dt), ry: this.ry, cast: null, attack: null, hand: null, ability: null };
     }
 
     let speed = TRAVEL_SPEED;
@@ -130,7 +137,7 @@ export class RoyaleBot extends BotWalker {
 
     speed *= moveSpeed(this.cls, view.hand) * (view.slowed ? SLOW_FACTOR : 1);
     const p = this.step(me.p, speed, view.dt);
-    const action: RoyaleAction = { p, ry: this.ry, cast: null, attack: null, hand: null };
+    const action: RoyaleAction = { p, ry: this.ry, cast: null, attack: null, hand: null, ability: null };
     if (target) {
       action.ry = this.ry = Math.atan2(-(target.p[0] - p[0]), -(target.p[2] - p[2])); // face them while strafing
       const wanted = this.wantedHand(view, flatDist(p, target.p));
@@ -138,6 +145,28 @@ export class RoyaleBot extends BotWalker {
       else this.fight(view, target, p, action);
     }
     return action;
+  }
+
+  // Abilities, when hurt: Wizards wall themselves off from someone at
+  // range, Rogues shadow-step away from someone close, Knights fortify.
+  // (The server checks cooldowns; a bot just tries every few seconds.)
+  private useAbility(view: RoyaleView, target: Player, from: Vec3, action: RoyaleAction): boolean {
+    if (view.now < this.abilityAt || view.hp > view.maxHp * 0.6) return false;
+    const dist = flatDist(from, target.p);
+    const [fx, fz] = [(target.p[0] - from[0]) / (dist || 1), (target.p[2] - from[2]) / (dist || 1)];
+    if (this.cls === "wizard" && dist > 6) {
+      // Aim at the ground about 4 m toward them: the wall goes up there.
+      const pitch = Math.atan2(EYE_HEIGHT + 0.9, 4);
+      action.ability = { slot: 0, d: [fx * Math.cos(pitch), -Math.sin(pitch), fz * Math.cos(pitch)] };
+    } else if (this.cls === "rogue" && dist < 6) {
+      action.ability = { slot: 0, d: [-fx, 0, -fz] };
+    } else if (this.cls === "knight") {
+      action.ability = { slot: 1, d: [fx, 0, fz] };
+    } else {
+      return false;
+    }
+    this.abilityAt = view.now + 4000;
+    return true;
   }
 
   // Which hand suits the moment.
@@ -149,6 +178,7 @@ export class RoyaleBot extends BotWalker {
 
   // Attack with what's in hand (or throw a Fireball if it's a good moment).
   private fight(view: RoyaleView, target: Player, from: Vec3, action: RoyaleAction): void {
+    if (this.useAbility(view, target, from, action)) return;
     if (view.now < this.nextCastAt) return;
     const dist = flatDist(from, target.p);
     if (view.fireballs > 0 && dist <= FIREBALL_RANGE && dist > 5) {
@@ -192,7 +222,7 @@ export class RoyaleBot extends BotWalker {
     if (now < this.sightCheckAt) return current;
     this.sightCheckAt = now + SIGHT_CHECK_MS * (0.8 + Math.random() * 0.4);
     const visible = view.enemies
-      .filter((e) => flatDist(me.p, e.p) <= SIGHT_RANGE && lineOfSight(eye(me.p), eye(e.p), this.boxes))
+      .filter((e) => flatDist(me.p, e.p) <= SIGHT_RANGE && lineOfSight(eye(me.p), eye(e.p), this.boxes()))
       .sort((a, b) => flatDist(me.p, a.p) - flatDist(me.p, b.p));
     const next = visible[0]?.conn.id ?? null;
     if (next !== null && next !== this.target) {

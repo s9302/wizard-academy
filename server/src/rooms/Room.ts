@@ -168,7 +168,7 @@ export abstract class Room {
     player.p = p;
     player.moveCheck.reset();
     player.conn.send({ t: "teleport", p, tp: player.tp });
-    this.broadcast({ t: "moved", id: player.conn.id, p, ry: player.ry, time: Date.now() }, player.conn.id);
+    this.relayMove(player, Date.now());
   }
 
   // Movement is client-authoritative, within reason: accept the position and
@@ -193,8 +193,14 @@ export abstract class Room {
     const now = Date.now();
     player.p = msg.p;
     player.ry = msg.ry;
-    this.broadcast({ t: "moved", id: player.conn.id, p: msg.p, ry: msg.ry, time: now }, player.conn.id);
+    this.relayMove(player, now);
     this.onPlayerMoved(player, from, msg.p, now);
+  }
+
+  // Tell everyone else where this player is now. (The battle royale skips
+  // this while someone has vanished, so nobody's game even knows.)
+  protected relayMove(player: Player, now: number): void {
+    this.broadcast({ t: "moved", id: player.conn.id, p: player.p, ry: player.ry, time: now }, player.conn.id);
   }
 
   protected broadcast(msg: ServerMsg, exceptId?: number): void {

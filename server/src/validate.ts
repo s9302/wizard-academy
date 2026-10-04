@@ -59,6 +59,13 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (len < 0.9 || len > 1.1) return null;
       return { t: "attack", o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len], seq: msg.seq as number };
     }
+    case "ability": {
+      if (msg.slot !== 0 && msg.slot !== 1) return null;
+      if (!isVec3(msg.o) || !isVec3(msg.d)) return null;
+      const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
+      if (len < 0.9 || len > 1.1) return null;
+      return { t: "ability", slot: msg.slot, o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
+    }
     case "vote":
       if (typeof msg.arena !== "string" || !ROOM_PATTERN.test(msg.arena)) return null;
       return { t: "vote", arena: msg.arena };

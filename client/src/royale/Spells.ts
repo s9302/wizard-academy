@@ -131,6 +131,15 @@ export class Spells {
     this.blasts.push({ mesh, start: performance.now(), size: def.splashRadius ?? 0.9 });
   }
 
+  // A puff of smoke (a Shadow Step's start and end).
+  puff(p: Vec3, color = "#2b2140"): void {
+    const material = new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), material);
+    mesh.position.set(...p);
+    this.scene.add(mesh);
+    this.blasts.push({ mesh, start: performance.now(), size: 1.1 });
+  }
+
   private remove(flying: Flying): void {
     this.scene.remove(flying.group);
   }
@@ -155,6 +164,11 @@ export class Spells {
 
   setBoxes(boxes: Box[]): void {
     this.clear();
+    this.boxes = boxes;
+  }
+
+  // Walls came or went: new spells stop at them (ones in flight carry on).
+  setBoxesKeepFlying(boxes: Box[]): void {
     this.boxes = boxes;
   }
 

@@ -9,14 +9,14 @@
 import WebSocket from "ws";
 import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
-import { NavGrid } from "../src/bots/NavGrid.ts";
+import { segmentHitsBox } from "../../shared/src/levels/geometry.ts";
 import { signIn } from "./signIn.ts";
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const arenaId = process.argv[3] ?? "arena";
 const pin = process.env.GAME_PIN!;
 const level = LEVELS[arenaId];
-const grid = new NavGrid(level);
+const solid = level.boxes;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const cookie = await signIn(base, pin, "test_arenabots");
@@ -59,17 +59,27 @@ for (const id of bots) {
   if (ps.length && Math.hypot(ps[0][0] - ps.at(-1)![0], ps[0][2] - ps.at(-1)![2]) > 2) moved++;
   for (const p of ps) {
     samples++;
-    const floor = grid.floorAt(p[0], p[2]);
-    if (!(p[1] - 0.9 >= floor - 1.05)) {
+    // Inside a wall: the bot's middle at least 0.3 m deep inside a block
+    // whose top is well above its feet (a wall or pillar, not a ledge or
+    // ramp it's in the middle of stepping onto: bots ease up and down
+    // heights over a few updates, which can dip them into a step briefly).
+    const feet = p[1] - 0.9;
+    const box = solid.find(
+      (b) =>
+        !(b.rot && (b.rot[0] || b.rot[2])) && // ramps don't count
+        b.pos[1] + b.size[1] / 2 > feet + 1 &&
+        segmentHitsBox([p[0], p[1] - 0.1, p[2]], [p[0], p[1] + 0.1, p[2]], b, -0.3) !== null,
+    );
+    if (box) {
       inside++;
-      if (process.env.SHOW_INSIDE) console.log("inside:", p.map((n) => n.toFixed(2)).join(","), "floor", floor.toFixed(2));
+      if (process.env.SHOW_INSIDE) console.log("inside:", p.map((n) => n.toFixed(2)).join(","), JSON.stringify(box));
     }
     if (p[1] - 0.9 > 2) high++;
   }
 }
 const ok = arenaSeen === arenaId && !!result && moved >= 4 && inside === 0 && spells + swings > 10;
 console.log(
-  `${ok ? "PASS" : "FAIL"}  ${arenaId}: ${result || "no result"} | ${moved}/${bots.length} moved, ${inside}/${samples} inside geometry, ` +
+  `${ok ? "PASS" : "FAIL"}  ${arenaId}: ${result || "no result"} | ${moved}/${bots.length} moved, ${inside}/${samples} inside walls, ` +
     `${high} high-ground samples, ${spells} shots, ${swings} swings, ${hits} hits, ${falls} falls`,
 );
 ws.close();

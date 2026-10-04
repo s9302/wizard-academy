@@ -3,10 +3,11 @@
 // the server's royale messages and the player's clicks; this decides what to
 // draw and what to send.
 
-import type * as THREE from "three";
+import * as THREE from "three";
+import { ABILITIES, CHARGE_SPEED, CHARGE_TIME, CLASS_ABILITIES } from "../../../shared/src/abilities.ts";
 import { type ClassId, type Hand, moveSpeed, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
 import { castDirections, MAX_SHIELD, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
-import type { Level } from "../../../shared/src/levels/types.ts";
+import type { Box, Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, RoundState, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RemotePlayers } from "../RemotePlayers.ts";
 import type { ServerClock } from "../ServerClock.ts";
@@ -25,6 +26,9 @@ export type RoyaleHooks = {
   onSpeed: (multiplier: number) => void; // class and hand set how fast you move
   feed: (text: string) => void; // a line in the message feed
   onArena: (levelId: string) => void; // the server switched arenas
+  onConjure: (id: number, box: Box) => void; // a wizard's wall or pillar appeared
+  onUnconjure: (id: number) => void;
+  onCharge: (dir: THREE.Vector3, speed: number, seconds: number) => void; // rush forward (Knight)
 };
 
 export class Royale {
@@ -46,6 +50,7 @@ export class Royale {
   private cls: ClassId;
   private hand: Hand = "main";
   private handReadyAt = 0;
+  private abilityReadyAt: [number, number] = [0, 0]; // performance.now()
   private pendingCls: ClassId | null = null; // picked mid-round
 
   constructor(scene: THREE.Scene, camera: THREE.Camera, hudEl: HTMLElement, clock: ServerClock, level: Level, roomName: string, remotes: RemotePlayers, primary: SpellId, cls: ClassId, hooks: RoyaleHooks) {
@@ -104,7 +109,9 @@ export class Royale {
         return true;
       case "equip":
         if (msg.id === me) {
-          // The server's word on our class and hand.
+          // The server's word on our class and hand. A new class starts with
+          // its abilities ready (the server resets them too).
+          if (msg.cls !== this.cls) this.abilityReadyAt = [0, 0];
           this.cls = msg.cls;
           this.hand = msg.hand;
           if (this.pendingCls === msg.cls) {
@@ -128,6 +135,19 @@ export class Royale {
         return true;
       case "arena":
         this.hooks.onArena(msg.levelId);
+        return true;
+      case "conjure":
+        this.hooks.onConjure(msg.id, msg.box);
+        return true;
+      case "unconjure":
+        this.hooks.onUnconjure(msg.id);
+        return true;
+      case "abilityFailed":
+        this.abilityReadyAt[msg.slot] = 0; // not spent
+        this.hud.callout(msg.reason);
+        return true;
+      case "effect":
+        this.effect(msg.id === me, msg.id, msg.kind, msg.ms, msg.from, msg.to);
         return true;
       case "arenaVote":
         this.hud.vote(msg.options, msg.votes);
@@ -172,6 +192,31 @@ export class Royale {
   private refreshVisibility(): void {
     const hide = this.state === "playing";
     this.remotes.forEachId((id) => this.remotes.setVisible(id, !hide || this.alive.has(id)));
+  }
+
+  // E (slot 0) / R (slot 1): this class's ability. The server does the work
+  // (and says if it didn't); a Knight's charge is our own movement.
+  ability(slot: 0 | 1, origin: THREE.Vector3, dir: THREE.Vector3): void {
+    const now = performance.now();
+    if (!this.hud.canAct || now < this.abilityReadyAt[slot]) return;
+    const id = CLASS_ABILITIES[this.cls][slot];
+    this.abilityReadyAt[slot] = now + ABILITIES[id].cooldownMs;
+    const o: Vec3 = [round3(origin.x), round3(origin.y), round3(origin.z)];
+    this.hooks.send({ t: "ability", slot, o, d: [dir.x, dir.y, dir.z] });
+    if (id === "charge") this.hooks.onCharge(new THREE.Vector3(dir.x, 0, dir.z), CHARGE_SPEED, CHARGE_TIME);
+  }
+
+  private effect(mine: boolean, id: number, kind: string, ms: number, from?: Vec3, to?: Vec3): void {
+    if (kind === "blink") {
+      if (from) this.spells.puff(from);
+      if (to) this.spells.puff(to);
+    } else if (kind === "stealth") {
+      if (mine) this.hud.stealthed(ms > 0);
+      else this.remotes.setVisible(id, ms === 0 && (this.state !== "playing" || this.alive.has(id)));
+    } else if (kind === "fortify" && !mine) {
+      this.remotes.glow(id, "#c9a227", ms);
+    }
+    if (mine && kind === "fortify") this.hud.callout("Fortified!");
   }
 
   // The class picker. Mid-round (while still in it) the change waits for the
@@ -231,11 +276,21 @@ export class Royale {
     const inStorm = !!c && Math.hypot(me.x - c[0], me.z - c[1]) > c[2];
     const now = performance.now();
     this.hud.update(Math.max(0, this.readyAt.primary - now), Math.max(0, this.handReadyAt - now), inStorm);
+    const abilities = CLASS_ABILITIES[this.cls];
+    this.hud.abilities(
+      abilities.map((a) => ABILITIES[a].name),
+      this.abilityReadyAt.map((t, i) => Math.max(0, t - now) / ABILITIES[abilities[i]].cooldownMs),
+    );
   }
 
   // A new arena: spells stop at its walls.
   setLevel(level: Level): void {
     this.spells.setBoxes(level.boxes);
+  }
+
+  // The level plus conjured walls (spells stop at those too).
+  setBoxes(boxes: Box[]): void {
+    this.spells.setBoxesKeepFlying(boxes);
   }
 
   dispose(): void {

@@ -14,6 +14,19 @@
 // for spells (unlike tags): they fly against where players are *now* on the
 // server, which is what dodging needs.
 
+import {
+  ABILITIES,
+  BLINK_RANGE,
+  CHARGE_DAMAGE,
+  CHARGE_SPEED,
+  CHARGE_TIME,
+  CLASS_ABILITIES,
+  CONJURE_RANGE,
+  FORTIFY_FACTOR,
+  PILLAR_HEIGHT,
+  PILLAR_SIZE,
+  WALL_SIZE,
+} from "../../../shared/src/abilities.ts";
 import { CLASSES, type ClassId, type Hand, inFront, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
 import {
   CAST_ORIGIN_SLACK,
@@ -38,7 +51,7 @@ import {
   WARD_SHIELD,
 } from "../../../shared/src/combat.ts";
 import { EYE_HEIGHT, PLAYER_RADIUS } from "../../../shared/src/constants.ts";
-import { lerp3, lineOfSight, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
+import { boxTouchesPlayer, floorBelow, lerp3, lineOfSight, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
 import type { CastMsg, ClientMsg, PickupInfo, Vec3, ZoneState } from "../../../shared/src/protocol.ts";
 import { saveLoadout } from "../accounts.ts";
 import { RoyaleBot } from "../bots/RoyaleBot.ts";
@@ -47,10 +60,10 @@ import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
 import { arenasOfSize } from "../../../shared/src/levels/arenas.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
-import type { Level } from "../../../shared/src/levels/types.ts";
-import { navGridFor, RoundRoom, SCALE } from "./RoundRoom.ts";
+import type { Box, Level } from "../../../shared/src/levels/types.ts";
+import { navGridFor, navGridIfBuilt, RoundRoom, SCALE } from "./RoundRoom.ts";
 
-const STORM_TICK_MS = 1000; // storm damage is dealt once a second
+const STORM_TICK_MS = 500; // storm damage is dealt twice a second (half the dps each time)
 const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle (medium arena)
 const RESULTS_MS = 12_000 * SCALE; // long enough to vote for the next arena
 
@@ -81,6 +94,11 @@ type Fighter = {
   nextCast: Record<SpellSlot, number>; // server time
   eliminations: number;
   slowedUntil: number; // Frost Shard (bots read this; players slow themselves)
+  abilityReady: [number, number]; // E and R: server time each is ready
+  stealthUntil: number; // Vanish
+  fortifyUntil: number; // Fortify
+  chargeUntil: number; // Charge: moving fast, the first enemy touched is hit
+  chargeHit: boolean;
 };
 
 // Flown by time since launch, so arrows can arc (see projectileAt).
@@ -88,6 +106,7 @@ type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3
 type Pickup = PickupInfo & { spot: number };
 
 let nextSpellId = 1;
+let nextConjureId = 1;
 let nextPickupId = 1;
 
 const eye = (p: Vec3): Vec3 => [p[0], p[1] + EYE_HEIGHT, p[2]];
@@ -95,6 +114,8 @@ const dist3 = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - 
 
 // Testing only: always play this arena (a level id); no votes.
 const FIXED_ARENA = process.env.ROYALE_ARENA;
+// Testing only: ROYALE_STORM=off for exact damage checks.
+const NO_STORM = process.env.ROYALE_STORM === "off";
 
 export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private fighters = new Map<number, Fighter>();
@@ -117,6 +138,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // cancels your own fall damage).
   private falls = new Map<number, { peak: number; speed: number; lastMove: number; lastY: number; stomped: boolean }>();
   // Arena vote: the options on offer and each person's vote.
+  // Walls and pillars wizards have conjured, by id.
+  private conjured = new Map<number, { box: Box; until: number }>();
+  private boxCache: Box[] | null = null;
   private voteOptions: string[] = [];
   private votes = new Map<number, string>();
 
@@ -132,6 +156,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   protected override onCountdown(): void {
     this.falls.clear(); // everyone was just moved to a spawn point
+    this.clearConjured();
     this.projectiles.clear();
     this.alive.clear();
     this.broadcast({ t: "alive", ids: [] });
@@ -154,7 +179,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
     this.stage = 0;
     this.nextStormTick = now + STORM_TICK_MS;
-    this.startStage([0, 0, this.level.arena?.stormRadius ?? STORM_START_RADIUS], now);
+    if (!NO_STORM) this.startStage([0, 0, this.level.arena?.stormRadius ?? STORM_START_RADIUS], now);
     this.broadcast({ t: "announce", text: "The storm is gathering. Last wizard standing wins!" });
   }
 
@@ -266,7 +291,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.respawnAt.clear();
     this.broadcastPickups();
     this.falls.clear();
-    for (const bot of this.bots.values()) bot.setLevel(navGridFor(level), level.boxes);
+    this.clearConjured();
+    for (const bot of this.bots.values()) bot.setLevel(navGridFor(level));
     this.broadcast({ t: "arena", levelId: level.id });
     this.broadcast({ t: "announce", text: `Next arena: ${level.name}` });
     console.log(`[${this.name}] arena: ${level.id}`);
@@ -274,6 +300,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   protected override onJoinedRound(player: Player): void {
     player.conn.send({ t: "arena", levelId: this.level.id });
+    const now = Date.now();
+    for (const [id, c] of this.conjured) player.conn.send({ t: "conjure", id, box: c.box, ms: c.until - now });
     if (!this.voteOptions.length && this.state === "waiting") this.openVote();
     else this.broadcastVote();
     // Joining mid-round: you watch until the next one. Everyone hears what
@@ -327,6 +355,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       nextCast: { primary: 0, fireball: 0 },
       eliminations: 0,
       slowedUntil: 0,
+      abilityReady: [0, 0],
+      stealthUntil: 0,
+      fortifyUntil: 0,
+      chargeUntil: 0,
+      chargeHit: false,
     };
     const id = player.conn.id;
     this.fighters.set(id, f);
@@ -346,6 +379,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const dt = Math.min(0.2, (now - this.lastStep) / 1000);
     this.lastStep = now;
     this.stepProjectiles(dt);
+    for (const [id, c] of this.conjured) if (now >= c.until) this.unconjure(id);
+    for (const player of this.players.values()) {
+      const f = this.fighters.get(player.conn.id);
+      if (f && f.stealthUntil && now >= f.stealthUntil) this.breakStealth(player);
+    }
     if (this.state !== "playing") return;
     this.stepStorm(now);
     for (const [spot, at] of this.respawnAt) {
@@ -364,6 +402,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     else if (msg.t === "hand") this.setHand(player, msg.hand);
     else if (msg.t === "class") this.setClass(player, msg.cls);
     else if (msg.t === "vote") this.vote(player, msg.arena);
+    else if (msg.t === "ability") this.ability(player, msg.slot, msg.d);
   }
 
   // ---- Classes and hands ----
@@ -402,6 +441,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const now = Date.now();
     const f = this.fighters.get(player.conn.id);
     if (!this.canAct(player, f) || now < f.handReadyAt) return;
+    this.breakStealth(player);
     const weapon = weaponOf(f.cls, f.hand);
     const def = WEAPONS[weapon];
     if (def.kind === "spell") {
@@ -434,7 +474,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         const flat = Math.hypot(p[0] - from[0], p[2] - from[2]) - PLAYER_RADIUS;
         if (flat > m.reach || Math.abs(p[1] - attacker.p[1]) > MELEE_HEIGHT) continue;
         if (!inFront(yaw, [p[0] - from[0], p[2] - from[2]], m.arcDeg) && flat > 0.4) continue;
-        if (!lineOfSight(from, p, this.level.boxes)) continue;
+        if (!lineOfSight(from, p, this.allBoxes())) continue;
         best = Math.min(best, flat);
       }
       if (best < Infinity) candidates.push({ target, dist: best });
@@ -460,6 +500,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const now = Date.now();
     const f = this.fighters.get(player.conn.id);
     if (!this.canAct(player, f)) return;
+    this.breakStealth(player);
     const def = SPELLS[msg.spell];
     if (def.slot === "primary") {
       // Only a Wizard holding their spell, and only spells they've unlocked.
@@ -482,7 +523,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     // Start from where the client says its eyes are, if that's believable:
     // close to where we think they are, and not through a wall.
     const expected = eye(player.p);
-    const o = dist3(clientO, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, clientO, this.level.boxes) ? clientO : expected;
+    const o = dist3(clientO, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, clientO, this.allBoxes()) ? clientO : expected;
     const caster = player.conn.id;
     castDirections(spell, aim).forEach((d, k) => {
       const p: Projectile = { id: nextSpellId++, caster, spell, o, d, t: 0, p: o };
@@ -498,7 +539,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const to = projectileAt(spell.spell, spell.o, spell.d, t);
 
       // First thing along this tick's path: a wall, or a player.
-      let hitT = segmentHitsLevel(spell.p, to, this.level.boxes, 0.05);
+      let hitT = segmentHitsLevel(spell.p, to, this.allBoxes(), 0.05);
       let hitPlayer: Player | null = null;
       for (const target of this.players.values()) {
         if (target.conn.id === spell.caster || !this.canBeHit(target.conn.id)) continue;
@@ -548,7 +589,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     for (const target of [...this.players.values()]) {
       if (target === hit || target.conn.id === spell.caster || !this.alive.has(target.conn.id)) continue;
       const d = dist3(at, target.p);
-      if (d > def.splashRadius || !lineOfSight(from, target.p, this.level.boxes)) continue;
+      if (d > def.splashRadius || !lineOfSight(from, target.p, this.allBoxes())) continue;
       const amount = def.splashMax! - (def.splashMax! - def.splashMin!) * (d / def.splashRadius);
       this.damage(target, Math.round(amount), attacker, at);
     }
@@ -561,7 +602,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const id = target.conn.id;
     const f = this.fighters.get(id);
     if (!f || !this.alive.has(id) || raw <= 0 || target.conn.isAdmin) return false; // admins can't be hurt
-    let amount = raw * (1 - CLASSES[f.cls].defense);
+    let amount = raw * (1 - CLASSES[f.cls].defense) * (Date.now() < f.fortifyUntil ? FORTIFY_FACTOR : 1);
     const held = WEAPONS[weaponOf(f.cls, f.hand)];
     const blocked =
       !!source && !!held.block && Date.now() >= f.handReadyAt && inFront(target.ry, [source[0] - target.p[0], source[2] - target.p[2]], held.blockArcDeg!);
@@ -636,7 +677,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const [cx, cz, r] = stormCircle(this.zone!, now);
     for (const id of [...this.alive]) {
       const player = this.players.get(id);
-      if (player && Math.hypot(player.p[0] - cx, player.p[2] - cz) > r) this.damage(player, this.zone!.dps, null);
+      if (player && Math.hypot(player.p[0] - cx, player.p[2] - cz) > r) this.damage(player, this.zone!.dps * (STORM_TICK_MS / 1000), null);
     }
   }
 
@@ -672,6 +713,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.history.set(player.conn.id, list);
     if (this.state !== "playing" || !this.alive.has(player.conn.id)) return;
     this.trackFall(player, from, to, now);
+    this.chargeInto(player, from, to, now);
     for (const item of this.pickups.values()) {
       if (Math.hypot(item.p[0] - to[0], item.p[2] - to[2]) > PICKUP_REACH || Math.abs(item.p[1] - to[1]) > 1.6) continue;
       if (this.usePickup(player, item.kind)) {
@@ -680,6 +722,173 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcastPickups();
         player.conn.send({ t: "announce", text: `You picked up a ${PICKUPS[item.kind].name}.` });
       }
+      return;
+    }
+  }
+
+  // ---- Abilities (Phase 12) ----
+
+  private allBoxes(): Box[] {
+    return (this.boxCache ??= [...this.level.boxes, ...[...this.conjured.values()].map((c) => c.box)]);
+  }
+
+  private isStealthed(id: number, now = Date.now()): boolean {
+    return (this.fighters.get(id)?.stealthUntil ?? 0) > now;
+  }
+
+  // While someone has vanished, nobody else's game hears where they are.
+  protected override relayMove(player: Player, now: number): void {
+    if (this.isStealthed(player.conn.id, now)) return;
+    super.relayMove(player, now);
+  }
+
+  private breakStealth(player: Player): void {
+    const f = this.fighters.get(player.conn.id);
+    if (!f || !f.stealthUntil) return;
+    f.stealthUntil = 0;
+    this.broadcast({ t: "effect", id: player.conn.id, kind: "stealth", ms: 0 });
+    super.relayMove(player, Date.now()); // here they are
+  }
+
+  // E (slot 0) or R (slot 1): whatever this player's class has there.
+  ability(player: Player, slot: 0 | 1, d: Vec3): void {
+    const now = Date.now();
+    const f = this.fighters.get(player.conn.id);
+    if (!this.canAct(player, f) || now < f.abilityReady[slot]) return;
+    const id = CLASS_ABILITIES[f.cls][slot];
+    const failed = this.useAbility(player, f, id, d, now);
+    if (failed) {
+      player.conn.send({ t: "abilityFailed", slot, reason: failed });
+      return;
+    }
+    f.abilityReady[slot] = now + ABILITIES[id].cooldownMs * COOLDOWN_SLACK;
+    if (id !== "stealth" && id !== "blink") this.breakStealth(player);
+  }
+
+  // Returns why it didn't work, or null.
+  private useAbility(player: Player, f: Fighter, id: string, d: Vec3, now: number): string | null {
+    const pid = player.conn.id;
+    switch (id) {
+      case "wall": {
+        const spot = this.aimedFloor(player, d);
+        if (!spot) return "Nothing to stand a wall on there.";
+        const yaw = Math.atan2(-d[0], -d[2]);
+        const box: Box = { pos: [spot[0], spot[1] + WALL_SIZE[1] / 2, spot[2]], size: WALL_SIZE, color: "#8a7f72", rot: [0, yaw, 0] };
+        if ([...this.players.values()].some((p) => boxTouchesPlayer(box, p.p))) return "No room for a wall there.";
+        this.conjure(box, ABILITIES.wall.durationMs!, now);
+        return null;
+      }
+      case "pillar": {
+        let spot = this.aimedFloor(player, d);
+        if (!spot) return "Nothing to raise a pillar on there.";
+        // Aimed at your own feet: it goes right under you and lifts you up.
+        const underMe = Math.hypot(spot[0] - player.p[0], spot[2] - player.p[2]) < 1.4;
+        if (underMe) {
+          const floor = floorBelow(player.p[0], player.p[2], player.p[1], this.allBoxes());
+          if (floor === null) return "Nothing to raise a pillar on there.";
+          spot = [player.p[0], floor, player.p[2]];
+        }
+        const box: Box = { pos: [spot[0], spot[1] + PILLAR_HEIGHT / 2, spot[2]], size: [PILLAR_SIZE, PILLAR_HEIGHT, PILLAR_SIZE], color: "#7d6d5c" };
+        if ([...this.players.values()].some((p) => (p !== player || !underMe) && boxTouchesPlayer(box, p.p))) return "No room for a pillar there.";
+        this.conjure(box, ABILITIES.pillar.durationMs!, now);
+        if (underMe) {
+          this.falls.delete(pid);
+          this.teleport(player, [spot[0], spot[1] + PILLAR_HEIGHT + 0.95, spot[2]]);
+        }
+        return null;
+      }
+      case "blink": {
+        const from = eye(player.p);
+        const end: Vec3 = [from[0] + d[0] * BLINK_RANGE, from[1] + d[1] * BLINK_RANGE, from[2] + d[2] * BLINK_RANGE];
+        // Unpadded: standing right next to a wall mustn't count as hitting
+        // it (the landing check below makes sure there's room to stand).
+        const t = segmentHitsLevel(from, end, this.allBoxes(), 0);
+        // As far as possible along your aim, short of any wall; if that
+        // spot is taken (say, by a low wall you stepped over), come back
+        // half a meter at a time until there's room to stand.
+        let to: Vec3 | null = null;
+        for (let dist = t === null ? BLINK_RANGE : t * BLINK_RANGE - 0.6; dist >= 1.5 && !to; dist -= 0.5) {
+          const at: Vec3 = [from[0] + d[0] * dist, from[1] + d[1] * dist, from[2] + d[2] * dist];
+          const floor = floorBelow(at[0], at[2], at[1], this.allBoxes());
+          if (floor === null) continue;
+          const spot: Vec3 = [at[0], floor + 0.95, at[2]];
+          if (!this.allBoxes().some((b) => boxTouchesPlayer(b, [spot[0], spot[1] + 0.05, spot[2]]))) to = spot;
+        }
+        if (!to) return "No room to step there.";
+        const before = player.p;
+        this.falls.delete(pid);
+        this.teleport(player, to);
+        this.broadcast({ t: "effect", id: pid, kind: "blink", ms: 0, from: before, to });
+        return null;
+      }
+      case "stealth":
+        f.stealthUntil = now + ABILITIES.stealth.durationMs!;
+        this.broadcast({ t: "effect", id: pid, kind: "stealth", ms: ABILITIES.stealth.durationMs! });
+        return null;
+      case "fortify":
+        f.fortifyUntil = now + ABILITIES.fortify.durationMs!;
+        this.broadcast({ t: "effect", id: pid, kind: "fortify", ms: ABILITIES.fortify.durationMs! });
+        return null;
+      case "charge":
+        // The player rushes forward themselves (their own movement); the
+        // server allows the extra distance and watches for who they hit.
+        f.chargeUntil = now + CHARGE_TIME * 1000 + 300;
+        f.chargeHit = false;
+        player.moveCheck.grant(CHARGE_SPEED * CHARGE_TIME + 1);
+        this.broadcast({ t: "effect", id: pid, kind: "charge", ms: CHARGE_TIME * 1000 });
+        return null;
+    }
+    return "Not available.";
+  }
+
+  // Where your aim meets something you could stand on, within CONJURE_RANGE.
+  private aimedFloor(player: Player, d: Vec3): Vec3 | null {
+    const from = eye(player.p);
+    const end: Vec3 = [from[0] + d[0] * CONJURE_RANGE, from[1] + d[1] * CONJURE_RANGE, from[2] + d[2] * CONJURE_RANGE];
+    const t = segmentHitsLevel(from, end, this.allBoxes(), 0.05);
+    // Hitting a wall: come back a little, so it goes in front of it.
+    const dist = t === null ? CONJURE_RANGE : Math.max(0, t * CONJURE_RANGE - 0.5);
+    const at: Vec3 = [from[0] + d[0] * dist, from[1] + d[1] * dist, from[2] + d[2] * dist];
+    const floor = floorBelow(at[0], at[2], at[1] + 0.2, this.allBoxes());
+    return floor === null ? null : [at[0], floor, at[2]];
+  }
+
+  private conjure(box: Box, ms: number, now: number): void {
+    const id = nextConjureId++;
+    this.conjured.set(id, { box, until: now + ms });
+    this.boxCache = null;
+    navGridIfBuilt(this.level)?.addObstacle(id, box); // (no bots yet: no map to update)
+    for (const bot of this.bots.values()) bot.replan();
+    this.broadcast({ t: "conjure", id, box, ms });
+  }
+
+  private unconjure(id: number): void {
+    if (!this.conjured.delete(id)) return;
+    this.boxCache = null;
+    navGridIfBuilt(this.level)?.removeObstacle(id);
+    this.broadcast({ t: "unconjure", id });
+  }
+
+  private clearConjured(): void {
+    for (const id of [...this.conjured.keys()]) this.unconjure(id);
+    navGridIfBuilt(this.level)?.clearObstacles();
+  }
+
+  // A charging Knight hits the first enemy along their path.
+  private chargeInto(player: Player, from: Vec3, to: Vec3, now: number): void {
+    const f = this.fighters.get(player.conn.id);
+    if (!f || f.chargeHit || now > f.chargeUntil) return;
+    for (const target of this.players.values()) {
+      if (target === player || !this.alive.has(target.conn.id)) continue;
+      // Closest point on this move to the target (flat), and roughly level.
+      const [dx, dz] = [to[0] - from[0], to[2] - from[2]];
+      const len2 = dx * dx + dz * dz || 1;
+      const k = Math.max(0, Math.min(1, ((target.p[0] - from[0]) * dx + (target.p[2] - from[2]) * dz) / len2));
+      const near = Math.hypot(from[0] + dx * k - target.p[0], from[2] + dz * k - target.p[2]);
+      if (near > 1.3 || Math.abs(target.p[1] - to[1]) > 1.5) continue;
+      f.chargeHit = true;
+      const blocked = this.damage(target, CHARGE_DAMAGE, player, from);
+      this.broadcast({ t: "melee", id: player.conn.id, weapon: "sword", hits: [target.conn.id], blocked: blocked ? [target.conn.id] : [], backstabs: [] });
       return;
     }
   }
@@ -757,7 +966,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // ---- Bots ----
 
   protected createBot(peer: BotPeer): RoyaleBot {
-    return new RoyaleBot(peer, navGridFor(this.level), this.level.boxes, this.bots.size);
+    return new RoyaleBot(peer, navGridFor(this.level), () => this.allBoxes(), this.bots.size);
   }
 
   protected runBot(bot: RoyaleBot, me: Player, now: number, dt: number): void {
@@ -768,7 +977,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       me,
       fighting: this.state === "playing" && this.alive.has(me.conn.id),
       practice: this.state === "waiting" || this.state === "ended",
-      enemies: [...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id)),
+      enemies: [...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id) && !this.isStealthed(p.conn.id, now)),
       hp: f?.hp ?? MAX_HEALTH,
       maxHp: f?.maxHp ?? MAX_HEALTH,
       hand: f?.hand ?? "main",
@@ -781,6 +990,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (action.hand) this.setHand(me, action.hand);
     if (action.cast) this.cast(me, { ...action.cast, o: eye(me.p), seq: 0 });
     if (action.attack) this.attack(me, eye(me.p), action.attack, 0);
+    if (action.ability) this.ability(me, action.ability.slot, action.ability.d);
   }
 }
 

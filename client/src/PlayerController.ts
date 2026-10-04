@@ -53,7 +53,8 @@ export class PlayerController {
   flying = false; // admins only: no gravity, no walls
   speedMul = 1; // battle royale class (and the Knight's raised shield)
   private airJumpUsed = false;
-  private dashLeft = 0; // seconds of dash remaining
+  private dashLeft = 0; // seconds of dash (or charge) remaining
+  private burstSpeed = DASH_SPEED;
   private dashDir = { x: 0, z: 0 };
   dashCooldown = 0; // seconds until the dash is ready
   private slowLeft = 0; // seconds of Frost Shard slow remaining
@@ -97,6 +98,14 @@ export class PlayerController {
     this.current.set(x, y, z);
     this.previous.copy(this.current);
     this.velocityY = 0;
+  }
+
+  // A Knight's charge: rush flat along (x, z) at `speed` for `seconds`.
+  burst(x: number, z: number, speed: number, seconds: number): void {
+    const len = Math.hypot(x, z) || 1;
+    this.dashDir = { x: x / len, z: z / len };
+    this.burstSpeed = speed;
+    this.dashLeft = seconds;
   }
 
   // Landed on someone's head: bounce off them.
@@ -168,14 +177,15 @@ export class PlayerController {
       const len = moving ? Math.hypot(dx, dz) : 1;
       this.dashDir = moving ? { x: dx / len, z: dz / len } : { x: -sin, z: -cos };
       this.dashLeft = DASH_TIME;
+      this.burstSpeed = DASH_SPEED;
       this.dashCooldown = DASH_COOLDOWN;
     }
     let hx = dx * speed;
     let hz = dz * speed;
     if (this.dashLeft > 0) {
       this.dashLeft -= dt;
-      hx = this.dashDir.x * DASH_SPEED;
-      hz = this.dashDir.z * DASH_SPEED;
+      hx = this.dashDir.x * this.burstSpeed;
+      hz = this.dashDir.z * this.burstSpeed;
       this.velocityY = Math.max(this.velocityY, 0); // no falling mid-dash
     }
 

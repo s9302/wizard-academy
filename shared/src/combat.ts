@@ -138,13 +138,13 @@ export type StormStage = { holdMs: number; shrinkMs: number; radius: number; dps
 
 export const STORM_START_RADIUS = 46; // covers the whole arena
 export const STORM_STAGES: StormStage[] = [
-  { holdMs: 40_000, shrinkMs: 25_000, radius: 26, dps: 2 },
-  { holdMs: 30_000, shrinkMs: 25_000, radius: 14, dps: 4 },
-  { holdMs: 25_000, shrinkMs: 20_000, radius: 6, dps: 8 },
-  { holdMs: 20_000, shrinkMs: 20_000, radius: 0, dps: 15 },
+  { holdMs: 40_000, shrinkMs: 25_000, radius: 26, dps: 5 },
+  { holdMs: 30_000, shrinkMs: 25_000, radius: 14, dps: 8 },
+  { holdMs: 25_000, shrinkMs: 20_000, radius: 6, dps: 12 },
+  { holdMs: 20_000, shrinkMs: 20_000, radius: 0, dps: 20 },
 ];
 // After the last stage the storm covers everything; this ends it for sure.
-export const STORM_FINAL_DPS = 25;
+export const STORM_FINAL_DPS = 30;
 
 // The safe circle [x, z, radius] at a given server time.
 export function stormCircle(zone: ZoneState, now: number): [number, number, number] {

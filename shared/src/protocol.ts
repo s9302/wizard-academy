@@ -3,6 +3,7 @@
 
 import type { ClassId, Hand, WeaponId } from "./classes.ts";
 import type { PickupKind, SpellId } from "./combat.ts";
+import type { Box } from "./levels/types.ts";
 import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 
 export type Vec3 = [number, number, number];
@@ -44,10 +45,12 @@ export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: 
 export type AttackMsg = { t: "attack"; o: Vec3; d: Vec3; seq: number };
 export type HandMsg = { t: "hand"; hand: Hand };
 export type ClassMsg = { t: "class"; cls: ClassId };
+// Use a class ability: slot 0 is E, 1 is R. o and d: your eyes and aim.
+export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3 };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg;
 
 // ---- Server -> Client ----
 
@@ -122,6 +125,14 @@ export type ChargesMsg = { t: "charges"; fireball: number };
 export type ArenaMsg = { t: "arena"; levelId: string };
 // The arenas you can vote for next, and the votes so far. Empty: no vote open.
 export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<string, number> };
+// A wizard conjured a wall or pillar (ms: how long it has left), and when
+// it's gone.
+export type ConjureMsg = { t: "conjure"; id: number; box: Box; ms: number };
+export type UnconjureMsg = { t: "unconjure"; id: number };
+// Someone vanished, fortified, charged or shadow-stepped (ms 0: it ended).
+export type EffectMsg = { t: "effect"; id: number; kind: "stealth" | "fortify" | "charge" | "blink"; ms: number; from?: Vec3; to?: Vec3 };
+// To one player: an ability you tried didn't work (cooldown refunded).
+export type AbilityFailedMsg = { t: "abilityFailed"; slot: 0 | 1; reason: string };
 // You landed on someone: bounce off.
 export type BounceMsg = { t: "bounce" };
 
@@ -169,4 +180,8 @@ export type ServerMsg =
   | ArenaMsg
   | ArenaVoteMsg
   | BounceMsg
+  | ConjureMsg
+  | UnconjureMsg
+  | EffectMsg
+  | AbilityFailedMsg
   | XpMsg;

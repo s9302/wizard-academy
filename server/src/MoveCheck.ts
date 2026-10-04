@@ -38,11 +38,17 @@ export class MoveCheck {
     this.last = now;
   }
 
+  // Allow this many extra meters right now (a Knight's charge). It can go
+  // over the usual cap; it's spent like any other distance.
+  grant(meters: number): void {
+    this.horizontal += meters;
+  }
+
   // Returns true if moving from `from` to `to` is plausible.
   allow(from: Vec3, to: Vec3, now = Date.now()): boolean {
     const seconds = Math.max(0, (now - this.last) / 1000);
     this.last = now;
-    this.horizontal = Math.min(HORIZONTAL.cap, this.horizontal + HORIZONTAL.rate * seconds);
+    this.horizontal = Math.max(this.horizontal, Math.min(HORIZONTAL.cap, this.horizontal + HORIZONTAL.rate * seconds));
     this.up = Math.min(UP.cap, this.up + UP.rate * seconds);
     this.down = Math.min(DOWN.cap, this.down + DOWN.rate * seconds);
 
