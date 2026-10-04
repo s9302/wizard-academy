@@ -1,6 +1,8 @@
 // Low-poly weapon models, built from a few boxes and shapes. Used for your
 // own view (Viewmodel.ts) and in other players' hands (Avatar.ts). Each
-// model's grip is at its origin, pointing up (+Y) like a held sword.
+// model's grip is at its origin, pointing up (+Y) like a held sword. The bow
+// is the exception: its limbs run along Y and its arrow points along -Z, and
+// setBowDraw() pulls its string back.
 
 import * as THREE from "three";
 import type { WeaponId } from "../../../shared/src/classes.ts";
@@ -34,20 +36,9 @@ export function makeWeapon(weapon: WeaponId, spellColor = "#b48cff"): THREE.Grou
       g.add(part(new THREE.BoxGeometry(0.42, 0.06, 0.08), gold, 0, 0.18));
       break;
     }
-    case "bow": {
-      // Three segments in a curve, and a string.
-      for (const [y, rz] of [
-        [0.35, 0.35],
-        [0, 0],
-        [-0.35, -0.35],
-      ]) {
-        const limb = part(new THREE.BoxGeometry(0.05, 0.4, 0.05), wood, rz * 0.25, y);
-        limb.rotation.z = rz;
-        g.add(limb);
-      }
-      g.add(part(new THREE.BoxGeometry(0.01, 1.0, 0.01), mat("#f4efe6"), -0.12, 0));
+    case "bow":
+      buildBow(g, wood, gold);
       break;
-    }
     case "daggers":
       for (const x of [-0.12, 0.12]) {
         g.add(part(new THREE.BoxGeometry(0.05, 0.12, 0.05), wood, x, 0));
@@ -88,6 +79,67 @@ export function makeWeapon(weapon: WeaponId, spellColor = "#b48cff"): THREE.Grou
     if (o instanceof THREE.Mesh) o.castShadow = false;
   });
   return g;
+}
+
+// ---- The bow ----
+
+const BOW_TIP = 0.52; // how far each tip is from the grip, along Y
+const BOW_REST_Z = 0.07; // the string at rest, behind the limbs' tips
+const BOW_DRAW = 0.42; // how far the string comes back at full draw
+
+// A recurve bow: each limb a smooth tube that bends forward (-Z) and flicks
+// back at the tip; a leather grip; a string from tip to tip that bends at
+// the nocking point; and an arrow, shown while drawn.
+function buildBow(g: THREE.Group, wood: THREE.Material, gold: THREE.Material): void {
+  const limbMat = mat("#6b4428");
+  for (const sign of [1, -1]) {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, sign * 0.06, 0),
+      new THREE.Vector3(0, sign * 0.22, -0.06),
+      new THREE.Vector3(0, sign * 0.4, -0.06),
+      new THREE.Vector3(0, sign * BOW_TIP, 0.03),
+    ]);
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 0.022, 6), limbMat));
+    g.add(part(new THREE.SphereGeometry(0.022, 6, 4), gold, 0, sign * BOW_TIP, 0.03)); // tip caps
+  }
+  g.add(part(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 8), mat("#3b2a1c"), 0, 0, 0)); // leather grip
+  g.add(part(new THREE.BoxGeometry(0.035, 0.03, 0.05), wood, 0, 0.075, -0.01)); // arrow rest
+  // The string: two thin pieces meeting at the nock (moved by setBowDraw).
+  const stringMat = mat("#f4efe6");
+  const top = part(new THREE.CylinderGeometry(0.004, 0.004, 1, 4), stringMat);
+  const bottom = part(new THREE.CylinderGeometry(0.004, 0.004, 1, 4), stringMat);
+  g.add(top, bottom);
+  // The arrow, nocked on the string.
+  const arrow = new THREE.Group();
+  arrow.add(part(new THREE.CylinderGeometry(0.008, 0.008, 0.72, 5), mat("#c9a36b"), 0, 0, 0).rotateX(Math.PI / 2));
+  arrow.add(part(new THREE.ConeGeometry(0.02, 0.07, 4), mat("#c9cdd6"), 0, 0, -0.39).rotateX(-Math.PI / 2));
+  for (const a of [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3]) {
+    const f = part(new THREE.BoxGeometry(0.002, 0.03, 0.08), mat("#e85a4a"), Math.cos(a) * 0.012, Math.sin(a) * 0.012, 0.31);
+    f.rotation.z = a;
+    arrow.add(f);
+  }
+  g.add(arrow);
+  g.userData.bow = { top, bottom, arrow };
+  setBowDraw(g, 0, false);
+}
+
+// Pull the string back: 0 at rest, 1 fully drawn; `nocked` shows the arrow.
+export function setBowDraw(g: THREE.Object3D, draw: number, nocked: boolean): void {
+  const bow = g.userData.bow as { top: THREE.Mesh; bottom: THREE.Mesh; arrow: THREE.Group } | undefined;
+  if (!bow) return;
+  const nock = new THREE.Vector3(0, 0.075, BOW_REST_Z + draw * BOW_DRAW);
+  const up = new THREE.Vector3(0, 1, 0);
+  for (const [piece, tipY] of [
+    [bow.top, BOW_TIP],
+    [bow.bottom, -BOW_TIP],
+  ] as const) {
+    const tip = new THREE.Vector3(0, tipY, 0.03);
+    piece.position.copy(tip).add(nock).multiplyScalar(0.5);
+    piece.scale.y = tip.distanceTo(nock);
+    piece.quaternion.setFromUnitVectors(up, tip.clone().sub(nock).normalize());
+  }
+  bow.arrow.visible = nocked;
+  bow.arrow.position.set(0, 0.075, nock.z - 0.3);
 }
 
 export function disposeWeapon(g: THREE.Object3D): void {

@@ -18,7 +18,7 @@ import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../../shared/src/constants.ts
 import type { WeaponId } from "../../shared/src/classes.ts";
 import { type Accessory, type Face, type Feature, HAIR_COLOR_VALUES, type Hair, type Outfit, SKIN_COLORS } from "../../shared/src/appearance.ts";
 import { DEFAULT_LOOK, type Hat, type Look, ROBE_COLORS } from "../../shared/src/unlocks.ts";
-import { disposeWeapon, makeWeapon } from "./royale/WeaponModels.ts";
+import { disposeWeapon, makeWeapon, setBowDraw } from "./royale/WeaponModels.ts";
 
 const TOP = PLAYER_HALF_HEIGHT + PLAYER_RADIUS; // top of the capsule (0.9)
 const FEET = -TOP;
@@ -522,6 +522,7 @@ function makeRig(): Rig {
   body.add(head);
   const arm = (side: number): Arm => {
     const shoulder = new THREE.Group();
+    shoulder.rotation.order = "YXZ"; // raise (x), then sweep sideways (y): a sword's slash
     shoulder.position.set(side * 0.27, SHOULDER_Y, 0);
     shoulder.rotation.z = side * 0.08;
     const elbow = new THREE.Group();
@@ -922,7 +923,9 @@ export function setAvatarLook(group: THREE.Group, id: number, rawLook: Look): vo
 
 // ---- Battle royale: the weapon in hand ----
 
-const SWING_MS = 260;
+const SWING_MS: Partial<Record<WeaponId, number>> = { sword: 340, mace: 420, staff: 300, daggers: 200, shield: 300, bow: 900 };
+const ease = (t: number) => t * t * (3 - 2 * t);
+const span = (k: number, a: number, b: number) => ease(Math.max(0, Math.min(1, (k - a) / (b - a))));
 
 export function setAvatarWeapon(group: THREE.Group, weapon: WeaponId | null): void {
   const parts = group.userData.parts as AvatarParts;
@@ -941,7 +944,8 @@ export function setAvatarWeapon(group: THREE.Group, weapon: WeaponId | null): vo
     model.position.set(-0.3, 0.1, -0.12);
     model.rotation.set(Math.PI / 2, 0, 0);
   } else if (weapon === "bow") {
-    model.rotation.set(Math.PI / 2, 0, 0);
+    // Held out at arm's length (see animateAvatar): upright, arrow ahead.
+    model.rotation.set(Math.PI, 0, 0);
   } else if (weapon === "staff") {
     model.position.set(0, -0.35, 0);
   }
@@ -971,10 +975,20 @@ export function animateAvatar(group: THREE.Group, now: number, speed = 0): void 
   // Idle: a slow breath.
   const breathe = Math.sin(now / 900) * 0.02;
   rig.head.rotation.x = breathe;
-  const armed = !!group.userData.weapon;
-  rig.armL.shoulder.rotation.x = -s * amp * 0.8 + (group.userData.weapon === "shield" ? -0.9 : 0);
-  rig.armL.elbow.rotation.x = group.userData.weapon === "shield" ? -0.8 : -0.15 - breathe;
-  if (armed) {
+  const weapon = group.userData.weapon as WeaponId | null | undefined;
+  const armed = !!weapon;
+  rig.armL.shoulder.rotation.x = -s * amp * 0.8 + (weapon === "shield" ? -0.9 : 0);
+  rig.armL.elbow.rotation.x = weapon === "shield" ? -0.8 : -0.15 - breathe;
+  rig.armR.shoulder.rotation.y = 0;
+  rig.armL.shoulder.rotation.y = 0;
+  if (weapon === "bow") {
+    // Bow arm straight out; the other hand back at the string.
+    rig.armR.shoulder.rotation.x = -1.45;
+    rig.armR.elbow.rotation.x = -0.1;
+    rig.armL.shoulder.rotation.x = -1.35;
+    rig.armL.shoulder.rotation.y = -0.5;
+    rig.armL.elbow.rotation.x = -1.7;
+  } else if (armed) {
     // Weapon ready: forearm forward, the weapon pointing ahead.
     rig.armR.shoulder.rotation.x = -0.35 + s * amp * 0.2;
     rig.armR.elbow.rotation.x = -1.0;
@@ -982,11 +996,59 @@ export function animateAvatar(group: THREE.Group, now: number, speed = 0): void 
     rig.armR.shoulder.rotation.x = s * amp * 0.8;
     rig.armR.elbow.rotation.x = -0.15 - breathe;
   }
-  const k = (now - (group.userData.swingAt ?? -Infinity)) / SWING_MS;
-  if (k >= 0 && k < 1) {
-    // Raise and strike.
-    rig.armR.shoulder.rotation.x = -0.35 - Math.sin(k * Math.PI) * 1.6 + k * 0.8;
-    rig.armR.elbow.rotation.x = -1.0 + Math.sin(k * Math.PI) * 0.6;
+  animateAttack(group, rig, weapon ?? null, now - (group.userData.swingAt ?? -Infinity));
+}
+
+// The attack itself, per weapon (and the bow's string, drawn or snapping).
+function animateAttack(group: THREE.Group, rig: Rig, weapon: WeaponId | null, ms: number): void {
+  const k = ms / (weapon ? (SWING_MS[weapon] ?? 280) : 280);
+  const bow = weapon === "bow" ? rig.hand.children[0] : null;
+  if (bow) setBowDraw(bow, k >= 0 && k < 1 ? (k < 0.35 ? Math.max(0, 1 - ms / 60) : span(k, 0.35, 0.95)) : 1, !(k >= 0 && k < 0.3));
+  if (k < 0 || k >= 1) return;
+  const R = rig.armR;
+  switch (weapon) {
+    case "sword": {
+      // Arm up and out to the right, then a flat sweep across the body.
+      const up = span(k, 0, 0.25) * (1 - span(k, 0.25, 0.55));
+      const sweep = span(k, 0.25, 0.55) * (1 - span(k, 0.65, 1));
+      R.shoulder.rotation.x = -0.35 - (up + sweep) * 1.1;
+      R.shoulder.rotation.y = up * 0.9 - sweep * 1.0;
+      R.elbow.rotation.x = -1.0 + sweep * 0.8;
+      break;
+    }
+    case "mace": {
+      // Raised high over the shoulder, then brought straight down.
+      const up = span(k, 0, 0.35) * (1 - span(k, 0.35, 0.55));
+      const down = span(k, 0.35, 0.55) * (1 - span(k, 0.7, 1));
+      R.shoulder.rotation.x = -0.35 - up * 2.4 - down * 0.6;
+      R.elbow.rotation.x = -1.0 - up * 0.6 + down * 0.9;
+      break;
+    }
+    case "staff":
+    case "daggers": {
+      // A thrust: the arm straightens out while the forearm's angle (and so
+      // the weapon's) stays the same, pointing ahead.
+      const jab = Math.sin(Math.min(1, k) * Math.PI);
+      R.shoulder.rotation.x = -0.35 - jab * 0.9;
+      R.elbow.rotation.x = -1.0 + jab * 0.9;
+      break;
+    }
+    case "shield": {
+      const bash = Math.sin(Math.min(1, k) * Math.PI);
+      rig.armL.shoulder.rotation.x = -0.9 - bash * 0.6;
+      rig.armL.elbow.rotation.x = -0.8 + bash * 0.6;
+      break;
+    }
+    case "bow":
+      // The string hand jerks back on release.
+      if (k < 0.2) rig.armL.shoulder.rotation.y = -0.5 - Math.sin((k / 0.2) * Math.PI) * 0.3;
+      break;
+    default: {
+      // Casting: the hand pushed out.
+      const push = Math.sin(Math.min(1, k) * Math.PI);
+      R.shoulder.rotation.x = -0.35 - push * 1.1;
+      R.elbow.rotation.x = -1.0 + push * 0.8;
+    }
   }
 }
 

@@ -542,7 +542,7 @@ export class Royale {
     if (now < this.readyAt.primary) return;
     this.readyAt.primary = now + cooldown;
     this.seq += 1;
-    this.viewmodel.swing();
+    this.viewmodel.swing(cooldown);
     if (weapon.kind === "spell") sound.fx(CAST_SOUND[this.primary]);
     else if (weapon.kind === "projectile") sound.fx(CAST_SOUND[weapon.projectile ?? "arrow"]);
     else sound.fx(this.weapon === "daggers" ? "swing" : "heavySwing", { rate: this.weapon === "daggers" ? 1.3 : 1 });
