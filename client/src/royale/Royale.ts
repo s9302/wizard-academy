@@ -27,7 +27,7 @@ import { sound } from "../audio/Sound.ts";
 import type { SynthId } from "../audio/synth.ts";
 
 // The sound of casting each spell (and loosing an arrow).
-const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark", thorn: "arrow", ember: "fireball" };
+const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark", thorn: "arrow", ember: "fireball", hex: "frost", flame: "fireball" };
 const HITS = ["punch0", "punch1", "punch2"] as const;
 const TEAM_COLORS = ["#ff4a4a", "#4a8cff"];
 
@@ -98,7 +98,12 @@ export class Royale {
     this.spells = new Spells(scene, clock, level.boxes);
     this.pickups = new Pickups(scene);
     this.viewmodel = new Viewmodel(camera);
-    this.monsters = new MonsterViews(scene);
+    this.monsters = new MonsterViews(scene, (owner) => {
+      const me = hooks.myId();
+      if (owner === me || hooks.horde || level.bossFight) return true; // (co-op: everyone's on your side)
+      const mine = this.teams.get(me);
+      return mine !== undefined && this.teams.get(owner) === mine;
+    });
     this.scene = scene;
     this.chosen = CLASS_ABILITIES[cls];
     this.fields = new Fields(scene, clock);
@@ -117,7 +122,7 @@ export class Royale {
     );
     this.hud = new RoyaleHud(hudEl, clock, this.storm, roomName, {
       onBots: (action) => hooks.send({ t: "bots", action }),
-      onMonsters: (action) => hooks.send({ t: "monsters", action }),
+      onMonsters: (action, kind) => hooks.send({ t: "monsters", action, kind }),
       onClass: (c) => this.pickClass(c),
       onVote: (arena) => hooks.send({ t: "vote", arena }),
       onMode: (mode) => hooks.send({ t: "mode", mode }),

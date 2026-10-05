@@ -770,9 +770,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     else if (msg.t === "abilities") this.setAbilities(player, msg.cls, msg.e, msg.r);
     else if (msg.t === "monsters" && !player.conn.isBot) {
       const before = this.monsters.count;
-      const count = this.monsters.adjust(msg.action);
+      const count = this.monsters.adjust(msg.action, msg.kind);
       this.broadcast({ t: "monsterCount", count, max: MAX_MONSTERS });
-      if (count !== before) this.broadcast({ t: "announce", text: `${player.conn.name} ${count > before ? "let in a monster" : "sent a monster away"}.` });
+      const what = msg.kind && msg.kind !== "mixed" ? `a ${MONSTERS[msg.kind].name}` : "a monster";
+      if (count !== before) this.broadcast({ t: "announce", text: `${player.conn.name} ${count > before ? `let in ${what}` : "sent a monster away"}.` });
     }
   }
 

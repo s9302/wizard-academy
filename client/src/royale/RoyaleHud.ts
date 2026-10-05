@@ -10,6 +10,7 @@ import { attachTooltip, hideTooltip } from "../ui/Tooltip.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
+import { type MonsterKind, MONSTER_KINDS, MONSTERS } from "../../../shared/src/monsters.ts";
 import type { HordeMsg, LineupEntry, RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
 import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
@@ -53,6 +54,8 @@ export class RoyaleHud {
   private boss: boolean;
   bossHint = "get out of the red circles"; // what the boss fight's HUD line says (Game sets it)
   private ctf: boolean;
+  private monsterKinds: HTMLElement;
+  private monsterKind: MonsterKind | "mixed" = "mixed";
   private horde: boolean;
   private hordeInfo: HordeMsg = { t: "horde", wave: 0, left: 0, nextAt: null, best: 0 };
   private respawnEl!: HTMLElement;
@@ -105,7 +108,7 @@ export class RoyaleHud {
     roomName: string,
     actions: {
       onBots: (action: "add" | "remove") => void;
-      onMonsters: (action: "add" | "remove") => void;
+      onMonsters: (action: "add" | "remove", kind: MonsterKind | "mixed") => void;
       onClass: (cls: ClassId) => void;
       onVote: (arena: string) => void;
       onAbilities: (e: AbilityId, r: AbilityId) => void;
@@ -151,7 +154,28 @@ export class RoyaleHud {
     this.votePanel.id = "arena-vote";
     this.votePanel.hidden = true;
     this.votePanel.onclick = (e) => e.stopPropagation();
-    this.monsterControls = new BotControls(actions.onMonsters, "monster");
+    this.monsterControls = new BotControls((action) => actions.onMonsters(action, this.monsterKind), "monster");
+    // Which monster + lets in: a mix, or one kind (pick it first).
+    this.monsterKinds = document.createElement("div");
+    this.monsterKinds.id = "monster-kinds";
+    this.monsterKinds.onclick = (e) => e.stopPropagation();
+    const kindButtons: HTMLButtonElement[] = [];
+    for (const kind of ["mixed", ...MONSTER_KINDS] as const) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = kind === "mixed" ? "Mix" : MONSTERS[kind].name.replace(/^(Shadow|Stone|Fire) /, "");
+      if (kind !== "mixed") {
+        const d = MONSTERS[kind];
+        b.title = `${d.name}: ${d.hp} health, ${d.damage} damage${d.ranged ? ", ranged" : ""}`;
+      } else b.title = "A mix of every kind";
+      b.className = kind === this.monsterKind ? "on" : "";
+      b.onclick = () => {
+        this.monsterKind = kind;
+        kindButtons.forEach((x) => x.classList.toggle("on", x === b));
+      };
+      kindButtons.push(b);
+      this.monsterKinds.appendChild(b);
+    }
     // Two columns: on the right, you (class, abilities) and the bots; on the
     // left, under the menu, the match (ready, mode, teams, next arena,
     // monsters).
@@ -169,13 +193,17 @@ export class RoyaleHud {
     this.modeBox.id = "mode-box";
     this.teamBox = document.createElement("div");
     this.teamBox.id = "team-box";
-    this.match.append(this.readyButton, this.modeBox, this.teamBox, this.votePanel, document.getElementById("monster-controls")!);
+    this.match.append(this.readyButton, this.modeBox, this.teamBox, this.votePanel, document.getElementById("monster-controls")!, this.monsterKinds);
     pausePanel.appendChild(this.match);
     if (this.boss) {
       document.getElementById("monster-controls")!.hidden = true;
+      this.monsterKinds.hidden = true;
       this.modeBox.hidden = this.teamBox.hidden = true;
     }
-    if (this.ctf) document.getElementById("monster-controls")!.hidden = true;
+    if (this.ctf) {
+      document.getElementById("monster-controls")!.hidden = true;
+      this.monsterKinds.hidden = true;
+    }
 
     document.body.classList.add("in-royale");
     this.crosshairEl = document.getElementById("crosshair")!;

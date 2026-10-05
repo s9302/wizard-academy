@@ -71,7 +71,8 @@ export type GrappleMsg = { t: "grapple"; d: Vec3 };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
 // Battle royale: add or remove a monster.
-export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
+// kind: which monster to let in (the arena's Esc panel), or a mix.
+export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove"; kind?: MonsterKind | "mixed" };
 
 export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg | ChaseSettingMsg | GrappleMsg;
 

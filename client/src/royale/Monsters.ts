@@ -25,9 +25,12 @@ type View = {
   attacking: boolean;
   phase: number;
   flashUntil: number;
+  wings: THREE.Object3D[]; // flap (the dragon's)
 };
 
 const LERP_MS = 110;
+const FRIEND_TINT = "#4ab8ff"; // a beast on your side
+const FOE_TINT = "#ff4a4a"; // another Druid's
 
 function lambert(color: string, emissive?: string): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({ color, flatShading: true, emissive: emissive ?? "#000000" });
@@ -41,9 +44,10 @@ function eyes(g: THREE.Object3D, y: number, z: number, spread: number, size: num
   }
 }
 
-function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; mats: THREE.MeshLambertMaterial[] } {
+function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; mats: THREE.MeshLambertMaterial[]; wings: THREE.Object3D[] } {
   const body = new THREE.Group();
   const legs: THREE.Object3D[] = [];
+  const wings: THREE.Object3D[] = [];
   const mats: THREE.MeshLambertMaterial[] = [];
   const add = (m: THREE.Mesh) => {
     m.castShadow = true;
@@ -81,6 +85,140 @@ function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; 
       body.add(leg);
       legs.push(leg);
     }
+  } else if (kind === "skeleton" || kind === "zombie") {
+    // Two-legged: a skeleton (bones and a rusty sword) or a zombie (green
+    // skin, a torn shirt, arms reaching out).
+    const bone = kind === "skeleton";
+    const skin = lambert(bone ? "#e6e0cc" : "#7fa36a");
+    const cloth = lambert(bone ? "#e6e0cc" : "#5a6a7a");
+    const pants = lambert(bone ? "#e6e0cc" : "#3e3a4a");
+    // Torso: a ribcage of bars for the skeleton, a shirt for the zombie.
+    if (bone) {
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.06), skin)).position.set(0, 0.1, 0.05); // spine
+      for (let i = 0; i < 4; i++) add(new THREE.Mesh(new THREE.BoxGeometry(0.4 - i * 0.05, 0.04, 0.24), skin)).position.set(0, 0.32 - i * 0.1, 0);
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.2), skin)).position.set(0, -0.22, 0); // pelvis
+    } else {
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.55, 0.26), cloth)).position.set(0, 0.08, 0);
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.02), skin)).position.set(0.08, -0.05, -0.14); // a tear
+    }
+    const head = add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), skin));
+    head.position.set(0, 0.56, 0);
+    if (bone) {
+      add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.04), lambert("#3a3530"))).position.set(0, 0.46, -0.15); // teeth
+      eyes(body, 0.6, -0.16, 0.07, 0.05, "#1a1410");
+    } else eyes(body, 0.6, -0.16, 0.07, 0.035, "#ff3a2a");
+    for (const sx of [-1, 1]) {
+      // Arms: the zombie's reach forward, the skeleton's hang (one holds a sword).
+      const arm = new THREE.Group();
+      arm.position.set(sx * 0.27, 0.3, 0);
+      arm.rotation.x = bone ? 0 : -1.4;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(bone ? 0.07 : 0.12, 0.55, bone ? 0.07 : 0.12), skin);
+      m.position.y = -0.27;
+      m.castShadow = true;
+      arm.add(m);
+      if (bone && sx > 0) {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 0.015), lambert("#8a7a6a"));
+        blade.position.set(0, -0.62, -0.22);
+        blade.rotation.x = -1.2;
+        arm.add(blade);
+      }
+      body.add(arm);
+      legs.push(arm); // arms swing too
+      const leg = new THREE.Group();
+      leg.position.set(sx * 0.12, -0.25, 0);
+      const lm = new THREE.Mesh(new THREE.BoxGeometry(bone ? 0.08 : 0.15, 0.68, bone ? 0.08 : 0.15), pants);
+      lm.position.y = -0.34;
+      lm.castShadow = true;
+      leg.add(lm);
+      body.add(leg);
+      legs.push(leg);
+    }
+  } else if (kind === "witch") {
+    // A witch riding her broom: a purple dress, green skin, a tall black hat
+    // with a brim, and a hex glowing in her hand (it swells as she winds up).
+    const dress = lambert("#4a2a6e");
+    const skin = lambert("#8fc27a");
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), lambert("#7a5236"));
+    stick.rotation.x = Math.PI / 2;
+    stick.position.set(0, -0.35, 0.1);
+    body.add(stick);
+    const bristles = add(new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.45, 8), lambert("#c9a46a")));
+    bristles.rotation.x = -Math.PI / 2;
+    bristles.position.set(0, -0.35, 1.0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 8), dress)).position.set(0, -0.05, 0.05);
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin)).position.set(0, 0.42, 0);
+    const nose = add(new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), skin));
+    nose.position.set(0, 0.4, -0.18);
+    nose.rotation.x = -Math.PI / 2;
+    eyes(body, 0.46, -0.15, 0.06, 0.03, "#ffd23a");
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.03, 14), lambert("#1c1626"))).position.set(0, 0.56, 0); // brim
+    const hat = add(new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.55, 10), lambert("#1c1626")));
+    hat.position.set(0, 0.83, 0.03);
+    hat.rotation.x = 0.2;
+    for (const sx of [-1, 1]) {
+      const leg = add(new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.08), lambert("#1c1626")));
+      leg.position.set(sx * 0.12, -0.45, -0.05);
+    }
+    const hex = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), new THREE.MeshBasicMaterial({ color: "#d07bff", toneMapped: false }));
+    hex.name = "fire";
+    hex.position.set(0.3, 0.15, -0.3);
+    body.add(hex);
+  } else if (kind === "dragon") {
+    // A young red dragon: a long body on four legs, a neck and horned head
+    // ahead (fire glowing in its mouth as it winds up), a tail, and wings.
+    const scale = lambert("#b8322a");
+    const belly = lambert("#e8a35a");
+    const dark = lambert("#6e1a14");
+    add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 2.0), scale)).position.set(0, 0, 0);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 1.8), belly)).position.set(0, -0.45, 0);
+    const neck = add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1.1), scale));
+    neck.position.set(0, 0.45, -1.3);
+    neck.rotation.x = 0.6;
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.8), scale)).position.set(0, 0.85, -1.85);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.2, 0.5), belly)).position.set(0, 0.65, -2.1); // jaw
+    eyes(body, 1.0, -2.2, 0.18, 0.06, "#ffd23a");
+    for (const sx of [-1, 1]) {
+      const horn = add(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.45, 5), lambert("#e6dcc0")));
+      horn.position.set(sx * 0.2, 1.2, -1.6);
+      horn.rotation.x = 0.7;
+    }
+    for (let i = 0; i < 5; i++) add(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 4), dark)).position.set(0, 0.55, -0.7 + i * 0.4);
+    for (let i = 0; i < 3; i++) {
+      const w = 0.6 - i * 0.16;
+      add(new THREE.Mesh(new THREE.BoxGeometry(w, w * 0.8, 0.8), scale)).position.set(0, -0.05 - i * 0.08, 1.35 + i * 0.75);
+    }
+    const tip = add(new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 4), dark));
+    tip.rotation.x = Math.PI / 2;
+    tip.position.set(0, -0.25, 3.2);
+    for (const [x, z] of [[-0.45, -0.6], [0.45, -0.6], [-0.45, 0.6], [0.45, 0.6]]) {
+      const leg = new THREE.Group();
+      leg.position.set(x, -0.35, z);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.75, 0.3), scale);
+      m.position.y = -0.37;
+      m.castShadow = true;
+      leg.add(m);
+      body.add(leg);
+      legs.push(leg);
+    }
+    const sail = new THREE.MeshLambertMaterial({ color: "#7a1e16", flatShading: true, side: THREE.DoubleSide });
+    mats.push(sail);
+    for (const sx of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.position.set(sx * 0.5, 0.4, -0.3);
+      const spar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 0.1), dark);
+      spar.position.set(sx * 0.9, 0.25, 0);
+      spar.rotation.z = sx * 0.3;
+      const membrane = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 1.1), sail);
+      membrane.position.set(sx * 0.85, 0.15, 0.55);
+      wing.add(spar, membrane);
+      body.add(wing);
+      wings.push(wing);
+    }
+    const fire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 1), new THREE.MeshBasicMaterial({ color: "#ffb347", toneMapped: false }));
+    fire.name = "fire";
+    fire.position.set(0, 0.7, -2.4);
+    fire.scale.setScalar(0.3);
+    body.add(fire);
   } else if (kind === "imp") {
     // A Fire Imp: a small red demon with horns, bat wings and a tail,
     // hovering, a ball of fire in its hand (it flares up as it winds up).
@@ -144,7 +282,7 @@ function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; 
       body.add(leg);
     }
   }
-  return { body, legs, mats };
+  return { body, legs, mats, wings };
 }
 
 function healthBar(): THREE.Sprite {
@@ -173,8 +311,12 @@ export class MonsterViews {
   private scene: THREE.Scene;
   private views = new Map<number, View>();
 
-  constructor(scene: THREE.Scene) {
+  // isFriend: is this player (a Druid) you or on your team?
+  private isFriend: (owner: number) => boolean;
+
+  constructor(scene: THREE.Scene, isFriend: (owner: number) => boolean = () => false) {
     this.scene = scene;
+    this.isFriend = isFriend;
   }
 
   // The server's latest list.
@@ -185,26 +327,30 @@ export class MonsterViews {
     for (const m of list) {
       let v = this.views.get(m.id);
       if (!v) {
-        const { body, legs, mats } = build(m.kind);
+        const { body, legs, mats, wings } = build(m.kind);
         const root = new THREE.Group();
         root.add(body);
         const bar = healthBar();
         bar.position.y = MONSTERS[m.kind].height + 0.7;
         root.add(bar);
         if (m.owner !== undefined) {
-          // A Druid's beast: a green ring under it.
-          const r = MONSTERS[m.kind].radius;
-          const ring = new THREE.Mesh(new THREE.RingGeometry(r + 0.1, r + 0.3, 28), new THREE.MeshBasicMaterial({ color: "#7fd06a", transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
-          ring.rotation.x = -Math.PI / 2;
-          ring.position.y = -MONSTERS[m.kind].height + 0.05;
-          root.add(ring);
+          // A Druid's beast takes on a color: blue if it's on your side (yours
+          // or a teammate's), red if it's someone else's.
+          const tint = new THREE.Color(this.isFriend(m.owner) ? FRIEND_TINT : FOE_TINT);
+          const seen = new Set<THREE.Material>();
+          body.traverse((o) => {
+            const mat = (o as THREE.Mesh).material;
+            if (!(mat instanceof THREE.MeshLambertMaterial) || seen.has(mat)) return;
+            seen.add(mat);
+            mat.color.lerp(tint, 0.65);
+          });
         }
         root.position.set(...m.p);
         this.scene.add(root);
         v = {
           kind: m.kind, root, body, legs, mats, bar,
           from: new THREE.Vector3(...m.p), to: new THREE.Vector3(...m.p), fromRy: m.ry, toRy: m.ry,
-          at: now, hp: -1, attacking: false, phase: Math.random() * 6, flashUntil: 0,
+          at: now, hp: -1, attacking: false, phase: Math.random() * 6, flashUntil: 0, wings,
         };
         this.views.set(m.id, v);
         particles.emit({ at: m.p, count: 30, color: "#b48cff", color2: "#2a1050", speed: 3, life: 0.8, size: 0.3 });
@@ -228,7 +374,9 @@ export class MonsterViews {
     const at: [number, number, number] = [v.to.x, v.to.y, v.to.z];
     if (v.kind === "golem") sound.play(["mining0", "mining1"], { at, rate: 0.6 });
     else if (v.kind === "wolf") sound.fx("sting", { at, volume: 0.5, rate: 1.6 });
-    else if (v.kind === "imp") sound.fx("charge", { at, volume: 0.5, rate: 1.8 }); // winding up a throw
+    else if (v.kind === "imp" || v.kind === "witch") sound.fx("charge", { at, volume: 0.5, rate: v.kind === "witch" ? 1.3 : 1.8 }); // winding up a throw
+    else if (v.kind === "dragon") sound.fx("rumble", { at, volume: 0.8, rate: 1.3 });
+    else if (v.kind === "skeleton") sound.play(["mining0", "mining1"], { at, rate: 1.6, volume: 0.6 });
     else sound.play("softHeavy", { at, rate: 1.4 });
   }
 
@@ -236,7 +384,7 @@ export class MonsterViews {
   died(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
-    const color = v.kind === "slime" ? "#5ad16e" : v.kind === "wolf" ? "#6a5a9a" : v.kind === "imp" ? "#ff7a2e" : "#9a96aa";
+    const color = { slime: "#5ad16e", wolf: "#6a5a9a", imp: "#ff7a2e", golem: "#9a96aa", skeleton: "#e6e0cc", zombie: "#7fa36a", witch: "#c05bff", dragon: "#ff5a1a" }[v.kind];
     particles.emit({ at: v.root.position, count: 50, color, color2: "#ffffff", speed: 4, up: 1.5, life: 1, size: 0.3, gravity: 6 });
     sound.play(v.kind === "golem" ? "metalHeavy0" : "punchHeavy1", { at: [v.root.position.x, v.root.position.y, v.root.position.z] });
     // It keels over and shrinks away (see update) instead of vanishing.
@@ -295,7 +443,13 @@ export class MonsterViews {
       const speed = before.distanceTo(v.root.position) * 60;
       v.phase += Math.min(speed, 8) * 0.03 + 0.02;
       const s = Math.sin(v.phase * 3);
-      if (v.kind === "imp") {
+      if (v.kind === "witch") {
+        // Riding the broom: a slow bob and sway; the hex swells as she winds up.
+        v.body.position.y = Math.sin(now / 400 + v.phase) * 0.15;
+        v.body.rotation.z = Math.sin(now / 700 + v.phase) * 0.08;
+        v.body.getObjectByName("fire")?.scale.setScalar(v.attacking ? 2 + Math.sin(now / 40) * 0.3 : 1);
+        if (Math.random() < 0.12) particles.emit({ at: [v.root.position.x, v.root.position.y - 0.3, v.root.position.z], count: 1, color: "#d07bff", color2: "#4a2a6e", speed: 0.3, life: 0.6, size: 0.12, gravity: 0.5 });
+      } else if (v.kind === "imp") {
         // Hovering, wings beating; the fire in its hand swells as it winds up.
         v.body.position.y = Math.sin(now / 220 + v.phase) * 0.12;
         v.legs.forEach((w, i) => (w.rotation.y = (i ? 1 : -1) * (0.3 + Math.sin(now / 70) * 0.5)));
@@ -308,6 +462,15 @@ export class MonsterViews {
       } else {
         v.legs.forEach((leg, i) => (leg.rotation.x = (i % 2 ? s : -s) * Math.min(1, speed / 3) * 0.7));
         v.body.position.y = v.kind === "golem" ? Math.abs(s) * 0.06 : Math.abs(s) * 0.05;
+      }
+      if (v.wings.length) {
+        const flap = Math.sin(now / (v.attacking ? 90 : 220)) * 0.5;
+        v.wings.forEach((w, i) => (w.rotation.z = i ? -flap : flap));
+      }
+      if (v.kind === "dragon") {
+        const fire = v.body.getObjectByName("fire");
+        if (fire) fire.scale.setScalar(v.attacking ? 1.6 + Math.sin(now / 40) * 0.3 : 0.3);
+        if (v.attacking && Math.random() < 0.5) particles.emit({ at: fire!.getWorldPosition(new THREE.Vector3()).toArray() as [number, number, number], count: 1, color: "#ffb347", color2: "#ff3a1a", speed: 0.6, up: 1, life: 0.4, size: 0.2 });
       }
       // Rearing back to strike.
       v.body.rotation.x = v.attacking ? 0.35 + Math.sin(now / 60) * 0.05 : 0;

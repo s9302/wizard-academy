@@ -9,7 +9,7 @@ export const MAX_SHIELD = 50;
 
 // "arrow" is the Rogue's bow: not a spell, but it flies through the same system.
 // "holy" is the Cleric's Holy Light (also from a weapon, never cast directly).
-export type SpellId = "bolt" | "frost" | "spark" | "fireball" | "arrow" | "holy" | "thorn" | "ember";
+export type SpellId = "bolt" | "frost" | "spark" | "fireball" | "arrow" | "holy" | "thorn" | "ember" | "hex" | "flame";
 
 // Which button, and whose cooldown: the three left-click spells share one
 // cooldown (you pick one in the Spellbook), so swapping can't fire faster.
@@ -74,6 +74,9 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   // The Druid's Thorns: a volley of two, a little slowing.
   // The Fire Imp's bolt (monsters only): slow enough to dodge.
   ember: { name: "Imp's Fire", slot: "primary", speed: 20, range: 30, radius: 0.3, damage: 10, cooldownMs: 1800, color: "#ff7a2e" },
+  // The Witch's hex and the Dragon's fire (monsters only).
+  hex: { name: "Hex", slot: "primary", speed: 18, range: 26, radius: 0.3, damage: 8, cooldownMs: 2000, slowMs: 1500, slowFactor: 0.55, color: "#c05bff" },
+  flame: { name: "Dragonfire", slot: "primary", speed: 22, range: 24, radius: 0.55, damage: 18, cooldownMs: 2400, color: "#ff5a1a" },
   thorn: { name: "Thorns", slot: "primary", speed: 36, range: 38, radius: 0.18, damage: 9, cooldownMs: 600, count: 2, spreadDeg: 4, slowMs: 600, slowFactor: 0.8, color: "#7fd06a" },
   // From a Fire Tome pickup (3 charges): slower, but it explodes.
   fireball: {

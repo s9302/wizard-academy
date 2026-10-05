@@ -5,6 +5,7 @@ import { type AbilityId, CLASS_ABILITY_POOL } from "../../shared/src/abilities.t
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { CLASS_IDS, type ClassId } from "../../shared/src/classes.ts";
+import { MONSTER_KINDS, type MonsterKind } from "../../shared/src/monsters.ts";
 import { allUnlocks, type Hat, HATS, type PrimarySpell, PRIMARY_SPELLS, type Robe, ROBES } from "../../shared/src/unlocks.ts";
 import { sanitizeAppearance } from "../../shared/src/appearance.ts";
 
@@ -121,7 +122,7 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "cast": {
       // Arrows only come from the bow ("attack"), never cast directly.
-      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || msg.spell === "holy" || msg.spell === "thorn" || msg.spell === "ember" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
+      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || msg.spell === "holy" || msg.spell === "thorn" || msg.spell === "ember" || msg.spell === "hex" || msg.spell === "flame" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
       if (!Number.isSafeInteger(msg.seq) || (msg.seq as number) < 0) return null;
       // Direction must be (roughly) a unit vector; the server renormalizes it.
       const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
@@ -139,7 +140,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "monsters":
       if (msg.action !== "add" && msg.action !== "remove") return null;
-      return { t: "monsters", action: msg.action };
+      if (msg.kind !== undefined && msg.kind !== "mixed" && !MONSTER_KINDS.includes(msg.kind as MonsterKind)) return null;
+      return { t: "monsters", action: msg.action, kind: (msg.kind as MonsterKind | "mixed" | undefined) ?? "mixed" };
     case "tag":
       if (!Number.isSafeInteger(msg.target) || (msg.target as number) < 1) return null;
       return { t: "tag", target: msg.target as number };

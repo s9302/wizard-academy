@@ -139,7 +139,7 @@ no guest play: XP and best times need an owner.
 | First clear of Trial I / II / III | 100 / 150 / 200 |
 | First clear of Trial IV / V / VI | 250 / 300 / 400 |
 | Clearing it again | a quarter of that, +25 for a new personal best |
-| Killing a monster (battle royale, the Tyrant's wolves) | Slime 8, Shadow Wolf 10, Fire Imp 12, Stone Golem 25; at most 12 kills pay XP per 5 minutes |
+| Killing a monster (battle royale, the Tyrant's wolves) | Slime 8, Shadow Wolf 10, Skeleton 10, Fire Imp 12, Zombie 15, Witch 15, Stone Golem 25, Dragon 40; at most 12 kills pay XP per 5 minutes |
 | Finishing a tag or infection round | 20 |
 | Tag: least time as It | +40 |
 | Infection: surviving the curse | +50 |
@@ -487,7 +487,7 @@ Level 11 adds **Sanctuary** (a 6 m circle healing you and teammates 12/s for
 don't play Clerics.
 
 The **Druid** fights with beasts: **Call Wolf** (E) brings a shadow wolf
-that fights for you (a green ring under it; it hunts your enemies and wild
+that fights for you (tinted blue; it hunts your enemies and wild
 monsters, never you or your team), and **Entangle** (R) roots a 4 m circle
 up to 20 m away (slowed to 30%, 8 damage a second). At most three beasts at
 once (an Imp Swarm can take you to five); they go back to the wild when you die or change class. The **Monk** is
@@ -579,8 +579,9 @@ Each also gives a robe (Wyrmfrost, Sovereign).
 
 ## Monsters
 
-Let in from the arena's Esc panel (up to 8; they come in a mix), or brought
-by Horde waves and the bosses (`shared/src/monsters.ts`,
+Let in from the arena's Esc panel (up to 10: pick a kind, or Mix, then +;
+each one comes back as the same kind when killed), or brought by Horde
+waves and the bosses (`shared/src/monsters.ts`,
 `server/src/monsters/Monsters.ts`). They hunt the nearest player, bot or
 Druid beast.
 
@@ -589,7 +590,15 @@ Druid beast.
 | **Slime** | 60 | 10 up close, slow |
 | **Shadow Wolf** | 45 | 8 up close, fast |
 | **Fire Imp** | 40 | **ranged**: a fire bolt for 10 from up to 24 m (dodgeable, 20 m/s); it needs a clear shot, backs off if you get within 9 m, and winds up (its fireball flares) before each throw |
+| **Skeleton** | 50 | 12 up close, quick, with a rusty sword |
+| **Zombie** | 120 | 16 up close, slow and tough |
+| **Witch** | 60 | **ranged**: hexes from her broom (8, and they slow you), from up to 22 m; keeps 10 m away |
 | **Stone Golem** | 180 | 22 up close, slow and heavy |
+| **Dragon** | 320 | **ranged**: balls of fire (18) from up to 20 m; big and tough |
+
+A Druid's beasts are tinted: **blue** if they're on your side (yours, a
+teammate's, or anyone's in Horde and the boss fights), **red** if they're
+another Druid's.
 
 The Imp's bolts are ordinary projectiles in the room (`ember` in
 `shared/src/combat.ts`, cast by the monster's id): walls and Null Zones

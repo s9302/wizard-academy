@@ -44,6 +44,7 @@ type Monster = {
   windupTarget: number | null;
   owner?: number; // a Druid's beast: whose
   until?: number; // ...and when it goes back to the wild
+  managed?: boolean; // let in from the Esc panel (counts toward `wanted`, comes back when killed)
   max?: number; // tougher than usual (Horde waves): its full health
   dmgMul?: number; // ...and how much harder it hits
   // Thrown (a shockwave, a tornado): moving at v until then, helpless.
@@ -54,14 +55,16 @@ const SPAWN_CLEARANCE = 12; // meters from any player
 const RESPAWN_MS = 6000;
 const REPLAN_MS = 700;
 const BROADCAST_MS = 100;
-const ORDER: MonsterKind[] = ["slime", "wolf", "imp", "golem", "wolf", "slime", "imp", "golem"];
+const ORDER: MonsterKind[] = ["slime", "skeleton", "imp", "zombie", "wolf", "witch", "golem", "skeleton", "slime", "dragon"];
 
 let nextId = MONSTER_ID_BASE;
 
 export class Monsters {
   private host: MonsterHost;
   private monsters = new Map<number, Monster>();
-  private wanted = 0;
+  // What players let in from the arena's Esc panel, one entry per monster:
+  // a kind, or null for "a mix" (the ORDER below). Killed ones come back.
+  private wanted: (MonsterKind | null)[] = [];
   private spawnAt = 0;
   private spawned = 0;
   private lastBroadcast = 0;
@@ -72,28 +75,46 @@ export class Monsters {
   }
 
   get count(): number {
-    return this.wanted;
+    return this.wanted.length;
   }
 
-  // Add or remove one from the wanted number. Returns the new count.
-  adjust(action: "add" | "remove"): number {
-    this.wanted = Math.max(0, Math.min(MAX_MONSTERS, this.wanted + (action === "add" ? 1 : -1)));
-    if (action === "add") this.spawnAt = 0; // right away
-    else this.trim();
-    return this.wanted;
-  }
-
-  // Too many alive (the count went down): the furthest from anyone go first.
-  private trim(): void {
-    while (this.monsters.size > this.wanted) {
-      const last = [...this.monsters.keys()].pop()!;
-      this.monsters.delete(last);
+  // Let one more in (of a kind, or a mix), or send the last one let in away.
+  // Returns the new count.
+  adjust(action: "add" | "remove", kind: MonsterKind | "mixed" = "mixed"): number {
+    if (action === "add") {
+      if (this.wanted.length < MAX_MONSTERS) this.wanted.push(kind === "mixed" ? null : kind);
+      this.spawnAt = 0; // right away
+    } else if (this.wanted.length) {
+      const gone = this.wanted.pop()!;
+      // One of that kind leaves (the newest), if there are more than wanted now.
+      const managed = [...this.monsters.values()].filter((m) => m.managed);
+      if (managed.length > this.wanted.length) {
+        const pick = managed.filter((m) => gone === null || m.kind === gone).at(-1) ?? managed.at(-1)!;
+        this.monsters.delete(pick.id);
+      }
     }
+    return this.wanted.length;
+  }
+
+  // The next kind to bring in: a chosen kind that's short, else the mix.
+  private nextKind(): MonsterKind {
+    const alive = new Map<MonsterKind, number>();
+    for (const m of this.monsters.values()) if (m.managed) alive.set(m.kind, (alive.get(m.kind) ?? 0) + 1);
+    const want = new Map<MonsterKind, number>();
+    for (const k of this.wanted) if (k) want.set(k, (want.get(k) ?? 0) + 1);
+    for (const [k, n] of want) if ((alive.get(k) ?? 0) < n) return k;
+    return ORDER[this.spawned++ % ORDER.length] ?? MONSTER_KINDS[0];
+  }
+
+  private get managedCount(): number {
+    let n = 0;
+    for (const m of this.monsters.values()) if (m.managed) n++;
+    return n;
   }
 
   // Nobody left to play with.
   clearAll(): void {
-    this.wanted = 0;
+    this.wanted = [];
     this.monsters.clear();
   }
 
@@ -142,7 +163,7 @@ export class Monsters {
 
   // One tick. Returns a "monsters" update when it's time to send one.
   step(now: number, dt: number): MonsterState[] | null {
-    if (this.monsters.size < this.wanted && now >= this.spawnAt) {
+    if (this.managedCount < this.wanted.length && now >= this.spawnAt) {
       this.spawn();
       this.spawnAt = now + 400; // the rest follow one by one
     }
@@ -266,10 +287,11 @@ export class Monsters {
         break;
       }
     }
-    const kind = ORDER[this.spawned++ % ORDER.length] ?? MONSTER_KINDS[0];
+    const kind = this.nextKind();
     const def = MONSTERS[kind];
     const floor = grid.floorAt(spot[0], spot[1]);
-    this.add(kind, [spot[0], (Number.isNaN(floor) ? 0 : floor) + def.height, spot[1]]);
+    const id = this.add(kind, [spot[0], (Number.isNaN(floor) ? 0 : floor) + def.height, spot[1]]);
+    this.monsters.get(id)!.managed = true;
   }
 
   private think(m: Monster, allPrey: Prey[], now: number, dt: number): void {

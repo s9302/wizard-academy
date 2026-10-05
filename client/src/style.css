@@ -116,6 +116,11 @@ button:disabled { opacity: 0.6; cursor: wait; }
   border-top: 1px solid #3d3263;
 }
 #bot-controls[hidden], #monster-controls[hidden] { display: none; }
+/* Which monster "+" lets in (the arena's Esc panel). */
+#monster-kinds { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 8px; }
+#monster-kinds[hidden] { display: none; }
+#monster-kinds button { padding: 3px 8px; font-size: 12px; font-weight: 400; background: rgba(255, 255, 255, 0.06); color: var(--ink); }
+#monster-kinds button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; }
 #bot-controls button, #monster-controls button { width: 40px; padding: 4px 0; font-size: 20px; line-height: 1; }
 #bot-count, #monster-count { min-width: 1.5em; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 

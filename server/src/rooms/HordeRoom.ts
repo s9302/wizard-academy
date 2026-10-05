@@ -1,8 +1,9 @@
 // Horde: an endless fight against waves of monsters, played with the battle
 // royale's classes. Everyone is on the same side (bots too); there's no
 // storm and no arena vote. Each wave brings more monsters, and tougher ones:
-// slimes at first, then wolves, fire imps (ranged) from wave 3, stone golems
-// from wave 4, with an elite wave every fifth. Between waves there's a short breather, and anyone who went down
+// slimes at first, then wolves and zombies, fire imps (ranged) and skeletons
+// from wave 3, stone golems from wave 4, witches from wave 5, with an elite
+// wave every fifth (and dragons in the elite waves from wave 10). Between waves there's a short breather, and anyone who went down
 // comes back for the next one. When everyone is down at once, it's over:
 // your score is the waves you survived, and each wave cleared pays XP.
 
@@ -36,8 +37,12 @@ export function waveOf(n: number, players: number): Wave {
   const wolves = n >= 2 ? Math.round(n * (elite ? 1.2 : 0.8) * more) : 0;
   const golems = n >= 4 ? Math.round(((n - 1) / (elite ? 2 : 3)) * more) : 0;
   const imps = n >= 3 ? Math.round((n - 1) * (elite ? 0.7 : 0.45) * more) : 0;
+  const zombies = n >= 2 && !elite ? Math.round(n * 0.5 * more) : 0;
+  const skeletons = n >= 3 ? Math.round((n - 1) * (elite ? 0.8 : 0.5) * more) : 0;
+  const witches = n >= 5 ? Math.round((n - 3) * (elite ? 0.5 : 0.3) * more) : 0;
+  const dragons = elite && n >= 10 ? Math.max(1, Math.round(((n - 5) / 5) * more)) : 0;
   const wave: Wave = [];
-  for (const [kind, count] of [["slime", slimes], ["wolf", wolves], ["golem", golems], ["imp", imps]] as const) {
+  for (const [kind, count] of [["slime", slimes], ["wolf", wolves], ["golem", golems], ["imp", imps], ["zombie", zombies], ["skeleton", skeletons], ["witch", witches], ["dragon", dragons]] as const) {
     for (let i = 0; i < count; i++) wave.push({ kind });
   }
   // Shuffle, so a wave isn't all slimes and then all golems.
