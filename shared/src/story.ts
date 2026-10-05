@@ -3,7 +3,7 @@
 // when you clear it for the first time; clearing it is what completes the
 // chapter. The hub's Chronicle board and lore tablets show the rest.
 
-export type ChapterId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type ChapterId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export type Chapter = {
   id: ChapterId;
@@ -103,6 +103,32 @@ export const CHAPTERS: Chapter[] = [
     outro: [
       "The Tyrant breaks apart into rain, and the crown rolls to a stop at your feet.",
       "Vale picks it up, turns it over, and hands it back to you. \"I think,\" he says, \"it was always meant for whoever was brave enough to take it off him.\"",
+    ],
+  },
+  {
+    id: 8,
+    trial: "trial8",
+    title: "Chapter VIII: The Frozen Summit",
+    intro: [
+      "With the Tyrant gone, winter came early. Snow fell on the academy in summer, and something enormous passed over the towers at night, blotting out the stars.",
+      "Vale tracked it to the mountain's summit. \"A wyrm,\" he says. \"It sleeps up there for a hundred years, and the storm woke it. It won't come down for you. Make it.\"",
+    ],
+    outro: [
+      "The Wyrm crashes into the snow and doesn't get up. The clouds break, and for the first time in weeks the sun is warm.",
+      "Under one of its wings you find a cold, dark crystal humming with a voice that isn't yours. Vale goes very pale when he hears it.",
+    ],
+  },
+  {
+    id: 9,
+    trial: "trial9",
+    title: "Chapter IX: The Hollow Throne",
+    intro: [
+      "The voice in the crystal belongs to the Lich Sovereign, the first Headmaster, who wanted to live forever and very nearly did. The storm, the Tyrant, the Wyrm: all his.",
+      "His throne is in the necropolis under the academy. He blinks from shadow to shadow and the dead rise when he calls them. This is the last trial. Bring everyone.",
+    ],
+    outro: [
+      "The Lich's crown cracks, and with it the crystal, and with it the storm. Somewhere far above, every bell in the academy rings at once.",
+      "Vale finds you on the stair, covered in dust. \"So that's it,\" he says. \"No more trials.\" He grins. \"For now.\"",
     ],
   },
 ];

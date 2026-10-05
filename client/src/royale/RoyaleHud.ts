@@ -51,6 +51,7 @@ export class RoyaleHud {
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
   private boss: boolean;
+  bossHint = "get out of the red circles"; // what the boss fight's HUD line says (Game sets it)
   private ctf: boolean;
   private respawnEl!: HTMLElement;
   private respawnAt = 0; // performance.now(): knocked out, back then (capture the flag)
@@ -661,7 +662,7 @@ export class RoyaleHud {
       case "playing": {
         if (this.boss) {
           this.timerEl.textContent = clockText(Math.max(0, left));
-          this.infoEl.textContent = this.amAlive ? `${this.aliveCount} fighting · hide behind pillars, jump the shockwaves` : "Down · watching the others";
+          this.infoEl.textContent = this.amAlive ? `${this.aliveCount} fighting · ${this.bossHint}` : "Down · watching the others";
           break;
         }
         if (this.team !== null) {

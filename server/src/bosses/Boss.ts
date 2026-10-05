@@ -191,6 +191,8 @@ export class Boss {
 
   private think(fighters: { id: number; p: Vec3 }[], now: number, dt: number): void {
     if (this.kind === "tyrant") return this.thinkTyrant(fighters, now, dt);
+    if (this.kind === "wyrm") return this.thinkWyrm(fighters, now, dt);
+    if (this.kind === "lich") return this.thinkLich(fighters, now);
     const def = BOSSES[this.kind];
     // Face (and, for the golem, lumber toward) the nearest wizard.
     let near = fighters[0];
@@ -332,6 +334,154 @@ export class Boss {
     }
   }
 
+  // The floor under a point (the walking map's), or the arena's floor.
+  private groundBelow(p: Vec3): number {
+    const floor = this.host.grid?.().floorAt(p[0], p[2]);
+    return floor === undefined || Number.isNaN(floor) ? this.arena.min[1] : floor;
+  }
+
+  // Phases from health: 1, then 2 below TYRANT.phase2, 3 below phase3
+  // (announced once each, with the boss's own lines).
+  private phaseCheck(now: number, lines: [string, string]): number {
+    const frac = this.hp / this.max;
+    const phase = frac < TYRANT.phase3 ? 3 : frac < TYRANT.phase2 ? 2 : 1;
+    if (phase > this.phase) {
+      this.phase = phase;
+      this.host.broadcast({ t: "announce", text: lines[phase - 2] });
+      this.nextAttack = Math.min(this.nextAttack, now + 600);
+      if (phase === 2) this.nextSummon = now;
+    }
+    return phase;
+  }
+
+  private pick(options: [number, () => void][]): void {
+    let roll = Math.random() * options.reduce((sum, [w]) => sum + w, 0);
+    for (const [w, attack] of options) {
+      roll -= w;
+      if (roll <= 0) return attack();
+    }
+  }
+
+  // ---- The Frost Wyrm (Trial VIII) ----
+  // Circles high over the middle of its arena (out of a sword's reach),
+  // breathing frost and dropping ice; now and then it swoops down at the
+  // furthest fighter (a marked landing), stays down a few seconds (now it
+  // can be hit up close), and takes off again.
+  private grounded = 0;
+  private thinkWyrm(fighters: BossFighter[], now: number, dt: number): void {
+    const phase = this.phaseCheck(now, ["The Wyrm shrieks: the air turns to ice!", "The Wyrm is furious!"]);
+    let near = fighters[0];
+    for (const f of fighters) if (dist(f.p, this.p) < dist(near.p, this.p)) near = f;
+    if (this.leap) {
+      const k = Math.min(1, (now - this.leap.start) / (this.leap.end - this.leap.start));
+      const { from, to } = this.leap;
+      this.p = [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k + Math.sin(k * Math.PI) * 3, from[2] + (to[2] - from[2]) * k];
+      if (k >= 1) {
+        this.leap = null;
+        this.slam(now);
+        this.grounded = now + 3500;
+      }
+      return;
+    }
+    this.ry = Math.atan2(-(near.p[0] - this.p[0]), -(near.p[2] - this.p[2]));
+    if (this.windupUntil) {
+      if (now >= this.windupUntil) {
+        this.windupUntil = 0;
+        this.windupAttack?.();
+        this.windupAttack = null;
+      }
+      return;
+    }
+    // Flying: circle the home point, high up (after a landing, rise back).
+    if (now >= this.grounded) {
+      this.orbit += dt * (phase === 3 ? 0.5 : 0.35);
+      const r = 13;
+      const want: Vec3 = [this.home[0] + Math.cos(this.orbit) * r, this.home[1] + 6 + Math.sin(now / 700) * 0.6, this.home[2] + Math.sin(this.orbit) * r];
+      const k = Math.min(1, dt * 1.5);
+      this.p = [this.p[0] + (want[0] - this.p[0]) * k, this.p[1] + (want[1] - this.p[1]) * k, this.p[2] + (want[2] - this.p[2]) * k];
+    }
+    if (now < this.nextAttack) return;
+    this.nextAttack = now + [0, 2400, 1900, 1500][phase];
+    const far = fighters.reduce((a, b) => (dist(b.p, this.p) > dist(a.p, this.p) ? b : a));
+    const options: [number, () => void][] = [
+      [3, () => this.windup(600, () => this.breath(near.p, now + 600, phase === 1 ? 7 : 11))],
+      [2, () => this.iceSpikes(near.p, now)],
+      [now >= this.grounded ? 2 : 0, () => this.windup(700, () => this.leapAt(far.p, now + 700))],
+    ];
+    if (phase >= 2) options.push([1.5, () => this.lightning(fighters, now, phase === 3 ? 2 : 1)]);
+    if (phase === 3) options.push([2, () => this.windup(800, () => this.meteors(fighters, now + 800))]);
+    this.pick(options);
+  }
+
+  // Frost breath: a fan of shards at someone.
+  private breath(at: Vec3, now: number, n: number): void {
+    for (let i = 0; i < n; i++) this.shoot([this.p[0], this.p[1] - 0.6, this.p[2]], at, 15, 0.4, "orb", now, (i - (n - 1) / 2) * 0.09);
+  }
+
+  // Ice spikes: a line of marked circles from under the wyrm toward someone.
+  private iceSpikes(at: Vec3, now: number): void {
+    const from: Vec3 = [this.p[0], 0, this.p[2]];
+    const dx = at[0] - from[0];
+    const dz = at[2] - from[2];
+    const len = Math.hypot(dx, dz) || 1;
+    for (let i = 1; i <= 7; i++) {
+      const t = (i / 7) * Math.min(28, len + 6);
+      const p: Vec3 = [from[0] + (dx / len) * t, 0, from[2] + (dz / len) * t];
+      p[1] = this.groundBelow(p);
+      this.strike(p, now + 900 + i * 140, 2.2, "meteor");
+    }
+  }
+
+  // ---- The Lich Sovereign (Trial IX) ----
+  // Floats in place, then blinks somewhere else every few seconds; soul
+  // bolts, death rings and curses; raises the dead from phase 2; a soul
+  // storm when it's nearly beaten.
+  private nextBlink = 0;
+  private thinkLich(fighters: BossFighter[], now: number): void {
+    const phase = this.phaseCheck(now, ["The Lich calls the dead from their graves!", "The Lich unleashes the soul storm!"]);
+    let near = fighters[0];
+    for (const f of fighters) if (dist(f.p, this.p) < dist(near.p, this.p)) near = f;
+    this.ry = Math.atan2(-(near.p[0] - this.p[0]), -(near.p[2] - this.p[2]));
+    if (this.windupUntil) {
+      if (now >= this.windupUntil) {
+        this.windupUntil = 0;
+        this.windupAttack?.();
+        this.windupAttack = null;
+      }
+      return;
+    }
+    // Blink to a new spot (a few meters from the fighters, never on them).
+    const grid = this.host.grid?.();
+    if (grid && now >= this.nextBlink) {
+      this.nextBlink = now + (phase === 3 ? 4500 : 7000) + Math.random() * 2000;
+      for (let i = 0; i < 12; i++) {
+        const [x, z] = grid.randomSpot();
+        const d = Math.min(...fighters.map((f) => Math.hypot(f.p[0] - x, f.p[2] - z)));
+        if (d < 7 || d > 24) continue;
+        this.p = [x, grid.floorAt(x, z) + BOSSES.lich.height, z];
+        break;
+      }
+    }
+    this.p = [this.p[0], this.p[1] + Math.sin(now / 500) * 0.01, this.p[2]];
+    if (now < this.nextAttack) return;
+    this.nextAttack = now + [0, 2300, 1800, 1400][phase];
+    if (phase >= 2 && now >= this.nextSummon && (this.host.summoned?.() ?? 0) < 4) {
+      this.nextSummon = now + 18_000;
+      this.windup(700, () => {
+        this.host.summon?.("wolf", this.p, 2);
+        this.host.broadcast({ t: "announce", text: "The dead rise to serve the Lich!" });
+      });
+      return;
+    }
+    const options: [number, () => void][] = [
+      [3, () => this.orbs(near, now, phase === 1 ? 3 : 5)],
+      [2, () => this.windup(700, () => this.orbRing(now + 700, phase === 3 ? 2 : 1))],
+      [2, () => this.lightning(fighters, now, phase === 1 ? 1 : 2)],
+    ];
+    if (phase === 3) options.push([2, () => this.windup(800, () => this.meteors(fighters, now + 800))]);
+    this.pick(options);
+  }
+
   // Jump to a spot: the landing circle is marked first, then it comes down there.
   private leapAt(target: Vec3, now: number): void {
     const grid = this.host.grid?.();
@@ -344,12 +494,12 @@ export class Boss {
       const floor = grid.floorAt(to[0], to[2]);
       // Land on the floor, not on a platform (it walks back down otherwise).
       if (!grid.isWalkable(to[0], to[2]) || Number.isNaN(floor)) return this.slam(now);
-      to = [to[0], floor + BOSSES.tyrant.height, to[2]];
+      to = [to[0], floor + BOSSES[this.kind].height, to[2]];
     }
     const end = now + TYRANT.leapDelayMs;
     this.leap = { from: [...this.p], to, start: now, end };
     this.path = [];
-    this.strike([to[0], to[1] - BOSSES.tyrant.height, to[2]], end, TYRANT.leapRadius, "leap");
+    this.strike([to[0], to[1] - BOSSES[this.kind].height, to[2]], end, TYRANT.leapRadius, "leap");
   }
 
   // Storm orbs in every direction (two staggered rings when enraged).
@@ -410,7 +560,8 @@ export class Boss {
   }
 
   private slam(now: number): void {
-    const o: Vec3 = [this.p[0], this.kind === "tyrant" ? this.p[1] - BOSSES.tyrant.height : this.arena.min[1], this.p[2]];
+    const big = this.kind === "tyrant" || this.kind === "wyrm" || this.kind === "lich";
+    const o: Vec3 = [this.p[0], big ? this.groundBelow(this.p) : this.arena.min[1], this.p[2]];
     this.waves.push({ o, start: now, hit: new Set() });
     this.host.broadcast({ t: "bossWave", o, time: now });
   }
@@ -419,7 +570,7 @@ export class Boss {
     for (const f of fighters) {
       for (let i = 0; i < perFighter; i++) {
         const jitter = i === 0 ? 0 : 3;
-        const y = this.kind === "tyrant" ? f.p[1] - 0.9 : this.arena.min[1];
+        const y = this.kind === "golem" || this.kind === "wraith" ? this.arena.min[1] : f.p[1] - 0.9;
         const p: Vec3 = [f.p[0] + (Math.random() - 0.5) * jitter, y, f.p[2] + (Math.random() - 0.5) * jitter];
         this.strike(p, now + STRIKE_DELAY_MS, STRIKE_RADIUS, "lightning");
       }

@@ -22,6 +22,8 @@ export const ROOMS: RoomInfo[] = [
   { id: "trial5", name: "Trial V: The Hollow Stair", levelId: "trial5", mode: "parkour" },
   { id: "trial6", name: "Trial VI: The Eye of the Storm", levelId: "trial6", mode: "parkour" },
   { id: "trial7", name: "Trial VII: The Tyrant's Crown", levelId: "trial7", mode: "boss" },
+  { id: "trial8", name: "Trial VIII: The Frozen Summit", levelId: "trial8", mode: "boss" },
+  { id: "trial9", name: "Trial IX: The Hollow Throne", levelId: "trial9", mode: "boss" },
   { id: "tag", name: "Tag: The Clocktower Gardens", levelId: "clocktower", mode: "tag" },
   { id: "infection", name: "Infection: The Moonlit Graveyard", levelId: "graveyard", mode: "infection" },
   { id: "royale", name: "Battle Royale: Last Wizard Standing", levelId: "arena", mode: "royale" },

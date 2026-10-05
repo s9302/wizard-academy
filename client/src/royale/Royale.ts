@@ -56,7 +56,7 @@ export type RoyaleHooks = {
 };
 
 export class Royale {
-  private hud: RoyaleHud;
+  readonly hud: RoyaleHud;
   private spells: Spells;
   private storm: Storm;
   private pickups: Pickups;

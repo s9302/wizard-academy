@@ -20,13 +20,14 @@ export const glowMat = (color: string, k = 2.2): THREE.MeshBasicMaterial => {
 
 // ---- Boss models (positions relative to the body's center) ----
 
-type Model = { root: THREE.Group; mats: THREE.MeshLambertMaterial[]; arms: THREE.Object3D[]; legs: THREE.Object3D[] };
+type Model = { root: THREE.Group; mats: THREE.MeshLambertMaterial[]; arms: THREE.Object3D[]; legs: THREE.Object3D[]; wings: THREE.Object3D[] };
 
 function bossModel(kind: BossKind): Model {
   const root = new THREE.Group();
   const mats: THREE.MeshLambertMaterial[] = [];
   const arms: THREE.Object3D[] = [];
   const legs: THREE.Object3D[] = [];
+  const wings: THREE.Object3D[] = [];
   const lam = (color: string, opts: THREE.MeshLambertMaterialParameters = {}) => {
     const m = new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts });
     mats.push(m);
@@ -72,6 +73,91 @@ function bossModel(kind: BossKind): Model {
       const a = add(new THREE.ConeGeometry(0.28, 1.8, 6), robe, 0, -0.8, 0, arm);
       a.rotation.z = s * 0.3;
       add(new THREE.OctahedronGeometry(0.18), glowMat("#c58fff", 3), 0, -1.7, 0, arm).castShadow = false;
+      root.add(arm);
+      arms.push(arm);
+    }
+  } else if (kind === "wyrm") {
+    // The Frost Wyrm: a pale blue dragon, front -z. A long body, a neck and
+    // horned head ahead, a tapering tail behind, and two big wings.
+    const scale = lam("#9cc8e0");
+    const belly = lam("#e2f4ff");
+    const dark = lam("#4f7894");
+    const ice = glowMat("#bff4ff", 3);
+    add(new THREE.BoxGeometry(2.0, 1.6, 4.2), scale, 0, 0, 0);
+    add(new THREE.BoxGeometry(1.6, 0.4, 3.6), belly, 0, -0.8, 0);
+    // Neck and head.
+    const neck = add(new THREE.BoxGeometry(0.9, 0.9, 2.2), scale, 0, 0.6, -2.8);
+    neck.rotation.x = 0.45;
+    add(new THREE.BoxGeometry(1.2, 0.9, 1.6), scale, 0, 1.3, -4.1);
+    add(new THREE.BoxGeometry(0.9, 0.4, 1.0), belly, 0, 0.95, -4.6); // the jaw
+    for (const sx of [-1, 1]) {
+      add(new THREE.SphereGeometry(0.13, 6, 4), ice, sx * 0.4, 1.5, -4.85).castShadow = false;
+      const horn = add(new THREE.ConeGeometry(0.14, 0.9, 5), belly, sx * 0.4, 2.0, -3.6);
+      horn.rotation.x = 0.7;
+    }
+    // Spines down the back, and the tail.
+    for (let i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.18, 0.6, 4), ice, 0, 1.0, -1.6 + i * 0.7).castShadow = false;
+    for (let i = 0; i < 4; i++) {
+      const w = 1.2 - i * 0.25;
+      add(new THREE.BoxGeometry(w, w * 0.8, 1.4), i % 2 ? dark : scale, 0, -0.1 - i * 0.12, 2.6 + i * 1.25);
+    }
+    add(new THREE.ConeGeometry(0.4, 1.2, 4), ice, 0, -0.55, 7.8).rotation.x = Math.PI / 2;
+    // Legs, tucked under (they swing a little when it walks).
+    for (const [x, z] of [[-0.9, -1.3], [0.9, -1.3], [-0.9, 1.4], [0.9, 1.4]]) {
+      const leg = new THREE.Group();
+      leg.position.set(x, -0.7, z);
+      add(new THREE.BoxGeometry(0.5, 1.4, 0.6), dark, 0, -0.6, 0, leg);
+      root.add(leg);
+      legs.push(leg);
+    }
+    // Wings: a bony arm along x and a sail of thin membrane hanging off it.
+    const sail = lam("#7fb2d6", { transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+    for (const sx of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.position.set(sx * 1.0, 0.6, -0.6);
+      add(new THREE.BoxGeometry(5.5, 0.25, 0.3), dark, sx * 2.75, 0, 0, wing);
+      const membrane = add(new THREE.BoxGeometry(5.3, 0.05, 3.2), sail, sx * 2.75, -0.05, 1.6, wing);
+      membrane.castShadow = false;
+      for (let i = 1; i <= 3; i++) add(new THREE.BoxGeometry(0.12, 0.12, 3.2), dark, sx * i * 1.6, 0, 1.6, wing);
+      root.add(wing);
+      wings.push(wing);
+    }
+  } else if (kind === "lich") {
+    // The Lich Sovereign: a floating skeletal king in tattered violet robes,
+    // a crown of bone, glowing eyes, and a staff topped with a soul gem.
+    const robe = lam("#3a2458", { transparent: true, opacity: 0.92 });
+    const trim = lam("#c9a227");
+    const bone = lam("#e6e0cc");
+    const body = add(new THREE.ConeGeometry(1.1, 3.2, 10, 1, true), robe, 0, -0.6, 0);
+    (body.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+    add(new THREE.CylinderGeometry(0.75, 0.9, 0.2, 10), trim, 0, 0.9, 0);
+    add(new THREE.BoxGeometry(1.6, 0.5, 0.9), robe, 0, 1.2, 0); // shoulders
+    // The skull and its crown.
+    add(new THREE.BoxGeometry(0.7, 0.75, 0.75), bone, 0, 1.85, -0.05);
+    add(new THREE.BoxGeometry(0.5, 0.25, 0.45), bone, 0, 1.45, -0.18); // the jaw
+    for (const sx of [-1, 1]) add(new THREE.SphereGeometry(0.1, 6, 4), glowMat("#b48cff", 4), sx * 0.17, 1.9, -0.44).castShadow = false;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      add(new THREE.ConeGeometry(0.08, 0.45, 4), bone, Math.cos(a) * 0.38, 2.4, Math.sin(a) * 0.38 - 0.05);
+    }
+    // A collar of floating soul gems.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      add(new THREE.OctahedronGeometry(0.12), glowMat("#9a7bff", 3), Math.cos(a) * 1.1, 1.4, Math.sin(a) * 1.1).castShadow = false;
+    }
+    // Arms: bony hands out of wide sleeves; the right holds the staff.
+    for (const sx of [-1, 1]) {
+      const arm = new THREE.Group();
+      arm.position.set(sx * 0.85, 1.2, 0);
+      const sleeve = add(new THREE.ConeGeometry(0.3, 1.3, 6, 1, true), robe, 0, -0.6, 0, arm);
+      sleeve.rotation.z = sx * 0.2;
+      add(new THREE.BoxGeometry(0.2, 0.3, 0.2), bone, 0, -1.3, 0, arm);
+      if (sx === 1) {
+        add(new THREE.CylinderGeometry(0.06, 0.06, 3.4, 6), lam("#2a2030"), 0, -0.9, -0.2, arm);
+        add(new THREE.OctahedronGeometry(0.3), glowMat("#b48cff", 4), 0, 0.95, -0.2, arm).castShadow = false;
+      } else {
+        add(new THREE.IcosahedronGeometry(0.2, 0), glowMat("#9a7bff", 3), 0, -1.55, -0.1, arm).castShadow = false;
+      }
       root.add(arm);
       arms.push(arm);
     }
@@ -122,7 +208,7 @@ function bossModel(kind: BossKind): Model {
       arms.push(arm);
     }
   }
-  return { root, mats, arms, legs };
+  return { root, mats, arms, legs, wings };
 }
 
 type Flying = { shot: BossShot; mesh: THREE.Mesh };
@@ -187,6 +273,12 @@ export class BossView {
         this.from.copy(this.model.root.position);
         this.to.set(...msg.p);
         this.at = performance.now();
+        // The Lich blinks: a puff where it was and where it is, no sliding.
+        if (this.kind === "lich" && this.from.distanceTo(this.to) > 4 && msg.state === "fight") {
+          for (const at of [this.from, this.to]) particles.emit({ at: [at.x, at.y, at.z], count: 40, color: "#b48cff", color2: "#1a0830", speed: 4, life: 0.7, size: 0.3 });
+          sound.fx("blink", { at: msg.p });
+          this.from.copy(this.to);
+        }
         this.ry = msg.ry;
         if (msg.hp < this.hp && msg.state === "fight") this.flashUntil = performance.now() + 120;
         if (msg.state === "dead" && this.state !== "dead") {
@@ -228,7 +320,7 @@ export class BossView {
         return true;
       }
       case "bossWave": {
-        const color = this.kind === "wraith" ? "#8fe3ff" : this.kind === "tyrant" ? "#ffcf5a" : "#ffb347";
+        const color = { wraith: "#8fe3ff", tyrant: "#ffcf5a", golem: "#ffb347", wyrm: "#bff4ff", lich: "#9a7bff" }[this.kind];
         const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.18, 6, 48), glowMat(color, 2.5));
         ring.rotation.x = Math.PI / 2;
         ring.position.set(msg.o[0], msg.o[1] + 0.25, msg.o[2]);
@@ -283,6 +375,15 @@ export class BossView {
       m.legs.forEach((l, i) => (l.rotation.x = airborne ? (i ? -0.5 : 0.4) : Math.sin(this.stride + i * Math.PI) * Math.min(0.6, step * 20)));
       const red = now < this.flashUntil ? "#ff3030" : this.windup ? "#5a1010" : "#000000";
       for (const mat of m.mats) mat.emissive.set(red);
+      // Wings flap (faster when it's diving or winding up).
+      const flap = Math.sin(time * (this.windup ? 9 : 4)) * 0.45;
+      m.wings.forEach((w, i) => (w.rotation.z = i ? -flap : flap));
+      if (this.kind === "wyrm" && Math.random() < 0.3) {
+        particles.emit({ at: m.root.position, count: 1, color: "#e6fbff", color2: "#8fe3ff", speed: 0.5, spread: 3, life: 1.2, size: 0.2, gravity: 2 });
+      }
+      if (this.kind === "lich" && Math.random() < 0.35) {
+        particles.emit({ at: [m.root.position.x, m.root.position.y - 1.5, m.root.position.z], count: 1, color: "#9a7bff", color2: "#2a1050", speed: 0.4, spread: 1, life: 1, size: 0.3, gravity: -0.5 });
+      }
       if (this.kind === "wraith" && Math.random() < 0.4) {
         particles.emit({ at: m.root.position, count: 1, color: "#8fe3ff", color2: "#5a3cff", speed: 0.6, spread: 1.6, life: 1.2, size: 0.3, gravity: 1 });
       }

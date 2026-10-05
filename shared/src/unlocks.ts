@@ -18,7 +18,7 @@ export type Requirement = { level: number } | { chapter: ChapterId };
 
 export type PrimarySpell = "bolt" | "frost" | "spark";
 export type Hat = "none" | "classic" | "tall" | "starry" | "crown" | "storm" | "tyrant" | "tophat" | "beret" | "hood" | "feathered" | "horned";
-export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold" | "storm" | "ember";
+export type Robe = "auto" | "crimson" | "emerald" | "midnight" | "ivory" | "gold" | "storm" | "ember" | "frost" | "sovereign";
 
 export type Unlock = {
   id: string;
@@ -63,13 +63,17 @@ export const UNLOCKS: Unlock[] = [
   { id: "hat:storm", name: "Stormcaller's hat", kind: "hat", requires: { chapter: 6 }, description: "It crackles." },
   { id: "hat:tyrant", name: "Tyrant's crown", kind: "hat", requires: { chapter: 7 }, description: "Taken off the Storm Tyrant." },
   { id: "area:trial7", name: "Trial VII", kind: "area", requires: { chapter: 6 }, description: "The portal to the Tyrant's Crown." },
+  { id: "robe:frost", name: "Wyrmfrost robe", kind: "robe", requires: { chapter: 8 }, description: "Woven from the Frost Wyrm's shed scales." },
+  { id: "robe:sovereign", name: "Sovereign robe", kind: "robe", requires: { chapter: 9 }, description: "The Lich's own colors, taken from his throne." },
+  { id: "area:trial8", name: "Trial VIII", kind: "area", requires: { chapter: 7 }, description: "The portal to the Frozen Summit." },
+  { id: "area:trial9", name: "Trial IX", kind: "area", requires: { chapter: 8 }, description: "The portal to the Hollow Throne." },
 ];
 
 // Always available.
 const DEFAULTS = ["spell:bolt", "hat:classic", "robe:auto", "hat:none", "hat:tophat", "hat:beret", "hat:hood", "hat:feathered", "hat:horned"];
 
 export function requirementText(r: Requirement): string {
-  return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III", "IV", "V", "VI", "VII"][r.chapter - 1]}`;
+  return "level" in r ? `Reach level ${r.level}` : `Complete Chapter ${["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][r.chapter - 1]}`;
 }
 
 // Admins have everything.
@@ -112,7 +116,7 @@ export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe:
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
 export const HATS: Hat[] = ["none", "classic", "tophat", "beret", "hood", "feathered", "horned", "tall", "starry", "crown", "storm", "tyrant"];
-export const ROBES: Robe[] = ["auto", "crimson", "emerald", "midnight", "ivory", "gold", "storm", "ember"];
+export const ROBES: Robe[] = ["auto", "crimson", "emerald", "midnight", "ivory", "gold", "storm", "ember", "frost", "sovereign"];
 export const ROBE_COLORS: Record<Exclude<Robe, "auto">, string> = {
   crimson: "#a8283a",
   emerald: "#2f9e5a",
@@ -121,6 +125,8 @@ export const ROBE_COLORS: Record<Exclude<Robe, "auto">, string> = {
   gold: "#d9a72b",
   storm: "#4b3f8f",
   ember: "#b8502a",
+  frost: "#8ccbe8",
+  sovereign: "#4a2a6e",
 };
 export const HAT_NAMES: Record<Hat, string> = {
   none: "No hat",
@@ -145,6 +151,8 @@ export const ROBE_NAMES: Record<Robe, string> = {
   gold: "Gold",
   storm: "Storm",
   ember: "Ember",
+  frost: "Wyrmfrost",
+  sovereign: "Sovereign",
 };
 
 // Keep only valid, unlocked choices; anything else falls back to the default.

@@ -10,7 +10,12 @@
 import WebSocket from "ws";
 import { EYE_HEIGHT } from "../../shared/src/constants.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import { XP } from "../src/xp.ts";
 import { signIn } from "./signIn.ts";
+
+// Which trial (BOSS_ROOM=trial8 or trial9 for the Wyrm and the Lich).
+const room = process.env.BOSS_ROOM ?? "trial7";
+const firstClearXp = XP.parkourFirstClear[room];
 
 const base = (process.argv[2] ?? "http://localhost:3000").replace(/\/$/, "");
 const pin = process.env.GAME_PIN!;
@@ -51,7 +56,7 @@ async function enter(name: string, cls: string) {
     if (m.t === "health" && m.id === me.id) me.hp = m.hp;
   });
   await new Promise((r) => ws.on("open", r));
-  ws.send(JSON.stringify({ t: "hello", room: "trial7" }));
+  ws.send(JSON.stringify({ t: "hello", room }));
   await waitFor(() => me.id > 0, 5000);
   ws.send(JSON.stringify({ t: "class", cls }));
   const eye = (): Vec3 => [me.pos[0], me.pos[1] + EYE_HEIGHT, me.pos[2]];
@@ -125,7 +130,7 @@ await waitFor(() => a.since(mark).some((m) => m.t === "finish"), 5000);
 const finish = a.since(mark).find((m) => m.t === "finish");
 check("beating it is a first clear", finish?.t === "finish" && finish.firstClear, JSON.stringify(finish));
 const xp = a.since(mark).find((m) => m.t === "xp" && m.reason.startsWith("First clear"));
-check("...worth 600 XP", xp?.t === "xp" && xp.amount === 600, JSON.stringify(xp));
+check(`...worth ${firstClearXp} XP`, xp?.t === "xp" && xp.amount === firstClearXp, JSON.stringify(xp));
 await waitFor(() => a.since(mark).some((m) => m.t === "roundResult"), 3000);
 const result = a.since(mark).find((m) => m.t === "roundResult");
 check("the results say it fell", result?.t === "roundResult" && result.title.includes("fallen"), result?.t === "roundResult" ? result.title : "no result");

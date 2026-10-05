@@ -122,7 +122,7 @@ export class BossRoom extends RoyaleRoom {
     const { hp, max } = this.boss.health;
     return {
       title: `${BOSSES[this.boss.kind].name} stands. Try again!`,
-      lines: [`It had ${Math.round((100 * hp) / Math.max(1, max))}% of its health left.`, "Tip: hide behind the pillars from its boulders, jump its shockwaves, and get out of the red circles."],
+      lines: [`It had ${Math.round((100 * hp) / Math.max(1, max))}% of its health left.`, `Tip: ${BOSSES[this.boss.kind].tip ?? "get out of the red circles."}`],
     };
   }
 

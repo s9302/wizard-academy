@@ -5,7 +5,7 @@
 
 import type { Vec3 } from "./protocol.ts";
 
-export type BossKind = "golem" | "wraith" | "tyrant";
+export type BossKind = "golem" | "wraith" | "tyrant" | "wyrm" | "lich";
 
 export type BossDef = {
   name: string;
@@ -15,6 +15,9 @@ export type BossDef = {
   height: number; // body center above the arena floor
   speed: number;
   color: string;
+  // For the class-fought bosses: a short hint for the HUD, and the tip after a loss.
+  hint?: string;
+  tip?: string;
 };
 
 export const BOSSES: Record<BossKind, BossDef> = {
@@ -22,7 +25,11 @@ export const BOSSES: Record<BossKind, BossDef> = {
   wraith: { name: "The Storm Wraith", title: "Heart of the Storm", hp: 380, radius: 1.4, height: 3.6, speed: 3.6, color: "#8fe3ff" },
   // Trial VII's boss: fought with your battle royale class (BossRoom), not
   // with hearts. Its numbers are in TYRANT below.
-  tyrant: { name: "The Storm Tyrant", title: "The Storm Made Flesh", hp: 2200, radius: 1.8, height: 3, speed: 3.2, color: "#ffcf5a" },
+  tyrant: { name: "The Storm Tyrant", title: "The Storm Made Flesh", hp: 2200, radius: 1.8, height: 3, speed: 3.2, color: "#ffcf5a", hint: "hide behind pillars, jump the shockwaves", tip: "Hide behind the pillars from its boulders, jump its shockwaves, and get out of the red circles." },
+  // Trial VIII: a dragon that circles overhead and swoops; Trial IX: a
+  // necromancer that teleports and raises the dead. Fought like the Tyrant.
+  wyrm: { name: "The Frost Wyrm", title: "Wings of the Long Winter", hp: 2600, radius: 2.4, height: 2.2, speed: 0, color: "#bfeeff", hint: "pillars stop its breath; hit it when it lands", tip: "Ice pillars stop its frost breath. Get out of the circles, and when it swoops down, that's your chance up close." },
+  lich: { name: "The Lich Sovereign", title: "King of the Hollow Dead", hp: 2400, radius: 1.3, height: 2.8, speed: 0, color: "#9a7bff", hint: "it blinks: keep moving, kill the dead", tip: "It blinks around, so don't stay put. Jump its death rings, get out of the circles, and deal with the wolves it raises." },
 };
 
 // The Storm Tyrant (Trial VII). It walks after the nearest fighter and gets

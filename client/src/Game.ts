@@ -38,6 +38,7 @@ import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
 import { Royale } from "./royale/Royale.ts";
+import { BOSSES } from "../../shared/src/bosses.ts";
 import { BossView } from "./bosses/BossView.ts";
 import { CtfView } from "./ctf/CtfView.ts";
 import { ServerClock } from "./ServerClock.ts";
@@ -254,6 +255,7 @@ export class Game {
     // Trial VII: the arena's combat, plus the boss.
     if (room.mode === "boss" && level.bossFight) {
       this.bossView = new BossView(this.scene, hud, this.clock, level.bossFight.boss, level.bossFight.home);
+      if (this.royale) this.royale.hud.bossHint = BOSSES[level.bossFight.boss].hint ?? this.royale.hud.bossHint;
       if (chapterForTrial(room.id)) this.story = new StoryCard(hud);
     }
     if (room.mode === "parkour" && level.course?.tasks?.length) {
