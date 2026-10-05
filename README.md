@@ -413,8 +413,8 @@ text in `shared/src/abilityInfo.ts`.
 |---|---|
 | **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
 | **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no Wizard/Rogue/Cleric abilities), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
-| **Druid** | **Stone Golem** (a golem fights for you), **Swarm** (three slimes), **Barkskin** (half damage taken and healing 6/s) |
-| **Monk** | **Windstep** (much faster for a while), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |
+| **Druid** | **Call Golem** (a stone golem fights for you), **Slime Swarm** (three slimes), **Barkskin** (half damage taken and healing 6/s) |
+| **Monk** | **Wind Step** (50% faster for 4 s for a while), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |
 | **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (a high leap, then 9 s of very slow falling and 80% more speed), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
 
 Being thrown (Shockwave, Tornado, Chain Pull, the pit's drag) is a "knock"
@@ -472,8 +472,8 @@ The **Druid** fights with beasts: **Call Wolf** (E) brings a shadow wolf
 that fights for you (a green ring under it; it hunts your enemies and wild
 monsters, never you or your team), and **Entangle** (R) roots a 4 m circle
 up to 20 m away (slowed to 30%, 8 damage a second). At most three beasts at
-once; they go back to the wild when you die or change class. The **Monk** is
-the fastest class: **Flurry** (E) dashes 10 m and hits the first enemy for
+once (a Slime Swarm can take you to five); they go back to the wild when you die or change class. The **Monk** is
+the fastest class: **Flurry Dash** (E) dashes 10 m and hits the first enemy for
 22, **Inner Peace** (R) heals 30 and shakes off slows, and Null Zones don't
 stop a Monk. Bots don't pick either (you can give them the class in the Esc
 panel). Check script: `druid-monk-check`.
