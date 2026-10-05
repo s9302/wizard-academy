@@ -130,7 +130,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   guard: {
     name: "Guard Hand",
     kind: "shield",
-    melee: { kind: "melee", damage: 9, reach: 2.1, arcDeg: 80, cooldownMs: 400 },
+    melee: { kind: "melee", damage: 6, reach: 2.1, arcDeg: 80, cooldownMs: 400 },
     block: 0.5,
     blockArcDeg: 360,
   },
