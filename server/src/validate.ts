@@ -70,6 +70,11 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "ready":
       return { t: "ready" };
+    case "unstuck":
+      return { t: "unstuck" };
+    case "chaseMap":
+      if (typeof msg.map !== "string" || !ROOM_PATTERN.test(msg.map)) return null;
+      return { t: "chaseMap", map: msg.map };
     case "mode":
       if (msg.mode !== "ffa" && msg.mode !== "teams") return null;
       return { t: "mode", mode: msg.mode };

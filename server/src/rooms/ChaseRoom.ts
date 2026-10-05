@@ -16,6 +16,8 @@ import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
 import { ChaseBot } from "../bots/ChaseBot.ts";
 import type { BotPeer } from "../Connection.ts";
+import { CHASE_MAPS } from "../../../shared/src/levels/chaseMaps.ts";
+import { LEVELS } from "../../../shared/src/levels/index.ts";
 import type { Player } from "./Room.ts";
 import { navGridFor, RoundRoom, SCALE } from "./RoundRoom.ts";
 
@@ -24,14 +26,55 @@ const START_GRACE_MS = 3_000 * SCALE; // chasers can't tag right away: runners s
 
 const HISTORY_MS = 400; // how far back a tag may "see" (lag compensation)
 const RANGE_SLACK = 0.3; // meters, for rounding and timing
+const UNSTUCK_COOLDOWN_MS = 10_000; // the Respawn button (R), per player
 
 export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
   protected chasers = new Set<number>(); // player ids
   private canTagAt = new Map<number, number>(); // per chaser: no tagging before this time
   private history = new Map<number, { time: number; p: Vec3 }[]>();
+  private nextMap: string; // the map for the next round (anyone can pick it)
+  private unstuckAt = new Map<number, number>();
 
   constructor(info: RoomInfo, level: Level) {
     super(info, level);
+    this.nextMap = level.id;
+  }
+
+  // ---- Maps and respawning ----
+
+  private mapsMsg() {
+    return { t: "chaseMaps" as const, maps: CHASE_MAPS, current: this.level.id, next: this.nextMap };
+  }
+
+  private pickMap(player: Player, map: string): void {
+    if (player.conn.isBot || !CHASE_MAPS.includes(map) || !LEVELS[map] || map === this.nextMap) return;
+    this.nextMap = map;
+    const when = this.state === "playing" || this.state === "countdown" ? "Next round" : "The next round";
+    this.broadcast({ t: "announce", text: `${player.conn.name} picked ${LEVELS[map].name}. ${when} is played there.` });
+    this.broadcast(this.mapsMsg());
+  }
+
+  // Just before the countdown: move to the picked map (everyone loads it).
+  protected override beforeCountdown(): void {
+    const level = LEVELS[this.nextMap];
+    if (!level || level === this.level) return;
+    this.level = level;
+    this.history.clear();
+    for (const bot of this.bots.values()) bot.setGrid(navGridFor(level));
+    this.broadcast({ t: "arena", levelId: level.id });
+    this.broadcast(this.mapsMsg());
+  }
+
+  // Stuck somewhere? Back to a spawn point (every 10 s at most).
+  private unstuck(player: Player): void {
+    const now = Date.now();
+    if (player.conn.isBot || now < (this.unstuckAt.get(player.conn.id) ?? 0)) {
+      player.conn.send({ t: "announce", text: "You can respawn again in a few seconds." });
+      return;
+    }
+    this.unstuckAt.set(player.conn.id, now + UNSTUCK_COOLDOWN_MS);
+    const points = this.level.spawnPoints ?? [this.level.spawn];
+    this.teleport(player, points[Math.floor(Math.random() * points.length)]);
   }
 
   // ---- What each mode decides ----
@@ -90,6 +133,8 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
 
   protected override onJoinedRound(player: Player): void {
     const now = Date.now();
+    player.conn.send({ t: "arena", levelId: this.level.id });
+    player.conn.send(this.mapsMsg());
     if (this.state === "playing" && this.lateJoinerIsChaser()) {
       this.makeChaser(player.conn.id, now, START_GRACE_MS);
       this.broadcastChasers();
@@ -101,6 +146,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
   protected override onLeftRound(player: Player): void {
     const id = player.conn.id;
     this.history.delete(id);
+    this.unstuckAt.delete(id);
     if (!this.chasers.has(id)) return;
     this.removeChaser(id);
     // The last chaser left mid-round: hand the role to a random runner.
@@ -124,6 +170,8 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
 
   protected override onRoundMessage(player: Player, msg: ClientMsg): void {
     if (msg.t === "tag") this.handleTag(player, msg.target);
+    else if (msg.t === "chaseMap") this.pickMap(player, msg.map);
+    else if (msg.t === "unstuck") this.unstuck(player);
   }
 
   // ---- Bots ----

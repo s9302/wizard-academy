@@ -1,4 +1,4 @@
-// Maps for tag and infection, built with the arenas' kit: several levels to
+// Maps for tag and infection (CHASE_MAPS), built with the arenas' kit: several levels to
 // run up and over (ramps everywhere a bot needs to go; ladders, jump pads and
 // teleporters as players' shortcuts), and pits to keep out of (fall in and
 // you're back at a spawn point).
@@ -235,5 +235,151 @@ function moonlitGraveyard(): Level {
   return k.level("graveyard", "The Moonlit Graveyard", "large", "night", 46);
 }
 
+// ---------------- Frostpeak Harbor (64 x 64 m) ----------------
+
+// A harbor on a cold morning. The southern half is open sea (void: fall in
+// and you're back at a spawn point), crossed by three long piers and a moored
+// ship you can board. Warehouses on the quay have ramps and ladders to their
+// roofs, linked by a footbridge; a crane stands tall over the docks; a
+// lighthouse on the breakwater is one end of a teleporter.
+function frostpeakHarbor(): Level {
+  const k = new ArenaKit(32, "#9c9384", STONE_DARK, 5);
+  const SEA = "void" as const;
+  const W = 3.5; // warehouse roofs
+  // The sea: everything south of z = 6, except piers and the breakwater.
+  k.pit(-22, 19, 20, 26, SEA).pit(0, 19, 8, 26, SEA).pit(22, 19, 20, 26, SEA);
+  // Piers (a hand's width above the water), and the ship moored at the east one.
+  for (const x of [-14, 0, 14]) k.slab(x, 19, 4, 26, 0, 0.3, PLANK);
+  k.slab(21, 20, 6, 16, 0, 1.2, WOOD); // the ship's deck
+  k.rampX(16, 18, 20, 2.5, 0.3, 1.2, PLANK); // gangplank from the pier
+  k.slab(21, 26, 0.5, 0.5, 1.2, 7, WOOD); // the mast
+  k.wall(18.2, 20, 0.4, 16, 0.8, WOOD, 1.2).wall(23.8, 20, 0.4, 16, 0.8, WOOD, 1.2);
+  // The breakwater along the south wall, with the lighthouse at its west end.
+  k.slab(-6, 30, 40, 3, 0, 0.6, STONE);
+  k.block(-26, 29, 5, 5, 8, "#e8e4dc");
+  k.props.push({ kind: "crystal", pos: [-26, 9.5, 29], color: "#ffe58a", scale: 0.9 });
+
+  // Warehouses on the quay.
+  for (const x of [-20, 20]) {
+    k.block(x, -18, 12, 8, W, PLANK);
+    k.rampZ(-18 + 4 + W * 1.7, -14, x - Math.sign(x) * 3, 3, 0, W, WOOD);
+    k.ladder(x + Math.sign(x) * 4, -22, W, Math.PI);
+  }
+  k.bridge(0, -18, 28.2, 2.5, W, WOOD); // the footbridge between their roofs
+  // The crane: a tall tower with a ladder and a high deck.
+  k.block(6, -4, 3, 3, 7, STONE_DARK);
+  k.ladder(6, -2.5, 7, 0);
+  k.slab(9.5, -4, 4, 2, 6.7, 7, WOOD);
+  // Crates for cover.
+  for (const [x, z, h] of [
+    [-6, -6, 1.2],
+    [-8, -4, 2.2],
+    [10, 2, 1.2],
+    [-26, -4, 1.2],
+    [26, 2, 2.2],
+    [-2, 2, 1.2],
+  ]) {
+    k.block(x, z, 1.8, 1.8, h, WOOD);
+  }
+  k.teleporterPair([-24, 0.6, 30], [0, 0, -26], "#5ac8ff");
+  k.pad(-20, -11, 14).pad(20, -11, 14);
+  for (const [x, z] of [
+    [-24, -6],
+    [24, -6],
+    [-10, -10],
+    [10, -10],
+    [0, -12],
+    [-14, 8],
+    [14, 8],
+    [0, 4],
+  ]) {
+    k.spawn(x, z);
+  }
+  for (const [x, z] of [
+    [-14, 6.5],
+    [14, 6.5],
+    [0, -28],
+  ]) {
+    k.props.push({ kind: "torch", pos: [x, 0, z], light: true });
+  }
+  return k.level("harbor", "Frostpeak Harbor", "large", "day", 46);
+}
+
+// ---------------- Canopy Village (60 x 60 m) ----------------
+
+// A village in the trees over a lava-flecked swamp. Huts on stilts (4 m)
+// ring a great tree; bridges link the huts; ramps climb from the ground to
+// two of them, ladders to the rest; the great tree's crown (8 m) is reached
+// by a ramp from a hut, or a jump pad. A teleporter links opposite huts.
+function canopyVillage(): Level {
+  const k = new ArenaKit(30, "#5a7d45", "#3d5a32", 5);
+  const H = 4; // hut floors
+  const C = 8; // the great tree's crown
+  // Swamp lava pools between the huts.
+  k.pit(-12, 0, 5, 7, "lava").pit(12, 0, 5, 7, "lava").pit(0, 13, 7, 4, "lava");
+  // The great tree: a fat trunk and a platform in its crown.
+  k.block(0, 0, 4, 4, C, WOOD);
+  k.slab(0, 0, 10, 10, C - 0.4, C, PLANK);
+  k.props.push({ kind: "tree", pos: [0, C, 0], scale: 1.6, color: "#3f8a4a" });
+  // Huts on stilts at the corners of a square, each with a roof.
+  const huts: [number, number][] = [
+    [-16, -16],
+    [16, -16],
+    [-16, 16],
+    [16, 16],
+  ];
+  for (const [x, z] of huts) {
+    k.slab(x, z, 7, 7, H - 0.4, H, PLANK);
+    for (const [px, pz] of [
+      [-3, -3],
+      [3, -3],
+      [-3, 3],
+      [3, 3],
+    ]) {
+      k.slab(x + px, z + pz, 0.5, 0.5, 0, H - 0.4, WOOD);
+    }
+    k.props.push({ kind: "cone", pos: [x, H + 3.2, z], size: [5, 2.6], color: ROOF });
+    k.wall(x, z - 3.3, 7, 0.3, 0.8, WOOD, H);
+  }
+  // Rope bridges between neighbouring huts (west, east, north sides).
+  k.bridge(-16, 0, 2.2, 25, H, WOOD).bridge(16, 0, 2.2, 25, H, WOOD).bridge(0, -16, 25, 2.2, H, WOOD);
+  // Ramps from the ground up to the two southern huts.
+  k.rampZ(16 + 3.5 + H * 1.7, 19.5, -16, 3, 0, H, PLANK).rampZ(16 + 3.5 + H * 1.7, 19.5, 16, 3, 0, H, PLANK);
+  // Ladders up to the northern huts.
+  k.ladder(-16, -19.5, H, 0).ladder(16, -19.5, H, 0);
+  // From the north bridge's middle, a ramp up to the great tree's crown.
+  k.rampZ(-15, -5, 0, 2.5, H, C, PLANK);
+  k.pad(5.5, 5.5, 18).pad(-5.5, 5.5, 18);
+  k.teleporterPair([-16, H, -16], [16, H, 16], "#c58fff");
+  for (const [x, z, s] of [
+    [-26, 0, 1.1],
+    [26, 0, 1],
+    [0, 26, 1],
+    [-24, 24, 0.9],
+    [24, -24, 0.9],
+  ]) {
+    k.tree(x, z, s);
+  }
+  for (const [x, z] of [
+    [-6, -8],
+    [6, -8],
+    [-22, 6],
+    [22, 6],
+    [-6, 22],
+    [6, 22],
+    [0, -24],
+    [-24, -6],
+  ]) {
+    k.spawn(x, z);
+  }
+  for (const [x, z] of huts) k.props.push({ kind: "torch", pos: [x + 2.5, H, z + 2.5], light: true });
+  return k.level("canopy", "Canopy Village", "large", "dusk", 44);
+}
+
 export const clocktower = clocktowerGardens();
 export const graveyard = moonlitGraveyard();
+export const harbor = frostpeakHarbor();
+export const canopy = canopyVillage();
+
+// The maps tag and infection can be played on (picked in the Esc panel).
+export const CHASE_MAPS = ["clocktower", "graveyard", "harbor", "canopy", "courtyard"];

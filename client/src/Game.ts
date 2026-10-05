@@ -61,8 +61,8 @@ const HELP: Record<string, string> = {
   // (V third person is added to every mode in applyPerks)
   hub: "E use",
   parkour: "R restart run",
-  tag: "Click tag",
-  infection: "Click curse",
+  tag: "Click tag \u00b7 R respawn",
+  infection: "Click curse \u00b7 R respawn",
   royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
   boss: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
 };
@@ -200,7 +200,10 @@ export class Game {
       this.parkour = new ParkourHud(hud, this.clock, level.course.checkpoints.length, room.name);
       if (chapterForTrial(room.id)) this.story = new StoryCard(hud);
     } else if (room.mode === "tag" || room.mode === "infection") {
-      this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }));
+      this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }), {
+        onMap: (map) => this.net.send({ t: "chaseMap", map }),
+        onUnstuck: () => this.net.send({ t: "unstuck" }),
+      });
     } else if (room.mode === "royale" || room.mode === "boss") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
@@ -490,6 +493,16 @@ export class Game {
         if (this.chase && msg.state === "ended") sound.play("bell", { volume: 0.6 });
         this.chase?.round(msg.state, msg.endsAt);
         break;
+      case "arena": {
+        // Tag and infection switch maps between rounds (the arena's own
+        // switches go through Royale).
+        const next = LEVELS[msg.levelId];
+        if (next && next !== this.level) this.loadLevel(next);
+        break;
+      }
+      case "chaseMaps":
+        this.chase?.maps(msg.maps, msg.current, msg.next);
+        break;
       case "chasers":
         if (msg.ids.includes(this.myId) && !this.chase?.isChaser) sound.fx("sting");
         this.remotes.setChasers(msg.ids, this.room.mode === "tag" ? "it" : "cursed");
@@ -668,6 +681,7 @@ export class Game {
     window.clearTimeout(this.levelUpTimer);
 
     this.royale?.dispose();
+    this.chase?.dispose();
     this.trial?.dispose();
     this.bossView?.dispose();
     this.npcs?.dispose();
@@ -835,6 +849,7 @@ export class Game {
     // R: restart a trial run; in the battle royale, E and R are abilities.
     const r = this.input.consumeRestart();
     if (r && this.parkour) this.net.send({ t: "restart" });
+    if (r && this.chase) this.net.send({ t: "unstuck" }); // R: respawn (tag and infection)
     if (this.royale) {
       const e = this.input.consumeInteract();
       if (e || r) {

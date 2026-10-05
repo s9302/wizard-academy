@@ -5,6 +5,7 @@
 import type { RoundState } from "../../shared/src/protocol.ts";
 import type { RoomMode } from "../../shared/src/rooms.ts";
 import { BotControls } from "./BotControls.ts";
+import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { ServerClock } from "./ServerClock.ts";
 
 function el(tag: string, id: string, parent: HTMLElement): HTMLElement {
@@ -33,11 +34,35 @@ export class ChaseHud {
   private chaserCount = 0;
   private total = 0;
   private bannerTimer: number | undefined;
+  private extras: HTMLElement; // in the pause panel: Respawn, and the map picker
+  private mapBox: HTMLElement;
+  private onMap: (map: string) => void;
 
   // onBots: ask the server to add or remove a bot.
-  constructor(hud: HTMLElement, clock: ServerClock, mode: RoomMode, roomName: string, onBots: (action: "add" | "remove") => void) {
+  // onMap: pick the next round's map; onUnstuck: back to a spawn point (also R).
+  constructor(
+    hud: HTMLElement,
+    clock: ServerClock,
+    mode: RoomMode,
+    roomName: string,
+    onBots: (action: "add" | "remove") => void,
+    extra: { onMap: (map: string) => void; onUnstuck: () => void },
+  ) {
     this.clock = clock;
     this.mode = mode;
+    this.onMap = extra.onMap;
+    this.extras = document.createElement("div");
+    this.extras.id = "chase-extras";
+    this.extras.onclick = (e) => e.stopPropagation();
+    const respawn = document.createElement("button");
+    respawn.type = "button";
+    respawn.className = "secondary";
+    respawn.textContent = "Respawn (R): stuck? back to a spawn point";
+    respawn.onclick = () => extra.onUnstuck();
+    this.mapBox = document.createElement("div");
+    this.mapBox.id = "chase-maps";
+    this.extras.append(respawn, this.mapBox);
+    document.querySelector("#overlay .panel")!.appendChild(this.extras);
 
     // Bot controls live in the pause panel (press Esc), where the mouse is free.
     this.bots = new BotControls(onBots);
@@ -48,6 +73,27 @@ export class ChaseHud {
     this.bannerEl = el("div", "banner", hud);
     this.resultsEl = el("div", "results", hud);
     this.resultsEl.hidden = true;
+  }
+
+  // The map picker: one button per map; the next round's is highlighted.
+  maps(list: string[], current: string, next: string): void {
+    this.mapBox.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "picker-title";
+    title.textContent = next === current ? "Map" : `Map (next round: ${LEVELS[next]?.name ?? next})`;
+    this.mapBox.appendChild(title);
+    for (const id of list) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = id === next ? "on" : "";
+      b.textContent = `${LEVELS[id]?.name ?? id}${id === current ? " (now)" : ""}`;
+      b.onclick = () => this.onMap(id);
+      this.mapBox.appendChild(b);
+    }
+  }
+
+  dispose(): void {
+    this.extras.remove();
   }
 
   get isChaser(): boolean {
