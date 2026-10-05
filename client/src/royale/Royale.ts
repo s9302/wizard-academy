@@ -308,6 +308,9 @@ export class Royale {
       case "lineup":
         this.hud.lineup(msg.players, msg.mode, msg.next, me);
         return true;
+      case "respawnIn":
+        this.hud.respawnIn(msg.ms);
+        return true;
       case "readyState":
         this.hud.readyState(msg.ids.length, msg.needed, msg.ids.includes(me), msg.on);
         return true;

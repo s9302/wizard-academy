@@ -291,7 +291,7 @@ export class Boss {
     const grid = this.host.grid?.();
     if (grid && dist(near.p, this.p) > 4) {
       if (now >= this.replanAt || !this.path.length) {
-        this.path = grid.findPath([this.p[0], this.p[2]], [near.p[0], near.p[2]]) ?? [];
+        this.path = grid.findPath([this.p[0], this.p[2]], [near.p[0], near.p[2]], false) ?? [];
         this.replanAt = now + 600;
       }
       const speed = def.speed * (phase === 3 ? 1.3 : 1);

@@ -17,6 +17,14 @@ const DROP = 3.0; // the most a bot will drop down between cells
 
 type Vec2 = [number, number]; // x, z
 
+// Shortcuts besides walking (bots use them; monsters and bosses don't): up
+// and down a ladder, launched by a jump pad onto the ledge it serves, or
+// through a teleporter. A waypoint reached by one carries its kind (and the
+// floor height there).
+export type LinkKind = "ladder" | "pad" | "teleport";
+export type Waypoint = Vec2 & { link?: LinkKind; y?: number };
+type Link = { to: number; kind: LinkKind };
+
 // Rotate a vector by euler angles the way three.js does (order XYZ:
 // matrix = Rx * Ry * Rz, so Rz applies first).
 function rotate(v: [number, number, number], rot: [number, number, number]): [number, number, number] {
@@ -33,7 +41,11 @@ function topAt(box: Box, x: number, z: number): number | null {
   const [w, h, d] = box.size;
   const [cx, cy, cz] = box.pos;
   if (!box.rot) {
-    if (Math.abs(x - cx) > w / 2 || Math.abs(z - cz) > d / 2) return null;
+    // Thinner than a cell (a fence, a parapet): count it as a cell thick, so
+    // no row of cell centers can slip past it.
+    const hw = Math.max(w / 2, CELL * 0.51);
+    const hd = Math.max(d / 2, CELL * 0.51);
+    if (Math.abs(x - cx) > hw || Math.abs(z - cz) > hd) return null;
     return cy + h / 2;
   }
   // Rotated box (a ramp): intersect a vertical line with the top face's plane.
@@ -65,6 +77,7 @@ export class NavGrid {
   // closed until they're gone.
   private closed: Uint8Array;
   private obstacles = new Map<number, number[]>();
+  private links = new Map<number, Link[]>();
 
   constructor(level: Level) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -125,8 +138,11 @@ export class NavGrid {
       }
     }
 
-    // Walkable = reachable on foot from the spawn (flood fill), so goals are
-    // never on top of walls or pillars.
+    this.buildLinks(level, nearWall);
+
+    // Walkable = reachable from the spawn (flood fill: on foot, or by a
+    // ladder, jump pad or teleporter), so goals are never on top of walls
+    // or pillars nobody can get to.
     const start = this.cellAt(level.spawn[0], level.spawn[2]);
     const queue = start >= 0 ? [start] : [];
     if (start >= 0) this.walkable[start] = 1;
@@ -138,8 +154,87 @@ export class NavGrid {
           queue.push(j);
         }
       }
+      for (const l of this.links.get(i) ?? []) {
+        if (!this.walkable[l.to]) {
+          this.walkable[l.to] = 1;
+          queue.push(l.to);
+        }
+      }
     }
     for (let i = 0; i < this.walkable.length; i++) if (this.walkable[i]) this.walkableCells.push(i);
+  }
+
+  // A standable cell near (x, z) at about height y (within a few cells; not
+  // hugging a wall), or -1.
+  private standAt(x: number, z: number, y: number, nearWall: Uint8Array): number {
+    let best = -1;
+    let bestD = Infinity;
+    const c0 = Math.floor((x - this.minX) / CELL);
+    const r0 = Math.floor((z - this.minZ) / CELL);
+    for (let dr = -4; dr <= 4; dr++) {
+      for (let dc = -4; dc <= 4; dc++) {
+        const c = c0 + dc;
+        const r = r0 + dr;
+        if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) continue;
+        const i = r * this.cols + c;
+        if (nearWall[i] || Number.isNaN(this.floor[i]) || Math.abs(this.floor[i] - y) > 0.7) continue;
+        const d = dr * dr + dc * dc;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+    }
+    return best;
+  }
+
+  private addLink(from: number, to: number, kind: LinkKind): void {
+    if (from < 0 || to < 0 || from === to) return;
+    const list = this.links.get(from) ?? [];
+    list.push({ to, kind });
+    this.links.set(from, list);
+  }
+
+  private buildLinks(level: Level, nearWall: Uint8Array): void {
+    // Ladders: both ways, between the foot and the top.
+    for (const l of level.ladders ?? []) {
+      const fx = -Math.sin(l.yaw); // toward the wall
+      const fz = -Math.cos(l.yaw);
+      const foot = this.standAt(l.pos[0] - fx * 0.8, l.pos[2] - fz * 0.8, l.pos[1], nearWall);
+      const top = this.standAt(l.pos[0] + fx * 0.9, l.pos[2] + fz * 0.9, l.pos[1] + l.height, nearWall);
+      this.addLink(foot, top, "ladder");
+      this.addLink(top, foot, "ladder");
+    }
+    // Jump pads: up onto the nearest ledge the launch can reach.
+    for (const pad of level.jumpPads ?? []) {
+      const from = this.standAt(pad.pos[0], pad.pos[2], pad.pos[1], nearWall);
+      if (from < 0) continue;
+      const apex = (pad.power * pad.power) / 40; // m: v^2 / 2g with g = 20
+      const base = this.floor[from];
+      let best = -1;
+      let bestD = Infinity;
+      const [px, pz] = this.center(from);
+      for (let dr = -10; dr <= 10; dr++) {
+        for (let dc = -10; dc <= 10; dc++) {
+          const i = this.cellAt(px + dc * CELL, pz + dr * CELL);
+          if (i < 0 || nearWall[i] || Number.isNaN(this.floor[i])) continue;
+          const rise = this.floor[i] - base;
+          const d = Math.hypot(dc, dr) * CELL;
+          if (rise < CLIMB + 0.2 || rise > apex - 0.3 || d > 5) continue;
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        }
+      }
+      this.addLink(from, best, "pad");
+    }
+    // Teleporters: from the pad to where it puts you.
+    for (const t of level.teleporters ?? []) {
+      const from = this.standAt(t.pos[0], t.pos[2], t.pos[1], nearWall);
+      const to = this.standAt(t.to[0], t.to[2], t.to[1] - 1, nearWall);
+      this.addLink(from, to, "teleport");
+    }
   }
 
   private center(i: number): Vec2 {
@@ -255,7 +350,8 @@ export class NavGrid {
 
   // A* search over the grid. Returns waypoints (cell centers, simplified to
   // straight runs), or null if there's no way there.
-  findPath(from: Vec2, to: Vec2): Vec2[] | null {
+  // useLinks: false for monsters and bosses (they walk everywhere).
+  findPath(from: Vec2, to: Vec2, useLinks = true): Waypoint[] | null {
     const start = this.nearestWalkable(from[0], from[1]);
     const goal = this.nearestWalkable(to[0], to[1]);
     if (start < 0 || goal < 0) return null;
@@ -268,6 +364,7 @@ export class NavGrid {
     };
     const cost = new Map<number, number>([[start, 0]]);
     const cameFrom = new Map<number, number>();
+    const via = new Map<number, LinkKind>(); // reached by a link (not a step)
     const open = new MinHeap();
     open.push(start, heuristic(start));
     const closed = new Set<number>();
@@ -285,6 +382,20 @@ export class NavGrid {
         if (g < (cost.get(j) ?? Infinity)) {
           cost.set(j, g);
           cameFrom.set(j, i);
+          via.delete(j);
+          open.push(j, g + heuristic(j));
+        }
+      }
+      if (!useLinks) continue;
+      for (const l of this.links.get(i) ?? []) {
+        const j = l.to;
+        if (!this.open(j) || closed.has(j)) continue;
+        const [jx, jz] = this.center(j);
+        const g = cost.get(i)! + (l.kind === "teleport" ? 2 : Math.hypot(jx - ix, jz - iz) + 2);
+        if (g < (cost.get(j) ?? Infinity)) {
+          cost.set(j, g);
+          cameFrom.set(j, i);
+          via.set(j, l.kind);
           open.push(j, g + heuristic(j));
         }
       }
@@ -294,7 +405,22 @@ export class NavGrid {
     const cells: number[] = [goal];
     while (cells[cells.length - 1] !== start) cells.push(cameFrom.get(cells[cells.length - 1])!);
     cells.reverse();
-    return this.simplify(cells);
+    // Simplify each stretch between links; a waypoint reached by a link says so.
+    const out: Waypoint[] = [];
+    let segStart = 0;
+    for (let k = 1; k <= cells.length; k++) {
+      if (k < cells.length && !via.has(cells[k])) continue;
+      const seg = cells.slice(segStart, k);
+      if (segStart > 0) {
+        const wp = this.center(seg[0]) as Waypoint;
+        wp.link = via.get(seg[0]);
+        wp.y = this.floor[seg[0]];
+        out.push(wp);
+      }
+      if (seg.length > 1) out.push(...this.simplify(seg));
+      segStart = k;
+    }
+    return out;
   }
 
   // Drop waypoints that a straight walk can skip (same floor height along
@@ -312,10 +438,17 @@ export class NavGrid {
     return out;
   }
 
+  // Can you walk straight from a to b on one floor level (no gaps, pits or walls)?
+  clearLine(a: Vec2, b: Vec2): boolean {
+    const i = this.cellAt(a[0], a[1]);
+    const j = this.cellAt(b[0], b[1]);
+    return i >= 0 && j >= 0 && this.open(i) && this.straightWalk(i, j);
+  }
+
   private straightWalk(a: number, b: number): boolean {
     const [ax, az] = this.center(a);
     const [bx, bz] = this.center(b);
-    const steps = Math.ceil(Math.hypot(bx - ax, bz - az) / (CELL / 2));
+    const steps = Math.ceil(Math.hypot(bx - ax, bz - az) / (CELL / 4)); // fine enough not to skip a cell's corner
     const base = this.floor[a];
     for (let s = 1; s <= steps; s++) {
       const i = this.cellAt(ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps);

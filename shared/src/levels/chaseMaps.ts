@@ -349,7 +349,7 @@ function canopyVillage(): Level {
   k.ladder(-16, -19.5, H, 0).ladder(16, -19.5, H, 0);
   // From the north bridge's middle, a ramp up to the great tree's crown.
   k.rampZ(-15, -5, 0, 2.5, H, C, PLANK);
-  k.pad(5.5, 5.5, 18).pad(-5.5, 5.5, 18);
+  k.pad(5.5, 5.5, 19).pad(-5.5, 5.5, 19);
   k.teleporterPair([-16, H, -16], [16, H, 16], "#c58fff");
   for (const [x, z, s] of [
     [-26, 0, 1.1],

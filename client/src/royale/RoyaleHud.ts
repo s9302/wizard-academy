@@ -52,6 +52,8 @@ export class RoyaleHud {
   private picker: HTMLElement;
   private boss: boolean;
   private ctf: boolean;
+  private respawnEl!: HTMLElement;
+  private respawnAt = 0; // performance.now(): knocked out, back then (capture the flag)
   private actions: { onMode: (mode: RoyaleMode) => void; onPickTeam: (team: 0 | 1 | null) => void; onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void };
   private match: HTMLElement; // left column: ready, mode, teams, arena vote, monsters
   private modeBox: HTMLElement;
@@ -185,6 +187,8 @@ export class RoyaleHud {
     this.resultsEl.hidden = true;
 
     this.calloutEl = el("div", "callout", hud);
+    this.respawnEl = el("div", "respawn-timer", hud);
+    this.respawnEl.hidden = true;
     this.stealthEl = el("div", "stealth-note", hud);
     this.stealthEl.textContent = "Hidden";
     this.voteCard = el("div", "vote-card", hud);
@@ -498,6 +502,11 @@ export class RoyaleHud {
     }
   }
 
+  // Knocked out (capture the flag): count down to coming back.
+  respawnIn(ms: number): void {
+    this.respawnAt = performance.now() + ms;
+  }
+
   // Who has voted to start the next round.
   readyState(count: number, needed: number, mine: boolean, on: boolean): void {
     this.readyVotes = { count, needed, mine, on };
@@ -630,6 +639,9 @@ export class RoyaleHud {
   // swap left. inStorm: outside the circle.
   update(readyIn: number, swapIn: number, inStorm: boolean): void {
     const now = this.clock.now();
+    const back = this.respawnAt - performance.now();
+    this.respawnEl.hidden = back <= 0 || this.amAlive;
+    if (!this.respawnEl.hidden) this.respawnEl.textContent = `Respawning in ${Math.ceil(back / 1000)}\u2026`;
     const left = this.endsAt === null ? 0 : this.endsAt - now;
     switch (this.state) {
       case "waiting": {

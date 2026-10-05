@@ -114,7 +114,7 @@ export class CtfRoom extends RoyaleRoom {
     this.dropFlagOf(target);
     if (this.state === "playing") {
       this.comeBackAt.set(target.conn.id, Date.now() + RESPAWN_MS);
-      if (!target.conn.isBot) target.conn.send({ t: "announce", text: `Back at your keep in ${RESPAWN_MS / 1000} s.` });
+      if (!target.conn.isBot) target.conn.send({ t: "respawnIn", ms: RESPAWN_MS });
     }
   }
 
@@ -189,6 +189,39 @@ export class CtfRoom extends RoyaleRoom {
       this.broadcastCtf();
       if (!player.conn.isBot) this.giveXp(player, 25, "Flag captured");
     }
+  }
+
+  // ---- Bots: what each one is for ----
+
+  // Carrying the enemy flag: home (urgent). Your own flag dropped: return it
+  // (urgent). Your own flag carried off: hunt the carrier. Otherwise half
+  // the team attacks (the enemy flag) and half defends (near your stand).
+  protected override botObjective(me: Player): { p: Vec3; urgent: boolean } | null {
+    const team = this.teamOf(me.conn.id);
+    if (team === undefined || this.state !== "playing" || !this.alive.has(me.conn.id)) return null;
+    const mine = this.flags[team];
+    const theirs = this.flags[1 - team];
+    if (theirs.carrier === me.conn.id) return { p: this.stands[team], urgent: true };
+    if (mine.state === "dropped") return { p: mine.p, urgent: true };
+    if (mine.state === "carried" && mine.carrier !== null) {
+      const carrier = this.players.get(mine.carrier);
+      if (carrier) return { p: carrier.p, urgent: true };
+    }
+    const teamBots = [...this.bots.keys()].filter((id) => this.teamOf(id) === team);
+    const attacker = teamBots.indexOf(me.conn.id) % 2 === 0;
+    if (attacker) {
+      // Escort a teammate carrying their flag, or go and take it.
+      if (theirs.state === "carried" && theirs.carrier !== null) {
+        const carrier = this.players.get(theirs.carrier);
+        if (carrier) return { p: carrier.p, urgent: false };
+      }
+      return { p: theirs.p, urgent: false };
+    }
+    // Defend: a spot between your stand and the middle, varying a little.
+    const stand = this.stands[team];
+    const toward = team === 0 ? 1 : -1;
+    const wobble = Math.sin(Date.now() / 4000 + me.conn.id) * 5;
+    return { p: [stand[0] + wobble, stand[1], stand[2] + toward * 6], urgent: false };
   }
 
   protected override onJoinedRound(player: Player): void {

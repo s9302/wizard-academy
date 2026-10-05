@@ -89,7 +89,7 @@ import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
 import { arenasOfSize } from "../../../shared/src/levels/arenas.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
-import type { Box, Level, Pit } from "../../../shared/src/levels/types.ts";
+import { type Box, inPit, type Level, type Pit } from "../../../shared/src/levels/types.ts";
 import { navGridFor, navGridIfBuilt, RoundRoom, SCALE } from "./RoundRoom.ts";
 
 const STORM_TICK_MS = 500; // storm damage is dealt twice a second (half the dps each time)
@@ -1231,6 +1231,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
           const floor = floorBelow(at[0], at[2], at[1], this.allBoxes());
           if (floor === null) continue;
           const spot: Vec3 = [at[0], floor + 0.95, at[2]];
+          if ((this.level.pits ?? []).some((pit) => inPit(spot, pit))) continue; // never into lava or the void
           if (!this.allBoxes().some((b) => boxTouchesPlayer(b, [spot[0], spot[1] + 0.05, spot[2]]))) to = spot;
         }
         if (!to) return "No room to step there.";
@@ -1841,12 +1842,18 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       slowed: (f?.slowedUntil ?? 0) > now,
       circles: this.safeCircles(now),
       pickups: this.pickupList(),
+      objective: this.botObjective(me),
     });
     this.moveBot(me, action.p, action.ry, now);
     if (action.hand) this.setHand(me, action.hand);
     if (action.cast) this.cast(me, { ...action.cast, o: eye(me.p), seq: 0 });
     if (action.attack) this.attack(me, eye(me.p), action.attack, 0);
     if (action.ability) this.ability(me, action.ability.slot, action.ability.d);
+  }
+
+  // A job for a bot besides fighting (CtfRoom: the flags). Default: none.
+  protected botObjective(_me: Player): { p: Vec3; urgent: boolean } | null {
+    return null;
   }
 
   // Who a bot fights: other fighters, and monsters that come close.

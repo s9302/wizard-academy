@@ -82,7 +82,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
   // drag them to you. Their own client moves them (a knock); bots are moved.
   private grapple(player: Player, d: [number, number, number]): void {
     const now = Date.now();
-    if (!this.grappleOn || player.conn.isBot || now < (this.grappleAt.get(player.conn.id) ?? 0)) return;
+    if (!this.grappleOn || now < (this.grappleAt.get(player.conn.id) ?? 0)) return;
     const from: Vec3 = [player.p[0], player.p[1] + EYE_HEIGHT, player.p[2]];
     const end: Vec3 = [from[0] + d[0] * CHAIN.range, from[1] + d[1] * CHAIN.range, from[2] + d[2] * CHAIN.range];
     let best: Player | null = null;
@@ -96,7 +96,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
       }
     }
     if (!best) {
-      player.conn.send({ t: "announce", text: "The grapple missed." });
+      if (!player.conn.isBot) player.conn.send({ t: "announce", text: "The grapple missed." });
       return;
     }
     this.grappleAt.set(player.conn.id, now + GRAPPLE_COOLDOWN_MS);
@@ -246,9 +246,11 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
       others: [...this.players.values()].filter((p) => p !== me),
       chasers: this.chasers,
       playing: this.state === "playing",
+      grapple: this.grappleOn,
     });
     this.moveBot(me, action.p, action.ry, now);
     if (action.tag !== null) this.handleTag(me, action.tag);
+    if (action.grapple) this.grapple(me, action.grapple);
   }
 
   private handleTag(tagger: Player, targetId: number): void {

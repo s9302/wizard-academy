@@ -519,6 +519,10 @@ body.spectating #royale-bottom { opacity: 0.4; }
 #class-picker #ability-picker button:disabled { opacity: 0.3; cursor: not-allowed; }
 #ability-picker .ability-names { font-size: 12px; opacity: 0.85; text-align: center; }
 
+/* Knocked out in capture the flag: a countdown in the middle of the screen. */
+#respawn-timer { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: 30px; font-weight: 800; color: #fff; text-shadow: 0 2px 6px #000; pointer-events: none; }
+#respawn-timer[hidden] { display: none; }
+
 /* Capture the flag: the score and flags, top middle under the round panel. */
 #ctf-score { position: absolute; top: 104px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 8px; background: rgba(0, 0, 0, 0.45); text-align: center; pointer-events: none; }
 #ctf-score .ctf-line { font-size: 20px; font-weight: 800; text-shadow: 0 1px 3px #000; }

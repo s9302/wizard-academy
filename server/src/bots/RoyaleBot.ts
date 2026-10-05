@@ -54,7 +54,12 @@ export type RoyaleView = {
   slowed: boolean; // hit by Frost Shard
   circles: { now: [number, number, number]; next: [number, number, number] } | null;
   pickups: PickupInfo[];
+  // A job besides fighting (capture the flag): go here. urgent: go even
+  // with enemies around (shooting on the way), e.g. carrying the flag home.
+  objective?: { p: Vec3; urgent: boolean } | null;
 };
+
+const OBJECTIVE_FIGHT_RANGE = 12; // m: closer enemies get fought on the way
 
 export type RoyaleAction = {
   p: Vec3;
@@ -117,9 +122,14 @@ export class RoyaleBot extends BotWalker {
     const target = this.pickTarget(view);
     const safe = this.safeGoal(view);
 
+    const objective = view.objective;
+    const fightFirst = target && flatDist(me.p, target.p) < OBJECTIVE_FIGHT_RANGE;
     if (safe) {
       // The storm comes first; still shoot on the way if someone's in sight.
       if (now >= this.replanAt || !this.path.length) this.planTo(safe, now, 1500);
+    } else if (objective && (objective.urgent || !fightFirst)) {
+      // The job (the flag): head there, shooting whoever's in sight on the way.
+      if (now >= this.replanAt || !this.path.length) this.planTo([objective.p[0], objective.p[2]], now, 900);
     } else if (target) {
       speed = FIGHT_SPEED;
       this.strafe(me, target, now);

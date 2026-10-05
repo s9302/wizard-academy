@@ -8,7 +8,8 @@
 
 import WebSocket from "ws";
 import { arena } from "../../shared/src/levels/arena.ts";
-import { courtyard } from "../../shared/src/levels/courtyard.ts";
+import { LEVELS } from "../../shared/src/levels/index.ts";
+import { findRoom } from "../../shared/src/rooms.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { NavGrid } from "../src/bots/NavGrid.ts";
 import { signIn } from "./signIn.ts";
@@ -35,7 +36,8 @@ async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
 }
 
 const cookie = await signIn(base, pin, "test_bots");
-const grids: Record<string, NavGrid> = { tag: new NavGrid(courtyard), infection: new NavGrid(courtyard), royale: new NavGrid(arena) };
+// Each room's own map (tag and infection each have one now).
+const grids: Record<string, NavGrid> = { tag: new NavGrid(LEVELS[findRoom("tag")!.levelId]), infection: new NavGrid(LEVELS[findRoom("infection")!.levelId]), royale: new NavGrid(arena) };
 
 class Client {
   ws: WebSocket;

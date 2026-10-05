@@ -280,7 +280,7 @@ export class Monsters {
 
   private plan(m: Monster, goal: Vec2, now: number): void {
     m.goal = goal;
-    m.path = this.host.grid().findPath([m.p[0], m.p[2]], goal) ?? [];
+    m.path = this.host.grid().findPath([m.p[0], m.p[2]], goal, false) ?? [];
     m.replanAt = now + REPLAN_MS * (0.8 + Math.random() * 0.4);
   }
 

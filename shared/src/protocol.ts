@@ -181,6 +181,8 @@ export type ChaseSettingsMsg = { t: "chaseSettings"; grapple: boolean };
 // stand, carried by someone, or dropped somewhere.
 export type CtfFlag = { state: "home" | "carried" | "dropped"; p: Vec3; carrier: number | null };
 export type CtfMsg = { t: "ctf"; score: [number, number]; flags: [CtfFlag, CtfFlag]; toWin: number };
+// To one player: you're knocked out, and back in this many ms (capture the flag).
+export type RespawnInMsg = { t: "respawnIn"; ms: number };
 // Who has voted to start the next round, and how many votes it needs.
 // on: false when the vote is switched off (tests).
 export type ReadyStateMsg = { t: "readyState"; ids: number[]; needed: number; on: boolean };
@@ -268,6 +270,7 @@ export type ServerMsg =
   | ChaseMapsMsg
   | ChaseSettingsMsg
   | CtfMsg
+  | RespawnInMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg
