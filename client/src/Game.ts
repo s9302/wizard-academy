@@ -203,6 +203,7 @@ export class Game {
       this.chase = new ChaseHud(hud, this.clock, room.mode, room.name, (action) => this.net.send({ t: "bots", action }), {
         onMap: (map) => this.net.send({ t: "chaseMap", map }),
         onUnstuck: () => this.net.send({ t: "unstuck" }),
+        onGrapple: (on) => this.net.send({ t: "chaseSetting", grapple: on }),
       });
     } else if (room.mode === "royale" || room.mode === "boss") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
@@ -503,6 +504,16 @@ export class Game {
       case "chaseMaps":
         this.chase?.maps(msg.maps, msg.current, msg.next);
         break;
+      case "chaseSettings":
+        this.chase?.setGrapple(msg.grapple);
+        break;
+      case "knock":
+        // Pulled by a grapple (the arena's knocks go through Royale).
+        this.player.knock(msg.v[0], msg.v[1], msg.v[2], msg.s);
+        break;
+      case "effect":
+        if (msg.kind === "chain" && msg.from && msg.to) this.drawChain(msg.from, msg.to, msg.ms, msg.id === this.myId);
+        break;
       case "chasers":
         if (msg.ids.includes(this.myId) && !this.chase?.isChaser) sound.fx("sting");
         this.remotes.setChasers(msg.ids, this.room.mode === "tag" ? "it" : "cursed");
@@ -717,6 +728,22 @@ export class Game {
     await closed;
   }
 
+  // A grapple's chain, for a moment (tag and infection; the arena's are Royale's).
+  private drawChain(from: Vec3, to: Vec3, ms: number, mine: boolean): void {
+    const a = new THREE.Vector3(from[0], from[1] + 0.3, from[2]);
+    const b = new THREE.Vector3(to[0], to[1] + 0.3, to[2]);
+    const link = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, a.distanceTo(b), 5), new THREE.MeshLambertMaterial({ color: "#8a8a96" }));
+    link.position.copy(a).add(b).multiplyScalar(0.5);
+    link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    this.scene.add(link);
+    sound.play("chop", { at: mine ? null : to });
+    if (mine) this.addFeed("Grappled!");
+    window.setTimeout(() => {
+      this.scene.remove(link);
+      link.geometry.dispose();
+    }, Math.max(250, ms));
+  }
+
   // ---- The way home ----
 
   // Finished a trial (or beat the Tyrant): a portal back to the Academy
@@ -850,6 +877,11 @@ export class Game {
     const r = this.input.consumeRestart();
     if (r && this.parkour) this.net.send({ t: "restart" });
     if (r && this.chase) this.net.send({ t: "unstuck" }); // R: respawn (tag and infection)
+    // E: the Knight's grapple, when the room has it on (tag and infection).
+    if (this.chase && this.input.consumeInteract() && this.chase.grappleOn) {
+      const { dir } = this.aim();
+      this.net.send({ t: "grapple", d: [dir.x, dir.y, dir.z] });
+    }
     if (this.royale) {
       const e = this.input.consumeInteract();
       if (e || r) {

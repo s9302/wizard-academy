@@ -37,6 +37,8 @@ export class ChaseHud {
   private extras: HTMLElement; // in the pause panel: Respawn, and the map picker
   private mapBox: HTMLElement;
   private onMap: (map: string) => void;
+  private grappleButton: HTMLButtonElement;
+  private grapple = false;
 
   // onBots: ask the server to add or remove a bot.
   // onMap: pick the next round's map; onUnstuck: back to a spawn point (also R).
@@ -46,7 +48,7 @@ export class ChaseHud {
     mode: RoomMode,
     roomName: string,
     onBots: (action: "add" | "remove") => void,
-    extra: { onMap: (map: string) => void; onUnstuck: () => void },
+    extra: { onMap: (map: string) => void; onUnstuck: () => void; onGrapple: (on: boolean) => void },
   ) {
     this.clock = clock;
     this.mode = mode;
@@ -61,7 +63,13 @@ export class ChaseHud {
     respawn.onclick = () => extra.onUnstuck();
     this.mapBox = document.createElement("div");
     this.mapBox.id = "chase-maps";
-    this.extras.append(respawn, this.mapBox);
+    // The Knight's grapple: a room setting, on or off for everyone.
+    this.grappleButton = document.createElement("button");
+    this.grappleButton.type = "button";
+    this.grappleButton.className = "secondary";
+    this.grappleButton.onclick = () => extra.onGrapple(!this.grapple);
+    this.setGrapple(false);
+    this.extras.append(respawn, this.grappleButton, this.mapBox);
     document.querySelector("#overlay .panel")!.appendChild(this.extras);
 
     // Bot controls live in the pause panel (press Esc), where the mouse is free.
@@ -90,6 +98,16 @@ export class ChaseHud {
       b.onclick = () => this.onMap(id);
       this.mapBox.appendChild(b);
     }
+  }
+
+  setGrapple(on: boolean): void {
+    this.grapple = on;
+    this.grappleButton.textContent = `Knight's grapple (E to pull someone to you): ${on ? "ON" : "off"}`;
+    this.grappleButton.classList.toggle("on", on);
+  }
+
+  get grappleOn(): boolean {
+    return this.grapple;
   }
 
   dispose(): void {

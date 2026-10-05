@@ -65,12 +65,15 @@ export type ReadyMsg = { t: "ready" };
 // Tag and infection: pick the next round's map; respawn when stuck.
 export type ChaseMapMsg = { t: "chaseMap"; map: string };
 export type UnstuckMsg = { t: "unstuck" };
+// Tag and infection: turn the Knight's grapple on or off for the room, and use it (E).
+export type ChaseSettingMsg = { t: "chaseSetting"; grapple: boolean };
+export type GrappleMsg = { t: "grapple"; d: Vec3 };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
 // Battle royale: add or remove a monster.
 export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg;
+export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg | ChaseSettingMsg | GrappleMsg;
 
 // ---- Server -> Client ----
 
@@ -173,6 +176,7 @@ export type LineupEntry = { id: number; name: string; bot: boolean; cls: ClassId
 export type LineupMsg = { t: "lineup"; players: LineupEntry[]; mode: RoyaleMode; next: RoyaleMode };
 // Tag and infection: the maps on offer, this round's and the next one's.
 export type ChaseMapsMsg = { t: "chaseMaps"; maps: string[]; current: string; next: string };
+export type ChaseSettingsMsg = { t: "chaseSettings"; grapple: boolean };
 // Who has voted to start the next round, and how many votes it needs.
 // on: false when the vote is switched off (tests).
 export type ReadyStateMsg = { t: "readyState"; ids: number[]; needed: number; on: boolean };
@@ -258,6 +262,7 @@ export type ServerMsg =
   | ReadyStateMsg
   | LineupMsg
   | ChaseMapsMsg
+  | ChaseSettingsMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg

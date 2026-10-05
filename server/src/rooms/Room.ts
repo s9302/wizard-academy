@@ -85,6 +85,8 @@ export abstract class Room {
     this.teleport(player, this.respawnPoint(player));
     player.conn.send({ t: "announce", text: pit.kind === "lava" ? "Too hot! Back you go." : "The void spat you back out." });
   }
+  // Fell off the level (after being put back at a spawn point).
+  protected onFellOut(_player: Player): void {}
   // Launched by a jump pad (the battle royale forgives the fall).
   protected onJumpPad(_player: Player, _now: number): void {}
   // Mode-specific messages go here later.
@@ -153,7 +155,10 @@ export abstract class Room {
       this.handleMove(player, msg);
     } else if (msg.t === "respawn") {
       // Only honored if the player really is falling out of the world.
-      if (player.p[1] < this.level.killY + 5) this.teleport(player, this.respawnPoint(player));
+      if (player.p[1] < this.level.killY + 5) {
+        this.teleport(player, this.respawnPoint(player));
+        this.onFellOut(player);
+      }
     } else {
       this.onMessage(player, msg);
     }

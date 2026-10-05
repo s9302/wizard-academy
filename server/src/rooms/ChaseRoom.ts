@@ -10,7 +10,9 @@
 // last moment and accepts a tag if the target was within range at any point
 // in that window, not just at the instant the message arrives.
 
-import { TAG_RANGE } from "../../../shared/src/constants.ts";
+import { CHAIN } from "../../../shared/src/abilities.ts";
+import { EYE_HEIGHT, GRAVITY, TAG_RANGE } from "../../../shared/src/constants.ts";
+import { segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RoomInfo } from "../../../shared/src/rooms.ts";
@@ -27,6 +29,7 @@ const START_GRACE_MS = 3_000 * SCALE; // chasers can't tag right away: runners s
 const HISTORY_MS = 400; // how far back a tag may "see" (lag compensation)
 const RANGE_SLACK = 0.3; // meters, for rounding and timing
 const UNSTUCK_COOLDOWN_MS = 10_000; // the Respawn button (R), per player
+const GRAPPLE_COOLDOWN_MS = 8_000; // the Knight's grapple (E), when it's on
 
 export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
   protected chasers = new Set<number>(); // player ids
@@ -34,6 +37,9 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
   private history = new Map<number, { time: number; p: Vec3 }[]>();
   private nextMap: string; // the map for the next round (anyone can pick it)
   private unstuckAt = new Map<number, number>();
+  // The Knight's grapple: a room setting anyone can switch on or off.
+  private grappleOn = false;
+  private grappleAt = new Map<number, number>();
 
   constructor(info: RoomInfo, level: Level) {
     super(info, level);
@@ -63,6 +69,54 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     for (const bot of this.bots.values()) bot.setGrid(navGridFor(level));
     this.broadcast({ t: "arena", levelId: level.id });
     this.broadcast(this.mapsMsg());
+  }
+
+  private setGrapple(player: Player, on: boolean): void {
+    if (player.conn.isBot || on === this.grappleOn) return;
+    this.grappleOn = on;
+    this.broadcast({ t: "chaseSettings", grapple: on });
+    this.broadcast({ t: "announce", text: `${player.conn.name} turned the Knight's grapple ${on ? "on (E to use it)" : "off"}.` });
+  }
+
+  // E with the grapple on: hook the first player along your aim (20 m) and
+  // drag them to you. Their own client moves them (a knock); bots are moved.
+  private grapple(player: Player, d: [number, number, number]): void {
+    const now = Date.now();
+    if (!this.grappleOn || player.conn.isBot || now < (this.grappleAt.get(player.conn.id) ?? 0)) return;
+    const from: Vec3 = [player.p[0], player.p[1] + EYE_HEIGHT, player.p[2]];
+    const end: Vec3 = [from[0] + d[0] * CHAIN.range, from[1] + d[1] * CHAIN.range, from[2] + d[2] * CHAIN.range];
+    let best: Player | null = null;
+    let bestT = segmentHitsLevel(from, end, this.level.boxes, 0.05) ?? 1;
+    for (const target of this.players.values()) {
+      if (target === player) continue;
+      const t = segmentHitsPlayer(from, end, target.p, 0.7);
+      if (t !== null && t < bestT) {
+        bestT = t;
+        best = target;
+      }
+    }
+    if (!best) {
+      player.conn.send({ t: "announce", text: "The grapple missed." });
+      return;
+    }
+    this.grappleAt.set(player.conn.id, now + GRAPPLE_COOLDOWN_MS);
+    const at = best.p;
+    const dx = player.p[0] - at[0];
+    const dz = player.p[2] - at[2];
+    const away = Math.hypot(dx, dz);
+    if (away > 2.2) {
+      const ux = dx / away;
+      const uz = dz / away;
+      if (best.conn.isBot) {
+        this.moveBot(best, [player.p[0] - ux * 1.8, player.p[1], player.p[2] - uz * 1.8], best.ry, now);
+      } else {
+        const seconds = (away - 2) / CHAIN.speed;
+        best.moveCheck.grant(CHAIN.speed * seconds + 2);
+        best.moveCheck.grantUp((3 * 3) / (2 * GRAVITY) + 1);
+        best.conn.send({ t: "knock", v: [ux * CHAIN.speed, 3, uz * CHAIN.speed], s: seconds });
+      }
+    }
+    this.broadcast({ t: "effect", id: best.conn.id, kind: "chain", ms: Math.round(Math.max(0, away - 2) / CHAIN.speed * 1000), from: player.p, to: at });
   }
 
   // Stuck somewhere? Back to a spawn point (every 10 s at most).
@@ -111,7 +165,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     return ROUND_MS;
   }
 
-  private broadcastChasers(): void {
+  protected broadcastChasers(): void {
     this.broadcast({ t: "chasers", ids: [...this.chasers] });
   }
 
@@ -135,6 +189,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     const now = Date.now();
     player.conn.send({ t: "arena", levelId: this.level.id });
     player.conn.send(this.mapsMsg());
+    player.conn.send({ t: "chaseSettings", grapple: this.grappleOn });
     if (this.state === "playing" && this.lateJoinerIsChaser()) {
       this.makeChaser(player.conn.id, now, START_GRACE_MS);
       this.broadcastChasers();
@@ -147,6 +202,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     const id = player.conn.id;
     this.history.delete(id);
     this.unstuckAt.delete(id);
+    this.grappleAt.delete(id);
     if (!this.chasers.has(id)) return;
     this.removeChaser(id);
     // The last chaser left mid-round: hand the role to a random runner.
@@ -172,6 +228,8 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     if (msg.t === "tag") this.handleTag(player, msg.target);
     else if (msg.t === "chaseMap") this.pickMap(player, msg.map);
     else if (msg.t === "unstuck") this.unstuck(player);
+    else if (msg.t === "chaseSetting") this.setGrapple(player, msg.grapple);
+    else if (msg.t === "grapple") this.grapple(player, msg.d);
   }
 
   // ---- Bots ----

@@ -4,6 +4,7 @@
 // takes everyone. Same rules engine as tag (ChaseRoom), different consequences.
 
 import { XP } from "../xp.ts";
+import type { Pit } from "../../../shared/src/levels/types.ts";
 import type { Player } from "./Room.ts";
 import { ChaseRoom } from "./ChaseRoom.ts";
 
@@ -28,6 +29,25 @@ export class InfectionRoom extends ChaseRoom {
   protected applyTag(tagger: Player, victim: Player, now: number): void {
     this.makeChaser(victim.conn.id, now, TURNING_MS);
     this.curses.set(tagger.conn.id, (this.curses.get(tagger.conn.id) ?? 0) + 1);
+  }
+
+  // Falling into a pit, or off the map, curses you (mid-round).
+  protected override onPit(player: Player, pit: Pit): void {
+    super.onPit(player, pit);
+    this.fallCursed(player, pit.kind === "lava" ? "fell into the lava" : "fell into the void");
+  }
+
+  protected override onFellOut(player: Player): void {
+    this.fallCursed(player, "fell off the map");
+  }
+
+  private fallCursed(player: Player, how: string): void {
+    const id = player.conn.id;
+    if (this.state !== "playing" || this.chasers.has(id)) return;
+    this.makeChaser(id, Date.now(), TURNING_MS);
+    this.broadcastChasers();
+    const left = this.players.size - this.chasers.size;
+    this.broadcast({ t: "announce", text: `${player.conn.name} ${how} and is cursed! ${left} survivor${left === 1 ? "" : "s"} left.` });
   }
 
   protected isRoundOver(): boolean {

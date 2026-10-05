@@ -72,6 +72,15 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return { t: "ready" };
     case "unstuck":
       return { t: "unstuck" };
+    case "chaseSetting":
+      if (typeof msg.grapple !== "boolean") return null;
+      return { t: "chaseSetting", grapple: msg.grapple };
+    case "grapple": {
+      if (!isVec3(msg.d)) return null;
+      const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
+      if (len < 0.9 || len > 1.1) return null;
+      return { t: "grapple", d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
+    }
     case "chaseMap":
       if (typeof msg.map !== "string" || !ROOM_PATTERN.test(msg.map)) return null;
       return { t: "chaseMap", map: msg.map };

@@ -522,6 +522,7 @@ body.spectating #royale-bottom { opacity: 0.4; }
 /* Tag and infection: Respawn and the map picker, in the pause panel. */
 #chase-extras { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #3d3263; }
 #chase-maps { display: grid; gap: 6px; }
+#chase-extras button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; }
 #chase-maps button { background: rgba(255, 255, 255, 0.06); color: var(--ink); font-weight: 400; }
 #chase-maps button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; font-weight: 700; }
 
