@@ -8,6 +8,7 @@ import { type FieldInfo, fieldCenter, inField } from "../../../shared/src/abilit
 import { sound } from "../audio/Sound.ts";
 import { glowMat } from "../bosses/BossView.ts";
 import { particles } from "../graphics/Particles.ts";
+import type { Vec3 } from "../../../shared/src/protocol.ts";
 import type { ServerClock } from "../ServerClock.ts";
 
 type View = { info: FieldInfo; root: THREE.Group; spin: THREE.Object3D[] };
@@ -215,10 +216,18 @@ export class Fields {
     return false;
   }
 
-  update(dt: number): void {
+  // whereIs: a player's position (a Null Aura follows its Knight around).
+  update(dt: number, whereIs: (id: number) => Vec3 | null = () => null): void {
     const now = this.clock.now();
     for (const v of this.views.values()) {
       const { info, root } = v;
+      if (info.follow !== undefined) {
+        const p = whereIs(info.follow);
+        if (p) {
+          info.p = [p[0], p[1] - 0.95, p[2]];
+          root.position.set(...info.p);
+        }
+      }
       if (info.kind === "tornado") {
         root.position.set(...fieldCenter(info, now));
         v.spin.forEach((m, i) => (m.rotation.y += dt * (6 + i * 2)));

@@ -13,7 +13,6 @@ import {
   CLASS_ABILITIES,
   CYCLONE,
   DRAGON,
-  EARTHSHATTER,
   FLURRY,
   FROSTNOVA,
   GIANT,
@@ -555,15 +554,6 @@ export class Royale {
         sound.fx("heavySwing", { at, rate: 0.8 });
         sound.fx("rumble", { at, volume: 0.5 });
         return true;
-      case "quake":
-        if (where) {
-          this.ringBurst(where, EARTHSHATTER.radius, "#ffb347", 500);
-          this.ringBurst(where, EARTHSHATTER.radius * 0.6, "#9a8070", 350);
-          particles.emit({ at: where, count: 120, color: "#9a8070", color2: "#ffcf5a", speed: 9, up: 5, life: 1, size: 0.35, gravity: 9 });
-        }
-        sound.fx("explosion", { at });
-        sound.fx("rumble", { at });
-        return true;
       case "holynova":
         if (where) {
           this.ringBurst(where, HOLYNOVA.radius, "#ffe9a0", 420);
@@ -794,7 +784,7 @@ export class Royale {
     const now = performance.now();
     this.hud.update(Math.max(0, this.readyAt.primary - now), Math.max(0, this.handReadyAt - now), inStorm);
     const abilities = this.chosen;
-    this.fields.update(Math.min(0.1, (now - this.lastUpdate) / 1000));
+    this.fields.update(Math.min(0.1, (now - this.lastUpdate) / 1000), (id) => (id === this.hooks.myId() ? [me.x, me.y, me.z] : this.remotes.positionOf(id)));
     this.lastUpdate = now;
     this.decoys.update();
     // The fallen have sunk away: hide them now.

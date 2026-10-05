@@ -442,7 +442,7 @@ the level 25 one is the big one. Check script: `legend-check` (admin).
 | Class | Level 15 | Level 20 | Level 25 |
 |---|---|---|---|
 | **Wizard** | **Meteor** (marks a spot up to 30 m; 1.2 s later 60 within 4.5 m, thrown) | **Frost Nova** (everyone within 9 m frozen solid 2.5 s: no moving or jumping, enforced by the server; frozen bots stand still; 20 damage) | **Black Hole** (8 m, 6 s: drags everyone into its middle, 25/s) |
-| **Knight** | **Whirlwind** (32 within 4 m, thrown back) | **War Cry** (you and teammates within 12 m take 40% less for 6 s; enemies take 15 and are slowed) | **Earthshatter** (60 within 11 m, launched and slowed) |
+| **Knight** | **Whirlwind** (32 within 4 m, thrown back) | **War Cry** (you and teammates within 12 m take 40% less for 6 s; enemies take 15 and are slowed) | **Null Aura** (a Null Zone that moves with you for 12 s: all the Null Zone's rules, around you wherever you go; it ends if you die or change class) |
 | **Rogue** | **Fan of Knives** (14 knives all around, 14 each) | **Assassinate** (appear behind the enemy you aim at, 55) | **Phantom Strike** (flash between up to 4 enemies within 30 m, 45 each, untouchable for a moment) |
 | **Cleric** | **Holy Nova** (heal 40 around you, 30 to enemies) | **Guardian Angel** (60 shield on you and teammates within 14 m) | **Wrath of Heaven** (a pillar of light on every enemy within 30 m, up to 6; heal 40) |
 | **Druid** | **Thorn Storm** (24 thorns all around) | **Wild Hunt** (4 shadow wolves for 15 s, over the limit) | **Dragon Form** (15 s as a dragon: fly with Space/C, every attack is a 18-damage fireball, 80 shield, 30% less damage) |

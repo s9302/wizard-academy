@@ -47,7 +47,6 @@ import {
   BLACKHOLE,
   CYCLONE,
   DRAGON,
-  EARTHSHATTER,
   FROSTNOVA,
   GUARDIAN,
   HOLYNOVA,
@@ -719,6 +718,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (bot) bot.cls = cls; // a bot plays the class it now has
     player.moveCheck.speedMul = CLASSES[cls].speed;
     this.monsters.dismiss(id); // a new life: a Druid's beasts go back to the wild
+    // ...and a Knight's Null Aura goes out.
+    for (const field of [...this.fields.values()]) {
+      if (field.follow !== id) continue;
+      this.fields.delete(field.id);
+      this.broadcast({ t: "fieldEnd", id: field.id });
+    }
     if (tell) {
       this.broadcast({ t: "health", id, hp: f.hp, max: maxHp, shield: f.shield });
       this.broadcast({ t: "equip", id, cls, hand: f.hand });
@@ -1613,10 +1618,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "shockwave", ms: 0, from: player.p });
         return null;
       }
-      case "earthshatter":
-        this.areaHit(player, player.p, EARTHSHATTER.radius, EARTHSHATTER.damage, { push: EARTHSHATTER.push, lift: EARTHSHATTER.lift, slowMs: EARTHSHATTER.slowMs });
-        this.broadcast({ t: "effect", id: pid, kind: "quake", ms: 0, from: player.p });
+      case "nullaura": {
+        // A Null Zone that moves with you (stepFields keeps it at your feet).
+        const floor = floorBelow(player.p[0], player.p[2], player.p[1], this.allBoxes()) ?? player.p[1] - 0.95;
+        this.addField({ kind: "nullzone", owner: pid, p: [player.p[0], floor, player.p[2]], r: NULLZONE_RADIUS, follow: pid }, ms, now);
         return null;
+      }
       case "knives":
         this.ringShots(player, "knife", KNIVES.count, now);
         return null;
@@ -1924,6 +1931,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private stepFields(now: number, dt: number): void {
     for (const field of [...this.fields.values()]) {
       const owner = this.players.get(field.owner) ?? null;
+      // Null Aura: the bubble stays around its Knight (gone if they are).
+      if (field.follow !== undefined) {
+        const who = this.players.get(field.follow);
+        if (!who || (this.state === "playing" && !this.alive.has(field.follow))) field.until = now;
+        else field.p = [who.p[0], who.p[1] - 0.95, who.p[2]];
+      }
       // A Knight's Null Zone breaks up a tornado that reaches it. (Pits and
       // black holes stay open, but can't touch anyone inside it.)
       if (field.kind === "tornado" && this.touchesNullZone(fieldCenter(field, now), field.r * 0.6, now)) {

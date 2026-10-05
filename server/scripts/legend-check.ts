@@ -116,7 +116,7 @@ const tests: Test[] = [
   { cls: "wizard", e: "blackhole", r: "wall", slot: 0, aim: ahead, label: "Black Hole opens", ok: field("blackhole") },
   { cls: "knight", e: "whirlwind", r: "charge", slot: 0, label: "Whirlwind", ok: effect("whirlwind") },
   { cls: "knight", e: "warcry", r: "charge", slot: 0, label: "War Cry rallies you", ok: (m) => m.some((x) => x.t === "effect" && x.kind === "rally" && x.id === a.me.id) },
-  { cls: "knight", e: "earthshatter", r: "charge", slot: 0, label: "Earthshatter throws B", ok: (m) => effect("quake")(m) },
+  { cls: "knight", e: "nullaura", r: "charge", slot: 0, label: "Null Aura: a Null Zone that follows you", ok: (m) => m.some((x) => x.t === "field" && x.field.kind === "nullzone" && x.field.follow === a.me.id) },
   { cls: "rogue", e: "knives", r: "blink", slot: 0, label: "Fan of Knives: 14 knives", ok: shots("knife", 14) },
   { cls: "rogue", e: "assassinate", r: "blink", slot: 0, aim: ahead, label: "Assassinate: appear behind B", ok: effect("blink") },
   { cls: "rogue", e: "phantom", r: "blink", slot: 0, label: "Phantom Strike", ok: effect("blink") },
@@ -142,6 +142,20 @@ for (const t of tests) {
   check(t.label, t.ok(got) && !fail, fail?.t === "abilityFailed" ? fail.reason : "");
   await b.walkTo([a.me.pos[0], a.me.pos[1], a.me.pos[2] - 5]);
 }
+
+// ---- Null Aura moves with the Knight: walk off, and bolts still fizzle at its edge ----
+await a.become("knight");
+await a.equip("knight", "nullaura", "charge");
+a.use(0);
+await sleep(300);
+await a.walkTo([a.me.pos[0] + 12, a.me.pos[1], a.me.pos[2]]);
+await sleep(300);
+await b.walkTo([a.me.pos[0], a.me.pos[1], a.me.pos[2] - 14]);
+let bMark0 = a.msgs.length;
+b.send({ t: "cast", spell: "bolt", o: [b.me.pos[0], b.me.pos[1] + EYE_HEIGHT, b.me.pos[2]], d: b.aimAt([a.me.pos[0], a.me.pos[1] + 0.3, a.me.pos[2]]), seq: 1 });
+await sleep(800);
+const end = a.since(bMark0).find((m) => m.t === "spellEnd");
+check("Null Aura: after walking 12 m, a bolt at the Knight still fizzles at the bubble", end?.t === "spellEnd" && end.hit === null && Math.hypot(end.p[0] - a.me.pos[0], end.p[2] - a.me.pos[2]) > 5, JSON.stringify(end));
 
 // ---- Frost Nova really freezes: B can't walk away ----
 await a.become("wizard");

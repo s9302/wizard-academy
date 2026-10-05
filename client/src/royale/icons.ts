@@ -27,7 +27,7 @@ export const ICONS: Record<string, string> = {
   blackhole: svg('<circle cx="12" cy="12" r="3.5" fill="currentColor"/><path d="M3 13c2-5 7-7 12-6M21 11c-2 5-7 7-12 6"/><path d="M6 6.5c4-2 8-1 10 1M18 17.5c-4 2-8 1-10-1"/>'),
   whirlwind: svg('<path d="M12 4a8 8 0 018 8M20 12a8 8 0 01-8 8M12 20a8 8 0 01-8-8M4 12a8 8 0 018-8"/><path d="M12 8v8M12 8l-2 2M12 8l2 2" /><path d="M20 12l-2-2M12 20l2-2M4 12l2 2M12 4l-2 2"/>'),
   warcry: svg('<path d="M4 9v6h3l5 4V5L7 9z" fill="currentColor" fill-opacity="0.2"/><path d="M15.5 8.5a5 5 0 010 7M18 6a8.5 8.5 0 010 12"/>'),
-  earthshatter: svg('<path d="M2 18h20"/><path d="M12 18l-2-5 3-3-2-5M12 18l3-4M12 18l-4-2"/><path d="M5 18l2-3M19 18l-2-3"/><path d="M8 4l4 3 4-3"/>'),
+  nullaura: svg('<circle cx="12" cy="12" r="9.5" stroke-dasharray="2 1.6"/><circle cx="12" cy="8" r="1.8"/><path d="M12 10v5M9.5 12.5h5M10.5 19l1.5-4 1.5 4"/><path d="M5 5l2 2M19 5l-2 2"/>'),
   knives: svg('<path d="M12 3v6M12 15v6M3 12h6M15 12h6M5.6 5.6l3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>'),
   assassinate: svg('<circle cx="9" cy="6" r="2.2" stroke-dasharray="1.5 1.5"/><path d="M9 8.5v6M6 11h6M7 20l2-5.5 2 5.5" stroke-dasharray="1.5 1.5"/><path d="M14 10l7 7M19.5 18.5l-1 1M14 14l2-2"/>'),
   phantom: svg('<path d="M4 20l3-8 5 4 3-9 5 13"/><circle cx="7" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="16" r="1.3" fill="currentColor"/><circle cx="15" cy="7" r="1.3" fill="currentColor"/>'),

@@ -56,7 +56,7 @@ export type AbilityId =
   | "blackhole"
   | "whirlwind"
   | "warcry"
-  | "earthshatter"
+  | "nullaura"
   | "knives"
   | "assassinate"
   | "phantom"
@@ -122,7 +122,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   blackhole: { name: "Black Hole", cooldownMs: 30_000, durationMs: 6_000, description: "Tear open a black hole where you aim (up to 25 m) for 6 s: it drags everyone within 8 m into its middle and rips at them (25 a second)." },
   whirlwind: { name: "Whirlwind", cooldownMs: 12_000, description: "Spin with your blade: 32 to everyone within 4 m, and they're thrown back." },
   warcry: { name: "War Cry", cooldownMs: 22_000, durationMs: 6_000, description: "A roar: you and your teammates within 12 m take 40% less damage for 6 s; enemies within 12 m take 15 and are slowed for 3 s." },
-  earthshatter: { name: "Earthshatter", cooldownMs: 30_000, description: "Bring your weight down on the ground: everyone within 11 m takes 60, is launched into the air and slowed." },
+  nullaura: { name: "Null Aura", cooldownMs: 40_000, durationMs: 12_000, description: "A Null Zone that moves with you for 12 s: no ranged attack gets in, and no magic reaches you or anyone else inside it." },
   knives: { name: "Fan of Knives", cooldownMs: 12_000, description: "Throw 14 knives in every direction at once, 14 damage each." },
   assassinate: { name: "Assassinate", cooldownMs: 18_000, description: "Vanish and reappear behind the enemy you aim at (up to 20 m) with a stab for 55." },
   phantom: { name: "Phantom Strike", cooldownMs: 30_000, description: "Flash between up to 4 enemies within 30 m, striking each for 45, and end up behind the last, untouchable for a moment." },
@@ -143,7 +143,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
 export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
   wizard: ["wall", "pillar", "tornado", "flames", "hellpit", "invert", "shockwave", "meteor", "frostnova", "blackhole"],
   rogue: ["blink", "stealth", "decoys", "glide", "smoke", "knives", "assassinate", "phantom"],
-  knight: ["charge", "fortify", "nullzone", "giant", "chain", "whirlwind", "warcry", "earthshatter"],
+  knight: ["charge", "fortify", "nullzone", "giant", "chain", "whirlwind", "warcry", "nullaura"],
   cleric: ["heal", "smite", "sanctuary", "aegis", "judgment", "holynova", "guardian", "wrath"],
   druid: ["wolf", "entangle", "golem", "swarm", "barkskin", "thornstorm", "wildhunt", "dragonform"],
   monk: ["flurry", "innerpeace", "windstep", "palm", "evasion", "hundredfists", "cyclone", "ascend"],
@@ -151,7 +151,7 @@ export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
 // The legendary abilities: each class has one at 15, 20 and 25.
 export const HIGH_LEVEL: Partial<Record<AbilityId, number>> = {
   meteor: 15, frostnova: 20, blackhole: 25,
-  whirlwind: 15, warcry: 20, earthshatter: 25,
+  whirlwind: 15, warcry: 20, nullaura: 25,
   knives: 15, assassinate: 20, phantom: 25,
   holynova: 15, guardian: 20, wrath: 25,
   thornstorm: 15, wildhunt: 20, dragonform: 25,
@@ -227,7 +227,6 @@ export const FROSTNOVA = { radius: 9, damage: 20 };
 export const BLACKHOLE = { range: 25, radius: 8, dps: 25, pull: 7 };
 export const WHIRLWIND = { radius: 4.2, damage: 32, push: 13 };
 export const WARCRY = { radius: 12, taken: 0.6, damage: 15, slowMs: 3000 };
-export const EARTHSHATTER = { radius: 11, damage: 60, lift: 13, push: 8, slowMs: 2000 };
 export const KNIVES = { count: 14 };
 export const ASSASSINATE = { range: 20, damage: 55 };
 export const PHANTOM = { range: 30, targets: 4, damage: 45 };
@@ -245,7 +244,8 @@ export const ASCEND = { taken: 0.5, damage: 2, speed: 1.6 };
 // enforced by the server). Lines (flames) have a yaw and a length; circles a
 // radius; a tornado moves along d at TORNADO.speed from p, starting at `time`.
 export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary" | "entangle" | "meteor" | "blackhole";
-export type FieldInfo = { id: number; kind: FieldKind; owner: number; p: Vec3; r: number; yaw?: number; len?: number; d?: Vec3; time: number; ms: number };
+// follow: a player it moves with (Null Aura: p is kept at their feet).
+export type FieldInfo = { id: number; kind: FieldKind; owner: number; p: Vec3; r: number; yaw?: number; len?: number; d?: Vec3; time: number; ms: number; follow?: number };
 
 export const fieldCenter = (f: FieldInfo, now: number): Vec3 => {
   if (f.kind !== "tornado" || !f.d) return f.p;
