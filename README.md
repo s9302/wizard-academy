@@ -370,6 +370,15 @@ teleporters, jump pads and ladders are in `arenas3.ts`:
 - **The Cloud Citadel** (large): islands over the void on narrow bridges,
   a keep, towers with ladders and pads, teleporters across.
 
+**Parkour maps, no bots** (`shared/src/levels/parkour.ts`, `noBots: true`):
+**The Sky Spires** (arena, medium: corner islands, stepping stones and
+balance beams to a floating plaza, a spiral of stones up a 16 m tower, sky
+platforms by jump pad, teleporters to the top) and **Skyrun Rooftops**
+(tag and infection: a 5 x 5 block of rooftops over the void, alleys to jump,
+crates as steps, ladders across the gaps to higher roofs, planks, pads and
+teleporters; fall in and you're infected). Bots can't get around them: they
+can't be added there, and any bots leave when a round moves to one.
+
 | Small (48 m) | Medium (84 m) | Large (120 m) |
 |---|---|---|
 | **The Pit**: a sunken floor under a raised rim, a tower in the middle | **The Ruins**: the dais, the wall ring, corner watchtowers | **The Highlands**: mesas from 2.5 to 8 m over open grass |

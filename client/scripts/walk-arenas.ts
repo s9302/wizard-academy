@@ -10,10 +10,11 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { ARENAS as ROYALE_ARENAS } from "../../shared/src/levels/arenas.ts";
+import { skyrun } from "../../shared/src/levels/parkour.ts";
 import { trial7 } from "../../shared/src/levels/trial7.ts";
 
 // The battle royale arenas, and Trial VII (a boss fight in the same kind of arena).
-const ARENAS = [...ROYALE_ARENAS, trial7];
+const ARENAS = [...ROYALE_ARENAS, trial7, skyrun];
 import type { Level } from "../../shared/src/levels/types.ts";
 import type { Vec3 } from "../../shared/src/protocol.ts";
 import { NavGrid } from "../../server/src/bots/NavGrid.ts";
@@ -59,7 +60,7 @@ for (const level of ARENAS) {
   for (const s of level.spawnPoints!) {
     const floor = grid.floorAt(s[0], s[2]);
     if (Math.abs(s[1] - 1 - floor) > 0.05) bad(`spawn ${s} is not on the floor (floor ${floor})`);
-    if (!grid.findPath([start[0], start[2]], [s[0], s[2]])) bad(`spawn ${s} unreachable for bots`);
+    if (!level.noBots && !grid.findPath([start[0], start[2]], [s[0], s[2]])) bad(`spawn ${s} unreachable for bots`);
     const p = new PlayerController(w, level.killY);
     p.teleport(...s);
     const input = { yaw: 0, pitch: 0, forward: 0, strafe: 0, running: false, consumeJump: () => false, consumeRestart: () => false };
@@ -67,8 +68,9 @@ for (const level of ARENAS) {
     if (Math.hypot(p.position.x - s[0], p.position.z - s[2]) > 0.3 || p.position.y < s[1] - 0.5) bad(`spawn ${s} pushes the player out (${p.position.toArray().map((n) => n.toFixed(1))})`);
   }
 
-  // Pickups: bots can get there, and so can the real movement.
-  for (const pk of level.pickupSpots!) {
+  // Pickups: bots can get there, and so can the real movement. (Parkour maps
+  // have no bots, and getting there is the parkour: only spawns are checked.)
+  for (const pk of level.noBots ? [] : level.pickupSpots!) {
     const floor = grid.floorAt(pk[0], pk[2]);
     if (Math.abs(pk[1] - 0.9 - floor) > 0.05) bad(`pickup ${pk} floats (floor there is ${floor})`);
     // (Ramps only: the walker can't climb ladders, ride pads or teleport.)
@@ -78,7 +80,8 @@ for (const level of ARENAS) {
       bad(`pickup ${pk} unreachable for bots`);
       continue;
     }
-    if (!walkPath(world(level), level, start, path, pk)) // a fresh world: no walkers left from before bad(`pickup ${pk}: the real movement couldn't follow the route there`);
+    // (A fresh world each time: no walkers left over from before.)
+    if (!walkPath(world(level), level, start, path, pk)) bad(`pickup ${pk}: the real movement couldn't follow the route there`);
   }
   console.log(`${problems ? "FAIL" : "ok  "} ${level.id} (${level.arena?.size}): ${level.spawnPoints!.length} spawns, ${level.pickupSpots!.length} pickups, ${level.boxes.length} boxes`);
 }

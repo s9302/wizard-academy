@@ -616,6 +616,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.clearFields();
     this.monsters.reset();
     for (const bot of this.bots.values()) bot.setLevel(navGridFor(level));
+    if (level.noBots) this.sendBotsHome();
     this.broadcast({ t: "arena", levelId: level.id });
     this.broadcast({ t: "announce", text: `Next arena: ${level.name}` });
     console.log(`[${this.name}] arena: ${level.id}`);

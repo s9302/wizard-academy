@@ -382,4 +382,4 @@ export const harbor = frostpeakHarbor();
 export const canopy = canopyVillage();
 
 // The maps tag and infection can be played on (picked in the Esc panel).
-export const CHASE_MAPS = ["clocktower", "graveyard", "harbor", "canopy", "courtyard"];
+export const CHASE_MAPS = ["clocktower", "graveyard", "harbor", "canopy", "courtyard", "skyrun"];

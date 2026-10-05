@@ -254,6 +254,10 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
   // ---- Bots ----
 
   private addBot(by: Player): void {
+    if (this.level.noBots) {
+      by.conn.send({ t: "announce", text: `No bots on ${this.level.name.replace(/ \(.*\)$/, "")}: it's all parkour, and they can't keep up.` });
+      return;
+    }
     if (this.bots.size >= MAX_BOTS || this.isFull) return;
     const taken = new Set([...this.players.values()].map((p) => p.conn.name));
     const name = BOT_NAMES.find((n) => !taken.has(n));
@@ -263,6 +267,14 @@ export abstract class RoundRoom<B extends RoomBot = RoomBot> extends Room {
     this.join(peer); // through the normal join path: spawn, announce, late-joiner rules
     this.broadcast({ t: "botCount", count: this.bots.size, max: MAX_BOTS });
     this.broadcast({ t: "announce", text: `${by.conn.name} added ${name}.` });
+  }
+
+  // A parkour map: every bot goes home (they can't get around it).
+  protected sendBotsHome(): void {
+    if (!this.bots.size) return;
+    for (const bot of [...this.bots.values()]) this.leave(bot.peer);
+    this.broadcast({ t: "botCount", count: this.bots.size, max: MAX_BOTS });
+    this.broadcast({ t: "announce", text: "The bots sit this one out: it's a parkour map." });
   }
 
   private removeBot(by: Player): void {

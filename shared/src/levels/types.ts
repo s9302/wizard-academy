@@ -188,6 +188,7 @@ export type Level = {
   bossFight?: { boss: BossKind; home: Vec3 }; // a boss room (Trial VII): where the boss starts
   // Capture the flag: each team's flag stand (red, blue) and where it spawns.
   ctf?: { flags: [Vec3, Vec3]; spawns: [Vec3[], Vec3[]] };
+  noBots?: boolean; // a parkour map: bots can't get around it, so they aren't allowed
 };
 
 // A point relative to a portal: `side` meters to its right (as seen walking

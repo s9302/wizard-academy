@@ -67,6 +67,7 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     this.level = level;
     this.history.clear();
     for (const bot of this.bots.values()) bot.setGrid(navGridFor(level));
+    if (level.noBots) this.sendBotsHome();
     this.broadcast({ t: "arena", levelId: level.id });
     this.broadcast(this.mapsMsg());
   }
