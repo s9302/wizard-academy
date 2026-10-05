@@ -55,7 +55,7 @@ export const UNLOCKS: Unlock[] = [
   { id: "spell:spark", name: "Spark Volley", kind: "spell", requires: { chapter: 2 }, description: "Three sparks in a fan, 9 damage each. Short range." },
   { id: "area:observatory", name: "The Observatory", kind: "area", requires: { chapter: 2 }, description: "Vale's stargazing tower." },
   { id: "hat:starry", name: "Starry hat", kind: "hat", requires: { chapter: 2 }, description: "Stars from the Observatory." },
-  { id: "area:sanctum", name: "The Headmaster's Sanctum", kind: "area", requires: { chapter: 3 }, description: "The academy's doors open." },
+  { id: "area:sanctum", name: "The Headmaster's Sanctum", kind: "area", requires: { chapter: 3 }, description: "The Sanctum's doors, at the back of the Hall of Trials, open." },
   { id: "hat:crown", name: "Headmaster's crown", kind: "hat", requires: { chapter: 3 }, description: "Left on a stand in the Sanctum." },
   { id: "robe:ivory", name: "Ivory robe", kind: "robe", requires: { chapter: 3 }, description: "The Headmaster's colors." },
   { id: "area:trial5", name: "Trial V", kind: "area", requires: { chapter: 4 }, description: "The portal to the Hollow Stair." },

@@ -25,7 +25,7 @@ export const NPCS: Record<string, Npc> = {
     look: L({ hat: "classic", robe: "auto", skin: "tan", hair: "curly", hairColor: "black", face: "grin", features: ["beard"], outfit: "tunic" }),
     lines: [
       "Mind the hedges, I only just trimmed 'em.",
-      "Those trial portals on the west side are the Headmaster's. Each one you clear opens a bit more of the grounds.",
+      "The trial portals are inside the academy, in the Hall of Trials. They're the Headmaster's. Each one you clear opens a bit more of the grounds.",
       "Some of the trials ask more of you than jumping now. Keep your eyes open for glowing things, and listen to anyone you meet in there.",
       "Level up enough and you'll learn to jump twice in the air. Handy on my roof, too.",
     ],

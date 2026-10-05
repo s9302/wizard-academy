@@ -45,7 +45,7 @@ const input = {
   consumeRestart: () => false,
 };
 const DT = 1 / 60;
-// The portals: everything opened (the Sanctum's are behind the great door).
+// The portals: everything opened (the Sanctum's are behind its doors).
 let player = new PlayerController(makeWorld(true), academy.killY);
 const portals = academy.portals!;
 const pos = (): Vec3 => [player.position.x, player.position.y, player.position.z];
@@ -73,18 +73,24 @@ const check = (ok: boolean, what: string) => {
 };
 const xz = (p: Vec3): [number, number] => [p[0], p[2]];
 
-// The Sanctum: round the plaza, past the battle royale portal (it stands on
-// the path), up the steps and through the great door.
-const toSanctum: [number, number][] = [[0, 12], [9, 9], [11, -6], [5, -21], [0, -24], [0, -30]];
-const inSanctum = (p: Portal) => p.pos[2] < -30;
+// Into the academy: round the plaza, up the path and the steps, through
+// the great doors into the Hall of Trials (I to III); the Sanctum (IV to
+// IX) is on through the hall's inner doors.
+const HALL_Z = -39;
+const toHall: [number, number][] = [[0, 12], [9, 9], [11, -6], [3, -20], [0, -24], [0, -31]];
+const toSanctum: [number, number][] = [...toHall, [0, -47], [0, -54], [0, -63]];
+const inAcademy = (p: Portal) => p.pos[2] < -30;
+const inSanctum = (p: Portal) => p.pos[2] < -50.5 || p.room === "trial9";
 
 for (const portal of portals) {
   // From the spawn to the south edge of the plaza, around it (the pedestal
   // is in the middle) to the portal's path, and in.
   player.teleport(...academy.spawn);
   const route: [number, number][] = inSanctum(portal)
-    ? [...toSanctum, [portal.pos[0], -31.3], xz(portalPoint(portal, 0, 0, -1))]
-    : [[0, 10], ...aroundPlaza(portal), xz(portalPoint(portal, 0, 0, 8)), xz(portalPoint(portal, 0, 0, -1))];
+    ? [...toSanctum, xz(portalPoint(portal, 0, 0, 6)), xz(portalPoint(portal, 0, 0, -1))]
+    : inAcademy(portal)
+      ? [...toHall, [portal.pos[0] * 0.5, HALL_Z + 2], xz(portalPoint(portal, 0, 0, 6)), xz(portalPoint(portal, 0, 0, -1))]
+      : [[0, 10], ...aroundPlaza(portal), xz(portalPoint(portal, 0, 0, 8)), xz(portalPoint(portal, 0, 0, -1))];
   const entered = walk(route);
   check(entered === portal.room, `walk into ${portal.room} from the spawn (entered: ${entered})`);
 
@@ -130,8 +136,8 @@ check(touching() === null, "spawn is outside every portal");
 
 // ---- Story areas and stations ----
 // Routes from the spawn: the garden and observatory gates face the plaza
-// side of each corner; the sanctum is through the academy door (around the
-// battle royale portal, which stands on the path).
+// side of each corner; the sanctum is through the academy doors and on
+// through the Hall of Trials' inner doors.
 const stations = new Map(academy.stations!.map((st) => [st.id, st]));
 const routes: Record<string, [number, number][]> = {
   spellbook: [[0, 12]],
@@ -139,7 +145,7 @@ const routes: Record<string, [number, number][]> = {
   chronicle: [[0, 12], [-9, 9], [-11, -2]],
   garden: [[-6, 18], [-20, 27.5], [-27, 27.5]],
   observatory: [[6, 18], [20, 27.5], [28, 27.5], [32, 22], [32, 29.5]],
-  sanctum: [...toSanctum, [-6.5, -31.3]],
+  sanctum: [...toHall, [0, -47], [0, -56], [-6.5, -56]],
 };
 const AREAS: Record<string, string> = { garden: "area:garden", observatory: "area:observatory", sanctum: "area:sanctum" };
 
@@ -157,7 +163,7 @@ player = new PlayerController(makeWorld((g) => g !== "area:trial5" && g !== "are
 for (const room of ["trial5", "trial6"]) {
   const portal = academy.portals!.find((p) => p.room === room)!;
   player.teleport(...academy.spawn);
-  const entered = walk([...toSanctum, [portal.pos[0], -31.3], xz(portalPoint(portal, 0, 0, -1))]);
+  const entered = walk([...toSanctum, xz(portalPoint(portal, 0, 0, 6)), xz(portalPoint(portal, 0, 0, -1))]);
   check(entered === null, `locked: the barrier keeps you out of ${room} (entered: ${entered})`);
 }
 

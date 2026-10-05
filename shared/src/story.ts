@@ -19,7 +19,7 @@ export const CHAPTERS: Chapter[] = [
     trial: "trial1",
     title: "Chapter I: The Floating Steps",
     intro: [
-      "Headmaster Orrin Vale vanished on the night of the first storm, and the academy doors have stayed shut ever since.",
+      "Headmaster Orrin Vale vanished on the night of the first storm, and the doors of his Sanctum have stayed shut ever since.",
       "He left three trials behind. The first asks one thing of a new student: can you keep your feet when the ground won't?",
     ],
     outro: [
@@ -49,7 +49,7 @@ export const CHAPTERS: Chapter[] = [
       "Long leaps, thin ledges, and a rope over nothing. This is the trial he built for his successor.",
     ],
     outro: [
-      "The final pillar holds. Far behind you, the academy's great doors grind open for the first time in years.",
+      "The final pillar holds. Far behind you, the Sanctum's great doors grind open for the first time in years.",
       "Whatever Vale left inside is waiting for you.",
     ],
   },

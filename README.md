@@ -562,8 +562,7 @@ Chapter VI is done.
 
 Two more boss fights, built exactly like Trial VII (BossRoom, your class,
 bots on your side), each unlocked by the chapter before it. Their portals
-are in the Sanctum: VIII on the west wall, IX on the front wall right of
-the door.
+are in the Sanctum: VIII on the west wall, IX by the Sanctum's doors.
 
 - **The Frost Wyrm** (`trial8.ts`, the Frozen Summit, 2600 health): circles
   high over the middle, out of a sword's reach, breathing fans of frost and
@@ -598,8 +597,7 @@ stop them, shields block them, and they only hit what monsters hunt.
 
 ## Horde mode
 
-The **Horde** portal is in the plaza between Battle Royale and Capture the
-Flag (`server/src/rooms/HordeRoom.ts`, on the arena). It's endless and
+The **Horde** portal is on the plaza's west side, next to Battle Royale (`server/src/rooms/HordeRoom.ts`, on the arena). It's endless and
 co-op: everyone (bots too) against waves of monsters. Slimes first, wolves
 from wave 2, fire imps from wave 3, stone golems from wave 4, and every fifth wave is an elite
 wave. Each wave has more monsters, 12% more health and 6% more damage than
@@ -628,8 +626,14 @@ A chapter is complete once you have a time on its trial. The text is in
 - **The Chronicle** (board on the far side of the plaza): the chapters so far.
 - **Hidden areas** behind magic barriers, opened by chapters: the **Spell
   Garden** (southwest corner), the **Observatory** (southeast, with a tower),
-  and the **Headmaster's Sanctum** (the academy's great doors open). Each has a
-  lore tablet.
+  and the **Headmaster's Sanctum** (its doors, at the back of the Hall of
+  Trials, open). Each has a lore tablet.
+- **The academy** (`shared/src/levels/academy.ts`): 60 x 48 m, its great
+  doors always open. Inside, the **Hall of Trials** has Trials I to III on
+  its inner wall; through the Sanctum's doors (Chapter III) are Trials IV to
+  VI on the back wall, VII and VIII on the side walls and IX by the doors.
+  The plaza's portals are the games: tag, infection and capture the flag on
+  the east, the battle royale and Horde on the west.
 
 Walk up to a station and press **E**; Esc or Close to leave it.
 

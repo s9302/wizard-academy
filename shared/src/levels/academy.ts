@@ -1,11 +1,12 @@
 // The hub: a plaza in front of the academy, where everyone arrives. A ring of
-// portal arches leads to every other room: the three trials on the west side,
-// tag, infection and capture the flag on the east, and the battle royale at
-// the north end, in front of the academy door.
+// portal arches leads to the games: tag, infection and capture the flag on
+// the east, the battle royale and Horde on the west. The trials are all
+// inside the academy (north, its doors always open): I to III in the Hall of
+// Trials, IV to IX in the Headmaster's Sanctum behind it.
 //
 // The story opens more of it: Chapter I opens the Spell Garden (southwest
 // corner), Chapter II the Observatory (southeast), and Chapter III the
-// academy's great doors and the Headmaster's Sanctum inside. Around the plaza
+// Sanctum's doors. Around the plaza
 // stand the Spellbook (choose your spell), the Wardrobe (hat and robe) and
 // the Chronicle (the story so far).
 
@@ -18,6 +19,7 @@ const FLAGSTONE = "#9c9384";
 const WALL = "#6c6889";
 const STONE = "#8d8aa6";
 const STONE_DARK = "#57536f";
+const STONE_LIGHT = "#a5a2bb";
 const ROOF = "#3b2a6b";
 const WOOD = "#7a5236";
 const WINDOW = "#f2d98a";
@@ -31,58 +33,69 @@ const BOOKS = ["#7a3b9e", "#2f6fa8", "#a8483b", "#3b8c5a", "#c9a227"];
 const FROST = "#bfeeff";
 const FLOWERS = ["#ff8fb8", "#ffd25a", "#8fb8ff", "#ff7a5a"];
 
-const HALF = 38; // the grounds are 76 x 76 m
+const HALF = 38; // the grounds are 76 m wide, from z = HALF (south)...
+const NORTH = -82; // ...to here, behind the academy
 const PORTAL_RING = 17; // portals stand on a circle this far from the center
 const boxes: Box[] = [];
 // Decoration the client draws (trees, banners, torches, roofs...).
 const props: Prop[] = [];
 
 // Ground and a boundary wall.
-boxes.push({ pos: [0, -0.5, 0], size: [HALF * 2 + 4, 1, HALF * 2 + 4], color: GRASS });
+const MIDZ = (HALF + NORTH) / 2;
+const DEPTH = HALF - NORTH;
+boxes.push({ pos: [0, -0.5, MIDZ], size: [HALF * 2 + 4, 1, DEPTH + 4], color: GRASS });
 for (const [x, z, w, d] of [
-  [0, -HALF, HALF * 2, 1],
+  [0, NORTH, HALF * 2, 1],
   [0, HALF, HALF * 2, 1],
-  [-HALF, 0, 1, HALF * 2],
-  [HALF, 0, 1, HALF * 2],
+  [-HALF, MIDZ, 1, DEPTH],
+  [HALF, MIDZ, 1, DEPTH],
 ]) {
   boxes.push({ pos: [x, 2, z], size: [w, 4, d], color: WALL });
 }
 // Battlements along the top of the boundary wall.
 for (let t = -HALF + 1; t <= HALF - 1; t += 2.5) {
   for (const [x, z, w, d] of [
-    [t, -HALF, 1.2, 1.1],
+    [t, NORTH, 1.2, 1.1],
     [t, HALF, 1.2, 1.1],
-    [-HALF, t, 1.1, 1.2],
-    [HALF, t, 1.1, 1.2],
   ]) {
     boxes.push({ pos: [x, 4.4, z], size: [w, 0.8, d], color: WALL });
   }
 }
+for (let t = NORTH + 1; t <= HALF - 1; t += 2.5) {
+  for (const x of [-HALF, HALF]) boxes.push({ pos: [x, 4.4, t], size: [1.1, 0.8, 1.2], color: WALL });
+}
 // Corner turrets on the boundary wall.
-for (const [x, z] of [[-HALF, -HALF], [HALF, -HALF], [-HALF, HALF], [HALF, HALF]]) {
+for (const [x, z] of [[-HALF, NORTH], [HALF, NORTH], [-HALF, HALF], [HALF, HALF]]) {
   boxes.push({ pos: [x, 3.5, z], size: [3.4, 7, 3.4], color: STONE_DARK });
   props.push({ kind: "cone", pos: [x, 7, z], size: [2.6, 4], color: ROOF });
 }
 
 // ---- The academy building (north) ----
 
+// 60 m wide and 48 m deep, with the plaza-facing facade at FRONT. Its great
+// doors are always open: inside is the Hall of Trials (Trials I to III), and
+// behind the hall's inner doors (they open with Chapter III), the
+// Headmaster's Sanctum with Trials IV to IX.
 const FRONT = -28; // z of the facade
-const BACK = FRONT - 8;
-// Hollow, so the Sanctum fits inside: back and side walls, a front wall with
-// the doorway (6 x 8 m), and a roof.
-boxes.push({ pos: [0, 7, BACK + 0.3], size: [40, 14, 0.6], color: WALL });
-for (const x of [-19.7, 19.7]) boxes.push({ pos: [x, 7, FRONT - 4], size: [0.6, 14, 8], color: WALL });
-for (const x of [-11.5, 11.5]) boxes.push({ pos: [x, 7, FRONT - 0.3], size: [17, 14, 0.6], color: WALL });
+const BACK = FRONT - 48; // z of the back wall
+const AW = 30; // half the building's width
+const MID = FRONT - 22; // the wall between the hall and the Sanctum
+const HALL_Z = (FRONT + MID) / 2; // the middle of the Hall of Trials
+const SANC_Z = (MID + BACK) / 2; // the middle of the Sanctum
+const INNER = AW - 0.6; // inside face of the side walls
+boxes.push({ pos: [0, 7, BACK + 0.3], size: [AW * 2, 14, 0.6], color: WALL });
+for (const x of [-AW + 0.3, AW - 0.3]) boxes.push({ pos: [x, 7, (FRONT + BACK) / 2], size: [0.6, 14, FRONT - BACK], color: WALL });
+for (const s of [-1, 1]) boxes.push({ pos: [s * (3 + (AW - 3) / 2), 7, FRONT - 0.3], size: [AW - 3, 14, 0.6], color: WALL });
 boxes.push({ pos: [0, 11, FRONT - 0.3], size: [6, 6, 0.6], color: WALL });
-boxes.push({ pos: [0, 14.3, FRONT - 4], size: [40, 0.6, 8], color: WALL });
+boxes.push({ pos: [0, 14.3, (FRONT + BACK) / 2], size: [AW * 2, 0.6, FRONT - BACK], color: WALL });
 // Battlements along the top of the facade.
-for (let x = -19; x <= 19; x += 2) boxes.push({ pos: [x, 14.4, FRONT - 0.4], size: [1, 0.8, 0.8], color: WALL });
-// Grand door (opens with Chapter III) and the steps up to it.
-boxes.push({ pos: [0, 4, FRONT - 0.3], size: [6, 8, 0.4], color: WOOD, gate: "area:sanctum" });
+for (let x = -AW + 1; x <= AW - 1; x += 2) boxes.push({ pos: [x, 14.4, FRONT - 0.4], size: [1, 0.8, 0.8], color: WALL });
+// The great doors stand open (swung back inside), and the steps up to them.
+for (const s of [-1, 1]) boxes.push({ pos: [s * 3.2, 4, FRONT - 2.2], size: [0.3, 8, 3], color: WOOD });
 boxes.push({ pos: [0, 8.6, FRONT + 0.2], size: [7, 1.2, 0.4], color: STONE });
 for (let i = 0; i < 3; i++) boxes.push({ pos: [0, 0.15 + i * 0.3, FRONT + 2.4 - i * 0.8], size: [10 - i * 1.5, 0.3, 0.8], color: STONE });
 // Lit windows below, stained glass above, and a rose window over the door.
-for (const x of [-16, -11, -6, 6, 11, 16]) {
+for (const x of [-26, -21, -16, -11, -6, 6, 11, 16, 21, 26]) {
   boxes.push({ pos: [x, 4, FRONT + 0.1], size: [1.8, 2.8, 0.2], color: WINDOW, glow: 2.2 });
   boxes.push({ pos: [x, 10, FRONT + 0.05], size: [2.1, 3.1, 0.1], color: STONE_DARK });
   props.push({ kind: "window", pos: [x, 10, FRONT + 0.12], yaw: 0, size: [1.8, 2.8] });
@@ -90,12 +103,12 @@ for (const x of [-16, -11, -6, 6, 11, 16]) {
 boxes.push({ pos: [0, 11.6, FRONT + 0.05], size: [3.3, 3.3, 0.1], color: STONE_DARK });
 props.push({ kind: "window", pos: [0, 11.6, FRONT + 0.12], yaw: 0, size: [3, 3] });
 // Banners between the windows, and torches either side of the door.
-for (const [x, color] of [[-3.9, "#4a2a9e"], [3.9, "#4a2a9e"], [-8.5, "#1f4f8f"], [8.5, "#1f4f8f"], [-13.5, "#7a1f4a"], [13.5, "#7a1f4a"]] as const) {
+for (const [x, color] of [[-3.9, "#4a2a9e"], [3.9, "#4a2a9e"], [-8.5, "#1f4f8f"], [8.5, "#1f4f8f"], [-13.5, "#7a1f4a"], [13.5, "#7a1f4a"], [-18.5, "#1f4f8f"], [18.5, "#1f4f8f"], [-23.5, "#4a2a9e"], [23.5, "#4a2a9e"]] as const) {
   props.push({ kind: "banner", pos: [x, 13.4, FRONT + 0.25], yaw: 0, size: [1.5, 4.6], color });
 }
 for (const x of [-3.7, 3.7]) props.push({ kind: "sconce", pos: [x, 4.6, FRONT + 0.55], yaw: 0, light: true });
 // Corner towers with stepped spires.
-for (const x of [-22, 22]) {
+for (const x of [-AW - 3, AW + 3]) {
   boxes.push({ pos: [x, 10, FRONT - 4], size: [7, 20, 7], color: STONE_DARK });
   boxes.push({ pos: [x, 15, FRONT - 0.45], size: [1.6, 2.6, 0.2], color: WINDOW, glow: 2.2 });
   boxes.push({ pos: [x, 6, FRONT - 0.45], size: [1.4, 2.2, 0.2], color: WINDOW, glow: 2.2 });
@@ -107,19 +120,46 @@ for (const x of [-22, 22]) {
   props.push({ kind: "cone", pos: [x, 20, FRONT - 4], size: [4.4, 10], color: ROOF });
   props.push({ kind: "banner", pos: [x, 18.5, FRONT - 0.4], yaw: 0, size: [1.4, 3.6], color: "#4a2a9e" });
 }
-// Two slim turrets rising from the facade.
-for (const x of [-11, 11]) {
+// Slim turrets rising from the facade, and a great spire over the middle.
+for (const x of [-11, 11, -22, 22]) {
   boxes.push({ pos: [x, 17.2, FRONT - 1.6], size: [2.6, 5.2, 2.6], color: STONE_DARK });
   boxes.push({ pos: [x, 17.5, FRONT - 0.25], size: [0.7, 1.4, 0.1], color: WINDOW, glow: 2.2 });
   props.push({ kind: "cone", pos: [x, 19.8, FRONT - 1.6], size: [2.1, 5], color: ROOF });
 }
+boxes.push({ pos: [0, 19, MID], size: [8, 9, 8], color: STONE_DARK });
+for (const s of [-1, 1]) boxes.push({ pos: [s * 4.05, 19.5, MID], size: [0.1, 2.4, 1.2], color: WINDOW, glow: 2.2 });
+props.push({ kind: "cone", pos: [0, 23.5, MID], size: [6, 12], color: ROOF });
 
-// ---- The Headmaster's Sanctum (inside the academy, Chapter III) ----
+// ---- The Hall of Trials (inside the doors; always open) ----
 
-const HALL_Z = FRONT - 4; // the middle of the hall
-boxes.push({ pos: [0, 0.02, HALL_Z], size: [38.8, 0.04, 7.4], color: STONE }); // floor
-boxes.push({ pos: [0, 0.05, HALL_Z], size: [2.6, 0.04, 7], color: CARPET });
-for (const x of [-7, 7]) boxes.push({ pos: [x, 7, HALL_Z], size: [0.8, 14, 0.8], color: STONE });
+boxes.push({ pos: [0, 0.02, HALL_Z], size: [INNER * 2, 0.04, FRONT - MID - 1.2], color: STONE }); // floor
+boxes.push({ pos: [0, 0.05, HALL_Z], size: [2.6, 0.04, FRONT - MID - 1.4], color: CARPET });
+for (const x of [-7, 7]) for (const z of [HALL_Z + 6, HALL_Z - 6]) boxes.push({ pos: [x, 7, z], size: [0.8, 14, 0.8], color: STONE });
+// The inner wall, with the Sanctum's doors in the middle (Chapter III).
+for (const s of [-1, 1]) boxes.push({ pos: [s * (3 + (INNER - 3) / 2), 7, MID], size: [INNER - 3, 14, 0.6], color: WALL });
+boxes.push({ pos: [0, 11, MID], size: [6, 6, 0.6], color: WALL });
+boxes.push({ pos: [0, 4, MID], size: [6, 8, 0.4], color: WOOD, gate: "area:sanctum" });
+boxes.push({ pos: [0, 8.6, MID + 0.5], size: [7, 1.2, 0.4], color: STONE });
+for (const x of [-3.7, 3.7]) props.push({ kind: "sconce", pos: [x, 4.6, MID + 0.85], yaw: 0, light: false });
+// Bookshelves along the side walls, and Vale's statue at the east end.
+for (const s of [-1, 1]) {
+  for (const z of [HALL_Z + 6, HALL_Z - 4]) {
+    boxes.push({ pos: [s * (INNER - 0.3), 2.2, z], size: [0.6, 4.4, 5], color: WOOD });
+    for (let row = 0; row < 3; row++) {
+      for (let i = 0; i < 4; i++) boxes.push({ pos: [s * (INNER - 0.65), 0.9 + row * 1.35, z - 1.9 + i * 1.27], size: [0.12, 0.85, 1.0], color: BOOKS[(i + row * 2 + (s > 0 ? 1 : 0)) % BOOKS.length] });
+    }
+  }
+}
+boxes.push({ pos: [18, 0.6, MID + 2.5], size: [3, 1.2, 3], color: STONE });
+boxes.push({ pos: [18, 2.4, MID + 2.5], size: [0.9, 2.4, 0.7], color: STONE_LIGHT });
+boxes.push({ pos: [18, 3.95, MID + 2.5], size: [0.6, 0.7, 0.6], color: STONE_LIGHT });
+props.push({ kind: "crystal", pos: [18, 5.4, MID + 2.5], color: GOLD, scale: 0.6 });
+
+// ---- The Headmaster's Sanctum (behind the inner doors, Chapter III) ----
+
+boxes.push({ pos: [0, 0.02, SANC_Z], size: [INNER * 2, 0.04, MID - BACK - 1.2], color: STONE });
+boxes.push({ pos: [0, 0.05, SANC_Z], size: [2.6, 0.04, MID - BACK - 1.4], color: CARPET });
+for (const x of [-7, 7]) for (const z of [SANC_Z + 6, SANC_Z - 6]) boxes.push({ pos: [x, 7, z], size: [0.8, 14, 0.8], color: STONE });
 // Bookshelves along the back wall, between the three portals (further down).
 for (const cx of [-6.75, 6.75]) {
   boxes.push({ pos: [cx, 2.2, BACK + 0.9], size: [5, 4.4, 0.6], color: WOOD });
@@ -129,9 +169,9 @@ for (const cx of [-6.75, 6.75]) {
     }
   }
 }
-// The Headmaster's desk (his letter is on it) and chair, front left; the
-// crown on its stand, front right.
-const DESK: [number, number] = [-6.5, FRONT - 2.2];
+// The Headmaster's desk (his letter is on it) and chair, just inside the
+// doors on the left; the crown on its stand on the right.
+const DESK: [number, number] = [-6.5, MID - 3.2];
 boxes.push({ pos: [DESK[0], 0.5, DESK[1]], size: [3, 1, 1.2], color: WOOD });
 boxes.push({ pos: [DESK[0] + 0.6, 1.05, DESK[1]], size: [0.5, 0.06, 0.4], color: "#f4efe6" });
 boxes.push({ pos: [DESK[0], 0.9, DESK[1] + 1.1], size: [1, 1.8, 0.2], color: CARPET });
@@ -220,18 +260,22 @@ const labels: Label[] = [
   { pos: [chronicle.x, 3.4, chronicle.z], title: "The Chronicle", subtitle: "The story so far", color: "#e8c547" },
   { pos: [-22.8, 4, 27.5], title: "The Spell Garden", color: "#8fe3ff", unlock: "area:garden" },
   { pos: [22.8, 4, 27.5], title: "The Observatory", color: "#ffe066", unlock: "area:observatory" },
-  { pos: [0, 10.2, FRONT + 1.2], title: "The Sanctum", color: "#ff8fb8", unlock: "area:sanctum" },
+  { pos: [0, 10.2, FRONT + 1.2], title: "The Academy", subtitle: "The Hall of Trials", color: "#ff8fb8" },
+  { pos: [0, 9.6, MID + 1.2], title: "The Sanctum", color: "#ff8fb8", unlock: "area:sanctum" },
   { pos: [-13, 3, BACK + 2.6], title: "Trial V", color: "#7b5bd6", unlock: "area:trial5", onlyLocked: true },
   { pos: [13, 3, BACK + 2.6], title: "Trial VI", color: "#c65bd6", unlock: "area:trial6", onlyLocked: true },
-  { pos: [17, 3, HALL_Z], title: "Trial VII", color: "#ffcf5a", unlock: "area:trial7", onlyLocked: true },
-  { pos: [-17, 3, HALL_Z], title: "Trial VIII", color: "#bff4ff", unlock: "area:trial8", onlyLocked: true },
-  { pos: [13.5, 3, FRONT - 2.4], title: "Trial IX", color: "#9a7bff", unlock: "area:trial9", onlyLocked: true },
+  { pos: [INNER - 1.4, 3, SANC_Z], title: "Trial VII", color: "#ffcf5a", unlock: "area:trial7", onlyLocked: true },
+  { pos: [-INNER + 1.4, 3, SANC_Z], title: "Trial VIII", color: "#bff4ff", unlock: "area:trial8", onlyLocked: true },
+  { pos: [18, 3, MID - 2.4], title: "Trial IX", color: "#9a7bff", unlock: "area:trial9", onlyLocked: true },
 ];
 
 const lights: PointLightDef[] = [
-  { pos: [0, 6, HALL_Z], color: "#ffd7a0", intensity: 30, distance: 16 },
-  { pos: [-13, 5, HALL_Z], color: "#ffd7a0", intensity: 20, distance: 12 },
-  { pos: [13, 5, HALL_Z], color: "#ffd7a0", intensity: 20, distance: 12 },
+  { pos: [0, 8, HALL_Z], color: "#ffd7a0", intensity: 40, distance: 22 },
+  { pos: [-18, 6, HALL_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
+  { pos: [18, 6, HALL_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
+  { pos: [0, 8, SANC_Z], color: "#ffd7a0", intensity: 40, distance: 22 },
+  { pos: [-18, 6, SANC_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
+  { pos: [18, 6, SANC_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
 ];
 
 // ---- Central plaza ----
@@ -260,15 +304,13 @@ boxes.push({ pos: [0, 0.03, 22], size: [3, 0.06, 30], color: FLAGSTONE });
 // ---- Portals ----
 
 // Angles around the plaza (0 = east, 90 = south; north is the academy).
+// (The trials are all inside the academy; the path north to its doors is clear.)
 const portalAngles: [string, number, string][] = [
-  ["trial1", 150, "#8f7bff"],
-  ["trial2", 180, "#6f9dff"],
-  ["trial3", 210, "#5ad1ff"],
   ["tag", 30, "#ff5a4a"],
   ["infection", 0, "#7dff5a"],
   ["ctf", 330, "#ffd25a"],
-  ["royale", 270, "#ff3d8b"],
-  ["horde", 300, "#ff7a2a"],
+  ["royale", 180, "#ff3d8b"],
+  ["horde", 210, "#ff7a2a"],
 ];
 
 const ringPortals: Portal[] = portalAngles.map(([room, degrees, color]) => {
@@ -277,23 +319,26 @@ const ringPortals: Portal[] = portalAngles.map(([room, degrees, color]) => {
   return { room, pos: [PORTAL_RING * Math.cos(a), 0, PORTAL_RING * Math.sin(a)] as Vec3, yaw: Math.atan2(Math.cos(a), Math.sin(a)), color };
 });
 
-// Chapters IV to VI: three more portals along the Sanctum's back wall,
-// facing the great door; VII and VIII on its east and west walls, and IX
-// on the front wall. V to IX are behind barriers until the chapter before
-// them is done.
+// Inside the academy: Trials I to III on the Hall of Trials' inner wall
+// (facing the doors), and IV to IX in the Sanctum behind it: IV to VI on the
+// back wall, VII and VIII on the east and west walls, IX by the doors.
+// V to IX are behind barriers until the chapter before them is done (IV
+// opens with the Sanctum).
+const hallPortals: Portal[] = [
+  { room: "trial1", pos: [-18, 0, MID + 1.2], yaw: Math.PI, color: "#8f7bff" },
+  { room: "trial2", pos: [-9, 0, MID + 1.2], yaw: Math.PI, color: "#6f9dff" },
+  { room: "trial3", pos: [9, 0, MID + 1.2], yaw: Math.PI, color: "#5ad1ff" },
+];
 const sanctumPortals: Portal[] = [
   { room: "trial4", pos: [0, 0, BACK + 1.2], yaw: Math.PI, color: "#9f7bff" },
   { room: "trial5", pos: [-13, 0, BACK + 1.2], yaw: Math.PI, color: "#7b5bd6" },
   { room: "trial6", pos: [13, 0, BACK + 1.2], yaw: Math.PI, color: "#c65bd6" },
-  // Chapter VII, the Tyrant: on the hall's east wall, facing west.
-  { room: "trial7", pos: [18.4, 0, HALL_Z], yaw: Math.PI / 2, color: "#ffcf5a" },
-  // Chapter VIII, the Frost Wyrm: the west wall, facing east.
-  { room: "trial8", pos: [-18.4, 0, HALL_Z], yaw: -Math.PI / 2, color: "#bff4ff" },
-  // Chapter IX, the Lich: on the front wall, right of the door, facing in.
-  { room: "trial9", pos: [13.5, 0, FRONT - 1.4], yaw: 0, color: "#9a7bff" },
+  { room: "trial7", pos: [INNER - 1.2, 0, SANC_Z], yaw: Math.PI / 2, color: "#ffcf5a" },
+  { room: "trial8", pos: [-INNER + 1.2, 0, SANC_Z], yaw: -Math.PI / 2, color: "#bff4ff" },
+  { room: "trial9", pos: [18, 0, MID - 1.2], yaw: 0, color: "#9a7bff" },
 ];
 
-export const portals: Portal[] = [...ringPortals, ...sanctumPortals];
+export const portals: Portal[] = [...ringPortals, ...hallPortals, ...sanctumPortals];
 
 const PILLAR = 0.8;
 for (const portal of portals) {
@@ -357,13 +402,13 @@ for (const [x, z, s] of [
   tree(x, z, s);
 }
 // Pines along the walls.
-for (const [x, z] of [[-35, -22], [-35, -8], [35, -22], [35, 14], [-35, 14], [-8, 35], [8, 35], [-26, -34], [26, -34]]) {
+for (const [x, z] of [[-35, -22], [-35, -8], [35, -22], [35, 14], [-35, 14], [-8, 35], [8, 35], [-34.5, -44], [34.5, -46], [-34.5, -60], [34.5, -62], [-34.5, -75], [34.5, -76]]) {
   tree(x, z, 0.9 + ((x * 7 + z * 3) % 5 + 5) / 25, "pine");
 }
 // Bushes, rocks and flower beds.
 for (const [x, z] of [[-9, -8], [9, -8], [-9, 8], [9, 8], [-24, -18], [24, -18]]) props.push({ kind: "bush", pos: [x, 0, z] });
-for (const [x, z, sc] of [[-29, -30, 1.4], [30, -29, 1.1], [-33, 4, 1], [33, 22.5, 0.8], [15, -33, 1.2]]) props.push({ kind: "rock", pos: [x, 0, z], scale: sc });
-for (const [x, z] of [[-6.5, -12], [10, -10], [-6.5, 12.5], [6.5, 12.5]]) props.push({ kind: "flowers", pos: [x, 0, z], size: [3, 1.2] });
+for (const [x, z, sc] of [[-34.5, -38, 1.4], [34.5, -39, 1.1], [-33, 4, 1], [33, 22.5, 0.8], [15, -33, 1.2]]) props.push({ kind: "rock", pos: [x, 0, z], scale: sc });
+for (const [x, z] of [[-6.5, -12], [6.5, -12], [-6.5, 12.5], [6.5, 12.5]]) props.push({ kind: "flowers", pos: [x, 0, z], size: [3, 1.2] });
 // Lamps along the paths (a few give real light on Ultra).
 for (const z of [-11, -19]) for (const x of [-2.2, 2.2]) props.push({ kind: "lamp", pos: [x, 0, z], light: z === -19 });
 for (const z of [12, 19, 25, 32]) for (const x of [-2.2, 2.2]) props.push({ kind: "lamp", pos: [x, 0, z], light: z === 12 });
@@ -376,7 +421,7 @@ for (const x of [-3, 3]) {
 // (Drawn and moved by your own browser only; see client/src/npcs/Npcs.ts.)
 props.push(
   { kind: "npc", talk: "thistle", pos: [-7.4, 0, 9.4], yaw: 2.4 },
-  { kind: "npc", talk: "rook", pos: [4.4, 0, -12.8], yaw: -0.4 },
+  { kind: "npc", talk: "rook", pos: [-12.6, 0, 3.6], yaw: -1.9 },
   { kind: "npc", talk: "quill", pos: [-7.8, 0, -7.4], yaw: 0.9 },
   { kind: "npc", talk: "bram", pos: [-20.5, 0, 25], yaw: -1.2 },
 );
