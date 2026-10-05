@@ -4,7 +4,7 @@
 // draw and what to send.
 
 import * as THREE from "three";
-import { ABILITIES, type AbilityId, CHARGE_SPEED, CHARGE_TIME, CLASS_ABILITIES, GIANT, SHOCKWAVE } from "../../../shared/src/abilities.ts";
+import { ABILITIES, type AbilityId, CHARGE_SPEED, CHARGE_TIME, CLASS_ABILITIES, FLURRY, GIANT, SHOCKWAVE, WINDSTEP_SPEED } from "../../../shared/src/abilities.ts";
 import { type ClassId, type Hand, moveSpeed, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
 import { castDirections, MAX_SHIELD, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
@@ -27,7 +27,7 @@ import { sound } from "../audio/Sound.ts";
 import type { SynthId } from "../audio/synth.ts";
 
 // The sound of casting each spell (and loosing an arrow).
-const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark" };
+const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark", thorn: "arrow" };
 const HITS = ["punch0", "punch1", "punch2"] as const;
 const TEAM_COLORS = ["#ff4a4a", "#4a8cff"];
 
@@ -374,7 +374,7 @@ export class Royale {
     const now = performance.now();
     if (!this.hud.canAct || now < this.abilityReadyAt[slot]) return;
     const id = this.chosen[slot];
-    if (this.cls !== "knight" && this.fields.inNullZone(origin)) {
+    if (this.cls !== "knight" && this.cls !== "monk" && this.fields.inNullZone(origin)) {
       this.hud.callout("No magic here!");
       return;
     }
@@ -382,6 +382,7 @@ export class Royale {
     const o: Vec3 = [round3(origin.x), round3(origin.y), round3(origin.z)];
     this.hooks.send({ t: "ability", slot, o, d: [dir.x, dir.y, dir.z] });
     if (id === "charge") this.hooks.onCharge(new THREE.Vector3(dir.x, 0, dir.z), CHARGE_SPEED, CHARGE_TIME);
+    if (id === "flurry") this.hooks.onCharge(new THREE.Vector3(dir.x, 0, dir.z), FLURRY.speed, FLURRY.time);
   }
 
   // What a spell or arrow sounds like when it lands.
@@ -460,6 +461,8 @@ export class Royale {
     this.hud.setTeam(this.teams.get(me) ?? null, alive);
   }
 
+  private windstepTimer: ReturnType<typeof setTimeout> | undefined;
+
   // Level 11+ ability effects.
   private masteryEffect(mine: boolean, id: number, kind: string, ms: number, at: Vec3 | null, from?: Vec3, to?: Vec3): void {
     const where = at ?? this.remotes.positionOf(id);
@@ -484,6 +487,15 @@ export class Royale {
         this.hooks.onGiant(ms);
         this.hud.callout("Giant!");
       } else this.remotes.setScale(id, GIANT.scale, ms);
+    } else if (kind === "windstep") {
+      sound.fx("blink", { at, rate: 1.4, volume: 0.6 });
+      if (mine && ms > 0) {
+        this.hooks.onSpeed(moveSpeed(this.cls, this.hand) * WINDSTEP_SPEED);
+        this.hud.callout("Windstep!");
+        clearTimeout(this.windstepTimer);
+        this.windstepTimer = setTimeout(() => this.hooks.onSpeed(moveSpeed(this.cls, this.hand)), ms);
+      } else if (!mine) this.remotes.glow(id, "#bff5ff", ms);
+      if (where) particles.emit({ at: where, count: 20, color: "#e6fbff", speed: 2.5, up: 0.5, life: 0.5, size: 0.15 });
     } else if (kind === "glide") {
       sound.fx("blink", { at, rate: 0.7 });
       if (mine) this.hooks.onGlide(ms / 1000);

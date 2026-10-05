@@ -18,7 +18,12 @@ export type MonsterHost = {
   grid(): NavGrid;
   prey(): Prey[]; // who monsters may hunt right now
   everyone(): Vec3[]; // where all players are (monsters don't appear right next to anyone)
-  hurt(targetId: number, amount: number, from: Vec3, kind: MonsterKind): void;
+  // A monster's hit on a player; owner: the Druid whose beast it is (credit).
+  hurt(targetId: number, amount: number, from: Vec3, kind: MonsterKind, owner?: number): void;
+  // Druid's beasts: is this player on the owner's side (they leave them be)?
+  friendly?(owner: number, playerId: number): boolean;
+  // A monster's hit on another monster (beasts and wild ones fight).
+  hurtMonster?(targetId: number, amount: number, owner?: number): void;
 };
 
 type Monster = {
@@ -34,6 +39,8 @@ type Monster = {
   nextAttack: number;
   windupUntil: number; // 0 = not winding up
   windupTarget: number | null;
+  owner?: number; // a Druid's beast: whose
+  until?: number; // ...and when it goes back to the wild
   // Thrown (a shockwave, a tornado): moving at v until then, helpless.
   push: { v: Vec3; until: number } | null;
 };
@@ -99,6 +106,7 @@ export class Monsters {
       ry: Math.round(m.ry * 100) / 100,
       hp: m.hp,
       attacking: m.windupUntil > 0,
+      owner: m.owner,
     }));
   }
 
@@ -133,6 +141,7 @@ export class Monsters {
       this.spawnAt = now + 400; // the rest follow one by one
     }
     const prey = this.host.prey();
+    for (const [id, m] of this.monsters) if (m.until !== undefined && now >= m.until) this.monsters.delete(id);
     for (const m of this.monsters.values()) {
       if (m.push) this.fly(m, now, dt);
       else this.think(m, prey, now, dt);
@@ -163,12 +172,43 @@ export class Monsters {
     }
   }
 
+  // A Druid calls a beast: it fights for them until `until`.
+  callBeast(kind: MonsterKind, near: Vec3, owner: number, until: number): void {
+    const grid = this.host.grid();
+    for (let tries = 0; tries < 16; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 1.5 + Math.random() * 2.5;
+      const x = near[0] + Math.cos(a) * r;
+      const z = near[2] + Math.sin(a) * r;
+      if (!grid.isWalkable(x, z)) continue;
+      const id = this.add(kind, [x, grid.floorAt(x, z) + MONSTERS[kind].height, z]);
+      const m = this.monsters.get(id)!;
+      m.owner = owner;
+      m.until = until;
+      return;
+    }
+  }
+
+  ownerOf(id: number): number | undefined {
+    return this.monsters.get(id)?.owner;
+  }
+
+  // How many beasts a Druid has out.
+  beastsOf(owner: number): number {
+    return [...this.monsters.values()].filter((m) => m.owner === owner).length;
+  }
+
+  // A Druid left: their beasts go with them.
+  dismiss(owner: number): void {
+    for (const [id, m] of this.monsters) if (m.owner === owner) this.monsters.delete(id);
+  }
+
   // How many of one kind are alive.
   countOf(kind: MonsterKind): number {
     return [...this.monsters.values()].filter((m) => m.kind === kind).length;
   }
 
-  private add(kind: MonsterKind, p: Vec3): void {
+  private add(kind: MonsterKind, p: Vec3): number {
     const m: Monster = {
       id: nextId++,
       kind,
@@ -185,6 +225,7 @@ export class Monsters {
       push: null,
     };
     this.monsters.set(m.id, m);
+    return m.id;
   }
 
   // Throw a monster: velocity v (m/s, y up) for `seconds`. It can't act
@@ -216,14 +257,29 @@ export class Monsters {
     this.add(kind, [spot[0], (Number.isNaN(floor) ? 0 : floor) + def.height, spot[1]]);
   }
 
-  private think(m: Monster, prey: Prey[], now: number, dt: number): void {
+  private think(m: Monster, allPrey: Prey[], now: number, dt: number): void {
     const def = MONSTERS[m.kind];
+    // Whom this one hunts: a wild monster, players and beasts; a beast, its
+    // owner's enemies and any monster not on its side.
+    const prey: Prey[] = [];
+    for (const p of allPrey) {
+      if (m.owner !== undefined && (p.id === m.owner || this.host.friendly?.(m.owner, p.id))) continue;
+      prey.push(p);
+    }
+    for (const o of this.monsters.values()) {
+      if (o === m) continue;
+      const hostile = m.owner === undefined ? o.owner !== undefined : o.owner === undefined || (o.owner !== m.owner && !this.host.friendly?.(m.owner, o.owner));
+      if (hostile) prey.push({ id: o.id, p: o.p });
+    }
     // Finishing an attack.
     if (m.windupUntil) {
       if (now < m.windupUntil) return; // rooted while it swings
       m.windupUntil = 0;
       const t = prey.find((p) => p.id === m.windupTarget);
-      if (t && this.inReach(m, t.p, 0.5)) this.host.hurt(t.id, def.damage, m.p, m.kind);
+      if (t && this.inReach(m, t.p, 0.5)) {
+        if (this.monsters.has(t.id)) this.host.hurtMonster?.(t.id, def.damage, m.owner);
+        else this.host.hurt(t.id, def.damage, m.p, m.kind, m.owner);
+      }
       m.windupTarget = null;
       m.nextAttack = now + def.cooldownMs;
       return;

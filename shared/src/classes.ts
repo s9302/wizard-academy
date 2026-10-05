@@ -9,9 +9,9 @@
 // hits softer than all of them but heals (themselves, and teammates in a
 // team round or a boss fight) and smites groups.
 
-export type ClassId = "knight" | "rogue" | "wizard" | "cleric";
+export type ClassId = "knight" | "rogue" | "wizard" | "cleric" | "druid" | "monk";
 export type Hand = "main" | "backup";
-export type WeaponId = "sword" | "shield" | "bow" | "daggers" | "spell" | "staff" | "mace" | "holy";
+export type WeaponId = "sword" | "shield" | "bow" | "daggers" | "spell" | "staff" | "mace" | "holy" | "thorns" | "sickle" | "fists";
 
 export type ClassDef = {
   name: string;
@@ -60,6 +60,24 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     backup: "holy",
     blurb: "The healer. A mace up close, holy light at range; heals and smites.",
   },
+  druid: {
+    name: "Druid",
+    maxHealth: 105,
+    speed: 1,
+    defense: 0.05,
+    main: "thorns",
+    backup: "sickle",
+    blurb: "Calls beasts to fight for them. Thorns at range, a sickle up close.",
+  },
+  monk: {
+    name: "Monk",
+    maxHealth: 90,
+    speed: 1.32,
+    defense: 0,
+    main: "fists",
+    backup: "staff",
+    blurb: "The fastest class. Lightning fists, a staff, dashes and dodges.",
+  },
 };
 
 export const CLASS_IDS = Object.keys(CLASSES) as ClassId[];
@@ -80,7 +98,7 @@ export type WeaponDef = {
   // spell: the Spellbook spell; shield: blocks, and bashes on click.
   kind: "melee" | "projectile" | "spell" | "shield";
   melee?: MeleeDef;
-  projectile?: "arrow" | "holy";
+  projectile?: "arrow" | "holy" | "thorn";
   // Shield: while it's in your hand, damage from in front of you (within
   // blockArcDeg) is cut by `block`, and you move slower.
   block?: number;
@@ -104,6 +122,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   staff: { name: "Staff", kind: "melee", melee: { kind: "melee", damage: 18, reach: 2.6, arcDeg: 90, cooldownMs: 600 } },
   mace: { name: "Mace", kind: "melee", melee: { kind: "melee", damage: 24, reach: 2.6, arcDeg: 100, cooldownMs: 700 } },
   holy: { name: "Holy Light", kind: "projectile", projectile: "holy" },
+  thorns: { name: "Thorns", kind: "projectile", projectile: "thorn" },
+  sickle: { name: "Sickle", kind: "melee", melee: { kind: "melee", damage: 19, reach: 2.4, arcDeg: 100, cooldownMs: 550 } },
+  fists: { name: "Fists", kind: "melee", melee: { kind: "melee", damage: 11, reach: 2.1, arcDeg: 90, cooldownMs: 260 } },
 };
 
 // Classes bots play (the Cleric's healing is beyond them).

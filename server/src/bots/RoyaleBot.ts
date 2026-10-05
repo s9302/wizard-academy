@@ -174,6 +174,12 @@ export class RoyaleBot extends BotWalker {
       action.ability = { slot: 1, d: [fx, 0, fz] };
     } else if (this.cls === "cleric") {
       action.ability = { slot: 0, d: [fx, 0, fz] }; // Healing Light
+    } else if (this.cls === "druid") {
+      action.ability = { slot: 0, d: [fx, 0, fz] }; // Call Wolf
+    } else if (this.cls === "monk" && dist > 3 && dist < 10) {
+      action.ability = { slot: 0, d: [fx, 0, fz] }; // Flurry Dash at them
+    } else if (this.cls === "monk") {
+      action.ability = { slot: 1, d: [fx, 0, fz] }; // Inner Peace
     } else {
       return false;
     }
@@ -206,7 +212,7 @@ export class RoyaleBot extends BotWalker {
       const len = Math.hypot(...d) || 1;
       action.attack = [d[0] / len, d[1] / len, d[2] / len];
     } else if (weapon.kind === "projectile") {
-      const shot = this.aim(view, target, from, "arrow");
+      const shot = this.aim(view, target, from, weapon.projectile ?? "arrow");
       action.attack = shot?.d ?? null;
     } else {
       action.cast = this.aim(view, target, from, this.primary);
@@ -276,7 +282,7 @@ export class RoyaleBot extends BotWalker {
     // How close to fight: Knights get in sword reach; Rogues stay far;
     // Spark Volley only reaches 20 m.
     const [far, near] =
-      this.cls === "knight" || this.cls === "cleric" ? [1.8, 0] : this.cls === "rogue" ? [28, 14] : this.primary === "spark" ? [13, 6] : [22, 9];
+      this.cls === "knight" || this.cls === "cleric" || this.cls === "monk" ? [1.8, 0] : this.cls === "rogue" ? [28, 14] : this.primary === "spark" ? [13, 6] : [22, 9];
     const forward = d > far ? Math.min(4, d) : d < near ? -3 : 0;
     const side = (this.cls === "knight" || this.cls === "cleric") && d < 4 ? 1.2 : 4; // melee classes circle tight
     const goal: Vec2 = [me.p[0] + fx * forward - fz * side * this.strafeSide, me.p[2] + fz * forward + fx * side * this.strafeSide];

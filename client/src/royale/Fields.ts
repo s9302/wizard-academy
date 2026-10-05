@@ -98,6 +98,29 @@ export class Fields {
         sound.fx("levelUp", { at: info.p, volume: 0.5 });
         break;
       }
+      case "entangle": {
+        // Thorny vines: a dark green ring and spiky stems poking up.
+        const ring = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.3, info.r, 40), see("#3f9a3a", 0.85));
+        const fill = new THREE.Mesh(new THREE.CircleGeometry(info.r - 0.3, 40), see("#2a5a22", 0.35));
+        for (const m of [ring, fill]) {
+          m.rotation.x = -Math.PI / 2;
+          m.position.y = 0.05;
+        }
+        root.add(ring, fill);
+        const vine = new THREE.MeshLambertMaterial({ color: "#3d7a2e", flatShading: true });
+        for (let i = 0; i < 18; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const d = Math.sqrt(Math.random()) * (info.r - 0.4);
+          const stem = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.7 + Math.random() * 0.6, 4), vine);
+          stem.position.set(Math.cos(a) * d, 0.35, Math.sin(a) * d);
+          stem.rotation.set((Math.random() - 0.5) * 0.6, 0, (Math.random() - 0.5) * 0.6);
+          stem.scale.y = 0.01;
+          root.add(stem);
+          spin.push(stem);
+        }
+        sound.fx("rumble", { at: info.p, volume: 0.5 });
+        break;
+      }
       case "smoke": {
         // Lumpy, nearly opaque grey balls: you really can't see through it.
         for (let i = 0; i < 9; i++) {
@@ -172,6 +195,13 @@ export class Fields {
         v.spin[0].scale.setScalar(1 - Math.min(1, (now - info.time) / info.ms) * 0.3);
       } else if (info.kind === "sanctuary") {
         if (Math.random() < 0.6) particles.emit({ at: [info.p[0], info.p[1] + 0.2, info.p[2]], count: 1, color: "#fff2a8", color2: "#ffffff", speed: 0.2, up: 1.5, spread: info.r * 0.9, life: 1.2, size: 0.15, gravity: -0.5 });
+      } else if (info.kind === "entangle") {
+        // The vines grow up out of the ground, then sway.
+        const grow = Math.min(1, (now - info.time) / 400);
+        v.spin.forEach((m, i) => {
+          m.scale.y = grow;
+          m.rotation.y = Math.sin(now / 400 + i) * 0.3;
+        });
       } else if (info.kind === "smoke") {
         v.spin.forEach((m, i) => {
           m.rotation.y += dt * 0.2 * (i % 2 ? 1 : -1);

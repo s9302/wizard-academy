@@ -36,7 +36,19 @@ export type AbilityId =
   // Cleric, level 11+
   | "sanctuary"
   | "aegis"
-  | "judgment";
+  | "judgment"
+  // Druid
+  | "wolf"
+  | "entangle"
+  | "golem"
+  | "swarm"
+  | "barkskin"
+  // Monk
+  | "flurry"
+  | "innerpeace"
+  | "windstep"
+  | "palm"
+  | "evasion";
 
 export type AbilityDef = {
   name: string;
@@ -72,6 +84,18 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   sanctuary: { name: "Sanctuary", cooldownMs: 20_000, durationMs: 6_000, description: "A 6 m circle of light for 6 s: you and your teammates inside heal 12 a second." },
   aegis: { name: "Aegis", cooldownMs: 14_000, description: "A 50-point shield on the teammate you aim at (30 m), or on yourself." },
   judgment: { name: "Judgment", cooldownMs: 15_000, durationMs: 15_000, description: "Mark the enemy you aim at (30 m): they take 35% more damage for 15 s." },
+  // Druid
+  wolf: { name: "Call Wolf", cooldownMs: 14_000, durationMs: 20_000, description: "A shadow wolf fights at your side for 20 s (two at most)." },
+  entangle: { name: "Entangle", cooldownMs: 12_000, durationMs: 4_000, description: "Vines burst up where you aim (up to 20 m): enemies in 4 m are rooted to a crawl for 4 s, and take 8 a second." },
+  golem: { name: "Call Golem", cooldownMs: 26_000, durationMs: 25_000, description: "A stone golem fights for you for 25 s: slow, tough, and it hits hard." },
+  swarm: { name: "Slime Swarm", cooldownMs: 18_000, durationMs: 15_000, description: "Three slimes burst out around you and hunt your enemies for 15 s." },
+  barkskin: { name: "Barkskin", cooldownMs: 18_000, durationMs: 6_000, description: "Your skin turns to bark for 6 s: take half damage, and heal 6 a second." },
+  // Monk
+  flurry: { name: "Flurry Dash", cooldownMs: 6_000, description: "Dash 10 m in a blink; the first enemy you pass takes 22." },
+  innerpeace: { name: "Inner Peace", cooldownMs: 14_000, description: "Breathe: heal 30, and shake off any slow." },
+  windstep: { name: "Wind Step", cooldownMs: 15_000, durationMs: 4_000, description: "Run 50% faster for 4 s." },
+  palm: { name: "Palm Strike", cooldownMs: 10_000, description: "A blast of force in front of you (6 m cone): 26 damage and a shove." },
+  evasion: { name: "Evasion", cooldownMs: 16_000, durationMs: 2_000, description: "For 2 s, nothing can touch you." },
   smoke: { name: "Smoke Bomb", cooldownMs: 16_000, durationMs: 8_000, description: "A thick cloud where you aim, for 8 s. Anyone inside is hidden from everyone outside." },
 };
 
@@ -82,6 +106,8 @@ export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
   rogue: ["blink", "stealth", "decoys", "glide", "smoke"],
   knight: ["charge", "fortify", "nullzone", "giant", "chain"],
   cleric: ["heal", "smite", "sanctuary", "aegis", "judgment"],
+  druid: ["wolf", "entangle", "golem", "swarm", "barkskin"],
+  monk: ["flurry", "innerpeace", "windstep", "palm", "evasion"],
 };
 // The level an ability unlocks at: 1 for a class's first two, then 3, 5, 7...
 // in pool order.
@@ -98,6 +124,8 @@ export const CLASS_ABILITIES: Record<ClassId, [AbilityId, AbilityId]> = {
   rogue: ["blink", "stealth"],
   knight: ["charge", "fortify"],
   cleric: ["heal", "smite"],
+  druid: ["wolf", "entangle"],
+  monk: ["flurry", "innerpeace"],
 };
 
 // Sizes and reaches (meters).
@@ -134,10 +162,19 @@ export const SANCTUARY = { radius: 6, hps: 12 };
 export const AEGIS = { shield: 50, range: 30 };
 export const JUDGMENT = { range: 30, factor: 1.35 };
 
+// Druid and Monk numbers.
+export const SUMMON_LIMIT = 3; // a Druid's beasts alive at once
+export const ENTANGLE = { range: 20, radius: 4, slow: 0.3, dps: 8 };
+export const BARKSKIN = { taken: 0.5, hps: 6 };
+export const FLURRY = { speed: 30, time: 0.33, damage: 22 };
+export const INNER_PEACE_HEAL = 30;
+export const WINDSTEP_SPEED = 1.5;
+export const PALM = { range: 6, arcDeg: 70, damage: 26, push: 16 };
+
 // A lasting area an ability leaves on the ground (drawn by the client,
 // enforced by the server). Lines (flames) have a yaw and a length; circles a
 // radius; a tornado moves along d at TORNADO.speed from p, starting at `time`.
-export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary";
+export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary" | "entangle";
 export type FieldInfo = { id: number; kind: FieldKind; owner: number; p: Vec3; r: number; yaw?: number; len?: number; d?: Vec3; time: number; ms: number };
 
 export const fieldCenter = (f: FieldInfo, now: number): Vec3 => {

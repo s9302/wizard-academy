@@ -153,6 +153,14 @@ export class MonsterViews {
         const bar = healthBar();
         bar.position.y = MONSTERS[m.kind].height + 0.7;
         root.add(bar);
+        if (m.owner !== undefined) {
+          // A Druid's beast: a green ring under it.
+          const r = MONSTERS[m.kind].radius;
+          const ring = new THREE.Mesh(new THREE.RingGeometry(r + 0.1, r + 0.3, 28), new THREE.MeshBasicMaterial({ color: "#7fd06a", transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.y = -MONSTERS[m.kind].height + 0.05;
+          root.add(ring);
+        }
         root.position.set(...m.p);
         this.scene.add(root);
         v = {

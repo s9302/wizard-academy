@@ -38,6 +38,9 @@ export class MoveCheck {
     this.last = now;
   }
 
+  // How much faster than normal this player may run (a fast class: the Monk).
+  speedMul = 1;
+
   // Allow this many extra meters right now (a Knight's charge). It can go
   // over the usual cap; it's spent like any other distance.
   grant(meters: number): void {
@@ -53,7 +56,8 @@ export class MoveCheck {
   allow(from: Vec3, to: Vec3, now = Date.now()): boolean {
     const seconds = Math.max(0, (now - this.last) / 1000);
     this.last = now;
-    this.horizontal = Math.max(this.horizontal, Math.min(HORIZONTAL.cap, this.horizontal + HORIZONTAL.rate * seconds));
+    const mul = Math.max(1, this.speedMul);
+    this.horizontal = Math.max(this.horizontal, Math.min(HORIZONTAL.cap * mul, this.horizontal + HORIZONTAL.rate * mul * seconds));
     this.up = Math.max(this.up, Math.min(UP.cap, this.up + UP.rate * seconds)); // a grant can go over the cap
     this.down = Math.min(DOWN.cap, this.down + DOWN.rate * seconds);
 

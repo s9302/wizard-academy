@@ -38,4 +38,5 @@ export type MonsterState = {
   ry: number;
   hp: number;
   attacking: boolean; // winding up a hit
+  owner?: number; // a Druid's beast: whose (it fights for them)
 };

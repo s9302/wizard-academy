@@ -68,6 +68,37 @@ export function makeWeapon(weapon: WeaponId, spellColor = "#b48cff"): THREE.Grou
       g.add(part(new THREE.OctahedronGeometry(0.07), mat("#ffe9a0", 0.9), 0, 0.22));
       break;
     }
+    case "thorns": {
+      // A gnarled wand of living wood, sprouting leaves and a green bud.
+      g.add(part(new THREE.CylinderGeometry(0.022, 0.035, 0.5, 5), mat("#5b3d24"), 0, 0.15));
+      for (let i = 0; i < 3; i++) {
+        const leaf = part(new THREE.ConeGeometry(0.035, 0.12, 4), mat("#4fae4a"), Math.cos(i * 2.1) * 0.04, 0.2 + i * 0.1, Math.sin(i * 2.1) * 0.04);
+        leaf.rotation.z = Math.cos(i * 2.1) * -0.9;
+        leaf.rotation.x = Math.sin(i * 2.1) * 0.9;
+        g.add(leaf);
+      }
+      g.add(part(new THREE.DodecahedronGeometry(0.06, 0), mat("#7fd06a", 0.7), 0, 0.44));
+      break;
+    }
+    case "sickle": {
+      // A short handle and a curved blade (a half ring of thin boxes).
+      g.add(part(new THREE.BoxGeometry(0.05, 0.3, 0.05), wood, 0, 0.05));
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 6) * Math.PI * 0.9;
+        const seg = part(new THREE.BoxGeometry(0.06 - i * 0.005, 0.07, 0.015), steel, 0.13 - Math.cos(a) * 0.13, 0.22 + Math.sin(a) * 0.15);
+        seg.rotation.z = a;
+        g.add(seg);
+      }
+      break;
+    }
+    case "fists": {
+      // Two wrapped fists, side by side.
+      for (const x of [-0.13, 0.13]) {
+        g.add(part(new THREE.BoxGeometry(0.1, 0.09, 0.11), mat("#e2b48c"), x, 0.05));
+        g.add(part(new THREE.BoxGeometry(0.105, 0.04, 0.115), mat("#e8e0cc"), x, 0.0)); // the wraps
+      }
+      break;
+    }
     case "spell": {
       // A glowing orb hovering over an open hand.
       g.add(part(new THREE.BoxGeometry(0.14, 0.05, 0.16), mat("#f3dcc4"), 0, 0));
