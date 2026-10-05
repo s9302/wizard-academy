@@ -40,6 +40,8 @@ export class MoveCheck {
 
   // How much faster than normal this player may run (a fast class: the Monk).
   speedMul = 1;
+  // Until then, any move is fine (a Druid in Dragon Form flies where it likes).
+  freeUntil = 0;
 
   // Allow this many extra meters right now (a Knight's charge). It can go
   // over the usual cap; it's spent like any other distance.
@@ -60,6 +62,7 @@ export class MoveCheck {
     this.horizontal = Math.max(this.horizontal, Math.min(HORIZONTAL.cap * mul, this.horizontal + HORIZONTAL.rate * mul * seconds));
     this.up = Math.max(this.up, Math.min(UP.cap, this.up + UP.rate * seconds)); // a grant can go over the cap
     this.down = Math.min(DOWN.cap, this.down + DOWN.rate * seconds);
+    if (now < this.freeUntil) return true;
 
     const horizontal = Math.hypot(to[0] - from[0], to[2] - from[2]);
     const dy = to[1] - from[1];

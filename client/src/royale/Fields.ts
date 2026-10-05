@@ -89,6 +89,40 @@ export class Fields {
         sound.fx("charge", { at: info.p, rate: 1.4, volume: 0.6 });
         break;
       }
+      case "meteor": {
+        // The marked circle; the meteor falls into it as it ends (remove).
+        const ring = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.25, info.r, 44), see("#ff7a2e", 0.9));
+        const fill = new THREE.Mesh(new THREE.CircleGeometry(info.r - 0.25, 44), see("#ffb347", 0.18));
+        for (const m of [ring, fill]) {
+          m.rotation.x = -Math.PI / 2;
+          m.position.y = 0.06;
+        }
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1, 0), glowMat("#ff8a2a", 3));
+        rock.position.set(10, 40, -5);
+        root.add(ring, fill, rock);
+        spin.push(ring, rock);
+        sound.fx("charge", { at: info.p, rate: 0.7 });
+        break;
+      }
+      case "blackhole": {
+        // A sphere of nothing, a glowing purple disc whirling round it, and a
+        // faint dome over everything it pulls.
+        const core = new THREE.Mesh(new THREE.SphereGeometry(1.1, 20, 14), new THREE.MeshBasicMaterial({ color: "#05010a" }));
+        core.position.y = 1.4;
+        const disc = new THREE.Mesh(new THREE.RingGeometry(1.4, 3.2, 40, 2), glowMat("#9a3aff", 2.5));
+        disc.position.y = 1.4;
+        disc.rotation.x = -Math.PI / 2 + 0.25;
+        (disc.material as THREE.MeshBasicMaterial).side = THREE.DoubleSide;
+        const pull = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.3, info.r, 48), see("#6a2aff", 0.6));
+        pull.rotation.x = -Math.PI / 2;
+        pull.position.y = 0.06;
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(info.r, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), see("#2a0a4a", 0.12));
+        root.add(core, disc, pull, dome);
+        spin.push(disc);
+        sound.fx("rumble", { at: info.p, rate: 0.5 });
+        sound.fx("stealth", { at: info.p, rate: 0.4 });
+        break;
+      }
       case "sanctuary": {
         const ring = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.25, info.r, 48), glowMat("#ffe9a0", 2));
         ring.rotation.x = -Math.PI / 2;
@@ -159,6 +193,15 @@ export class Fields {
       sound.fx("thunder", { at: v.info.p, volume: 0.7 });
       sound.fx("explosion", { at: v.info.p, volume: 0.5 });
     }
+    if (v.info.kind === "meteor") {
+      // It lands: a blast of fire and rock.
+      const at: [number, number, number] = [v.info.p[0], v.info.p[1] + 0.4, v.info.p[2]];
+      particles.emit({ at, count: 120, color: "#ffb347", color2: "#ff3a1a", speed: 9, up: 4, life: 1, size: 0.4, gravity: 6 });
+      particles.emit({ at, count: 50, color: "#5a4a40", speed: 6, up: 5, life: 1.2, size: 0.35, gravity: 10 });
+      sound.fx("explosion", { at: v.info.p });
+      sound.fx("rumble", { at: v.info.p });
+    }
+    if (v.info.kind === "blackhole") particles.emit({ at: [v.info.p[0], v.info.p[1] + 1.4, v.info.p[2]], count: 60, color: "#d07bff", color2: "#1a0830", speed: 7, life: 0.8, size: 0.3 });
     if (v.info.kind === "smoke" || v.info.kind === "tornado") particles.emit({ at: fieldCenter(v.info, this.clock.now()), count: 25, color: "#a09cad", speed: 2, up: 1, spread: v.info.r, life: 0.8, size: 0.5 });
   }
 
@@ -194,6 +237,23 @@ export class Fields {
         if (Math.random() < 0.8) particles.emit({ at: [info.p[0], info.p[1] + 0.2, info.p[2]], count: 2, color: "#ff4a1a", color2: "#3a0000", speed: 0.5, up: 3, spread: info.r * 0.8, life: 0.9, size: 0.3, gravity: -1 });
       } else if (info.kind === "smite") {
         v.spin[0].scale.setScalar(1 - Math.min(1, (now - info.time) / info.ms) * 0.3);
+      } else if (info.kind === "meteor") {
+        // Pulsing as it comes; the rock falls in over the last 0.7 s.
+        const left = Math.max(0, info.time + info.ms - now);
+        v.spin[0].scale.setScalar(1 - Math.min(1, (now - info.time) / info.ms) * 0.25);
+        const k = Math.min(1, left / 700);
+        v.spin[1].visible = left < 700;
+        v.spin[1].position.set(k * 10, 0.6 + k * 40, -k * 5);
+        v.spin[1].rotation.x += dt * 4;
+        if (left < 700 && Math.random() < 0.9) particles.emit({ at: [info.p[0] + k * 10, info.p[1] + 0.6 + k * 40, info.p[2] - k * 5], count: 2, color: "#ffb347", color2: "#ff3a1a", speed: 0.5, life: 0.5, size: 0.45 });
+      } else if (info.kind === "blackhole") {
+        v.spin[0].rotation.z += dt * 3;
+        // Dust and light spiralling in.
+        for (let i = 0; i < 3; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const r = info.r * (0.7 + Math.random() * 0.3);
+          particles.emit({ at: [info.p[0] + Math.cos(a) * r, info.p[1] + 0.3 + Math.random(), info.p[2] + Math.sin(a) * r], count: 1, color: "#b48cff", color2: "#2a0a4a", speed: 0.2, life: 0.6, size: 0.2 });
+        }
       } else if (info.kind === "sanctuary") {
         if (Math.random() < 0.6) particles.emit({ at: [info.p[0], info.p[1] + 0.2, info.p[2]], count: 1, color: "#fff2a8", color2: "#ffffff", speed: 0.2, up: 1.5, spread: info.r * 0.9, life: 1.2, size: 0.15, gravity: -0.5 });
       } else if (info.kind === "entangle") {

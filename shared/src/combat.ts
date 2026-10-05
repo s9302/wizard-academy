@@ -9,7 +9,7 @@ export const MAX_SHIELD = 50;
 
 // "arrow" is the Rogue's bow: not a spell, but it flies through the same system.
 // "holy" is the Cleric's Holy Light (also from a weapon, never cast directly).
-export type SpellId = "bolt" | "frost" | "spark" | "fireball" | "arrow" | "holy" | "thorn" | "ember" | "hex" | "flame";
+export type SpellId = "bolt" | "frost" | "spark" | "fireball" | "arrow" | "holy" | "thorn" | "ember" | "hex" | "flame" | "knife";
 
 // Which button, and whose cooldown: the three left-click spells share one
 // cooldown (you pick one in the Spellbook), so swapping can't fire faster.
@@ -77,6 +77,7 @@ export const SPELLS: Record<SpellId, SpellDef> = {
   // The Witch's hex and the Dragon's fire (monsters only).
   hex: { name: "Hex", slot: "primary", speed: 18, range: 26, radius: 0.3, damage: 8, cooldownMs: 2000, slowMs: 1500, slowFactor: 0.55, color: "#c05bff" },
   flame: { name: "Dragonfire", slot: "primary", speed: 22, range: 24, radius: 0.55, damage: 18, cooldownMs: 2400, color: "#ff5a1a" },
+  knife: { name: "Thrown Knife", slot: "primary", speed: 40, range: 26, radius: 0.18, damage: 14, cooldownMs: 600, color: "#dfe4ee" },
   thorn: { name: "Thorns", slot: "primary", speed: 36, range: 38, radius: 0.18, damage: 9, cooldownMs: 600, count: 2, spreadDeg: 4, slowMs: 600, slowFactor: 0.8, color: "#7fd06a" },
   // From a Fire Tome pickup (3 charges): slower, but it explodes.
   fireball: {

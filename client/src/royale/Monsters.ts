@@ -347,6 +347,12 @@ function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; 
   return { body, legs, mats, wings };
 }
 
+// A monster's model on its own (a Druid in Dragon Form looks like one).
+export function monsterModel(kind: MonsterKind): { body: THREE.Group; wings: THREE.Object3D[] } {
+  const { body, wings } = build(kind);
+  return { body, wings };
+}
+
 function healthBar(): THREE.Sprite {
   const canvas = document.createElement("canvas");
   canvas.width = 96;

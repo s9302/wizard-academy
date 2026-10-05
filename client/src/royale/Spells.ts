@@ -29,6 +29,7 @@ const SPARKS: Record<SpellId, [string, string]> = {
   ember: ["#ffe08a", "#ff4a0a"],
   hex: ["#f0c8ff", "#9a3aff"],
   flame: ["#fff0a0", "#ff3a0a"],
+  knife: ["#ffffff", "#9aa3b8"],
 };
 
 const TRAIL = 4; // ghost copies behind each spell
@@ -104,6 +105,7 @@ export class Spells {
       ember: glow(SPELLS.ember.color),
       hex: glow(SPELLS.hex.color),
       flame: glow(SPELLS.flame.color),
+      knife: glow(SPELLS.knife.color),
     };
   }
 

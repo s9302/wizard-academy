@@ -57,6 +57,9 @@ export class PlayerController {
   private dashLeft = 0; // seconds of dash (or charge) remaining
   private burstSpeed = DASH_SPEED;
   private glideLeft = 0;
+  private soarLeft = 0;
+  private soarClimb = 0;
+  private soarSpeed = 1;
   private glideFall = 0;
   private glideSpeed = 1;
   private dashDir = { x: 0, z: 0 };
@@ -136,6 +139,14 @@ export class PlayerController {
   }
 
   // Glide (Rogue): a leap up, then a slow fall and more speed for `seconds`.
+  // Dragon Form: no gravity for a while; Space climbs, C dives, and you're
+  // a little faster. Walls still stop you.
+  soar(seconds: number, climb: number, speedMul: number): void {
+    this.soarLeft = seconds;
+    this.soarClimb = climb;
+    this.soarSpeed = speedMul;
+  }
+
   glide(seconds: number, lift: number, fall: number, speedMul: number): void {
     this.glideLeft = seconds;
     this.glideFall = fall;
@@ -181,10 +192,11 @@ export class PlayerController {
     if (this.flying) return this.fly(dt, input);
     this.slowLeft = Math.max(0, this.slowLeft - dt);
     this.glideLeft = Math.max(0, this.glideLeft - dt);
+    this.soarLeft = Math.max(0, this.soarLeft - dt);
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 
     // Horizontal movement relative to where the camera faces.
-    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1) * (this.glideLeft > 0 ? this.glideSpeed : 1);
+    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1) * (this.glideLeft > 0 ? this.glideSpeed : 1) * (this.soarLeft > 0 ? this.soarSpeed : 1);
     const sin = Math.sin(input.yaw);
     const cos = Math.cos(input.yaw);
     let dx = -sin * input.forward + cos * input.strafe;
@@ -234,6 +246,7 @@ export class PlayerController {
 
     // Gravity.
     this.velocityY = Math.max(this.velocityY - GRAVITY * dt, -(this.glideLeft > 0 ? this.glideFall : TERMINAL_FALL_SPEED));
+    if (this.soarLeft > 0) this.velocityY = input.ascend ? this.soarClimb : input.descend ? -this.soarClimb * 1.4 : 0;
 
     // Ladders: W climbs, S goes down, nothing holds on. Jumping lets go.
     const here: [number, number, number] = [this.current.x, this.current.y, this.current.z];

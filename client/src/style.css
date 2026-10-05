@@ -517,10 +517,10 @@ body.spectating #royale-bottom { opacity: 0.4; }
 
 /* Level 11+: which abilities go on E and R (inside the class picker). */
 #ability-picker { display: grid; gap: 6px; margin-top: 6px; padding-top: 10px; border-top: 1px solid #3d3263; }
-#ability-picker .ability-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+#ability-picker .ability-row { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
 #ability-picker .ability-key { width: 18px; font-weight: 700; text-align: center; }
-#class-picker #ability-picker button { display: grid; place-items: center; width: 38px; height: 36px; padding: 0; }
-#class-picker #ability-picker button svg { width: 22px; height: 22px; }
+#class-picker #ability-picker button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; }
+#class-picker #ability-picker button svg { width: 20px; height: 20px; }
 #class-picker #ability-picker button:disabled { opacity: 0.3; cursor: not-allowed; }
 #ability-picker .ability-names { font-size: 12px; opacity: 0.85; text-align: center; }
 

@@ -4,7 +4,8 @@
 // The server does the real work for all of them; these are the numbers.
 //
 // Every class always has its first two (CLASS_ABILITIES). The rest of its
-// pool unlocks one at a time as you level: levels 3, 5, 7, 9, 11 (abilityLevel).
+// pool unlocks one at a time as you level: levels 3, 5, 7, 9, 11, and then
+// three legendary ones at 15, 20 and 25 (abilityLevel; HIGH_LEVEL).
 // You pick which two go on E and R (Esc panel, saved in your loadout). The
 // extra ones are deliberately over the top. Bots keep CLASS_ABILITIES.
 
@@ -48,7 +49,26 @@ export type AbilityId =
   | "innerpeace"
   | "windstep"
   | "palm"
-  | "evasion";
+  | "evasion"
+  // Levels 15, 20, 25 (HIGH_LEVEL)
+  | "meteor"
+  | "frostnova"
+  | "blackhole"
+  | "whirlwind"
+  | "warcry"
+  | "earthshatter"
+  | "knives"
+  | "assassinate"
+  | "phantom"
+  | "holynova"
+  | "guardian"
+  | "wrath"
+  | "thornstorm"
+  | "wildhunt"
+  | "dragonform"
+  | "hundredfists"
+  | "cyclone"
+  | "ascend";
 
 export type AbilityDef = {
   name: string;
@@ -96,22 +116,52 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   windstep: { name: "Wind Step", cooldownMs: 15_000, durationMs: 4_000, description: "Run 50% faster for 4 s." },
   palm: { name: "Palm Strike", cooldownMs: 10_000, description: "A blast of force in front of you (6 m cone): 26 damage and a shove." },
   evasion: { name: "Evasion", cooldownMs: 16_000, durationMs: 2_000, description: "For 2 s, nothing can touch you." },
+  // ---- Levels 15, 20 and 25 ----
+  meteor: { name: "Meteor", cooldownMs: 18_000, description: "Call a meteor down where you aim (up to 30 m). It lands 1.2 s later: 60 damage within 4.5 m, and everyone there is thrown." },
+  frostnova: { name: "Frost Nova", cooldownMs: 20_000, durationMs: 2_500, description: "Everyone within 9 m freezes solid for 2.5 s, and takes 20." },
+  blackhole: { name: "Black Hole", cooldownMs: 30_000, durationMs: 6_000, description: "Tear open a black hole where you aim (up to 25 m) for 6 s: it drags everyone within 8 m into its middle and rips at them (25 a second)." },
+  whirlwind: { name: "Whirlwind", cooldownMs: 12_000, description: "Spin with your blade: 32 to everyone within 4 m, and they're thrown back." },
+  warcry: { name: "War Cry", cooldownMs: 22_000, durationMs: 6_000, description: "A roar: you and your teammates within 12 m take 40% less damage for 6 s; enemies within 12 m take 15 and are slowed for 3 s." },
+  earthshatter: { name: "Earthshatter", cooldownMs: 30_000, description: "Bring your weight down on the ground: everyone within 11 m takes 60, is launched into the air and slowed." },
+  knives: { name: "Fan of Knives", cooldownMs: 12_000, description: "Throw 14 knives in every direction at once, 14 damage each." },
+  assassinate: { name: "Assassinate", cooldownMs: 18_000, description: "Vanish and reappear behind the enemy you aim at (up to 20 m) with a stab for 55." },
+  phantom: { name: "Phantom Strike", cooldownMs: 30_000, description: "Flash between up to 4 enemies within 18 m, striking each for 45, and end up behind the last, untouchable for a moment." },
+  holynova: { name: "Holy Nova", cooldownMs: 14_000, description: "A burst of holy light: you and your teammates within 9 m heal 40, and enemies there take 30." },
+  guardian: { name: "Guardian Angel", cooldownMs: 22_000, description: "A 60-point shield on you and on every teammate within 14 m." },
+  wrath: { name: "Wrath of Heaven", cooldownMs: 32_000, description: "Pillars of holy light fall on every enemy within 30 m (up to 6, 40 each), and you and your teammates heal 40." },
+  thornstorm: { name: "Thorn Storm", cooldownMs: 14_000, description: "24 thorns burst out of you in every direction: 9 each, and they slow." },
+  wildhunt: { name: "Wild Hunt", cooldownMs: 28_000, durationMs: 15_000, description: "A pack of four shadow wolves answers your call for 15 s (over your usual beast limit)." },
+  dragonform: { name: "Dragon Form", cooldownMs: 45_000, durationMs: 15_000, description: "Become a dragon for 15 s: fly (Space to climb, C to dive), breathe fire with every attack (18 a blast), gain an 80-point shield, and take 30% less damage." },
+  hundredfists: { name: "Hundred Fists", cooldownMs: 12_000, description: "A blur of punches in front of you (5 m): 50 damage to everyone there." },
+  cyclone: { name: "Cyclone Kick", cooldownMs: 16_000, description: "A spinning kick: everyone within 5 m takes 35 and is sent flying." },
+  ascend: { name: "Transcendence", cooldownMs: 40_000, durationMs: 10_000, description: "Transcend for 10 s: move 60% faster, hit twice as hard, take half damage, and nothing can slow or shove you." },
   smoke: { name: "Smoke Bomb", cooldownMs: 16_000, durationMs: 8_000, description: "A thick cloud where you aim, for 8 s. Anyone inside is hidden from everyone outside." },
 };
 
 
 // What each class can choose from (the first two are the defaults).
 export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
-  wizard: ["wall", "pillar", "tornado", "flames", "hellpit", "invert", "shockwave"],
-  rogue: ["blink", "stealth", "decoys", "glide", "smoke"],
-  knight: ["charge", "fortify", "nullzone", "giant", "chain"],
-  cleric: ["heal", "smite", "sanctuary", "aegis", "judgment"],
-  druid: ["wolf", "entangle", "golem", "swarm", "barkskin"],
-  monk: ["flurry", "innerpeace", "windstep", "palm", "evasion"],
+  wizard: ["wall", "pillar", "tornado", "flames", "hellpit", "invert", "shockwave", "meteor", "frostnova", "blackhole"],
+  rogue: ["blink", "stealth", "decoys", "glide", "smoke", "knives", "assassinate", "phantom"],
+  knight: ["charge", "fortify", "nullzone", "giant", "chain", "whirlwind", "warcry", "earthshatter"],
+  cleric: ["heal", "smite", "sanctuary", "aegis", "judgment", "holynova", "guardian", "wrath"],
+  druid: ["wolf", "entangle", "golem", "swarm", "barkskin", "thornstorm", "wildhunt", "dragonform"],
+  monk: ["flurry", "innerpeace", "windstep", "palm", "evasion", "hundredfists", "cyclone", "ascend"],
+};
+// The legendary abilities: each class has one at 15, 20 and 25.
+export const HIGH_LEVEL: Partial<Record<AbilityId, number>> = {
+  meteor: 15, frostnova: 20, blackhole: 25,
+  whirlwind: 15, warcry: 20, earthshatter: 25,
+  knives: 15, assassinate: 20, phantom: 25,
+  holynova: 15, guardian: 20, wrath: 25,
+  thornstorm: 15, wildhunt: 20, dragonform: 25,
+  hundredfists: 15, cyclone: 20, ascend: 25,
 };
 // The level an ability unlocks at: 1 for a class's first two, then 3, 5, 7...
-// in pool order.
+// in pool order (and 15, 20, 25 for the legendary ones).
 export function abilityLevel(id: AbilityId): number {
+  const high = HIGH_LEVEL[id];
+  if (high) return high;
   for (const pool of Object.values(CLASS_ABILITY_POOL)) {
     const i = pool.indexOf(id);
     if (i >= 0) return i < 2 ? 1 : 3 + (i - 2) * 2;
@@ -171,10 +221,30 @@ export const INNER_PEACE_HEAL = 30;
 export const WINDSTEP_SPEED = 1.5;
 export const PALM = { range: 6, arcDeg: 70, damage: 26, push: 16 };
 
+// Levels 15, 20 and 25.
+export const METEOR = { range: 30, radius: 4.5, damage: 60, delayMs: 1200, push: 14, lift: 10 };
+export const FROSTNOVA = { radius: 9, damage: 20 };
+export const BLACKHOLE = { range: 25, radius: 8, dps: 25, pull: 7 };
+export const WHIRLWIND = { radius: 4.2, damage: 32, push: 13 };
+export const WARCRY = { radius: 12, taken: 0.6, damage: 15, slowMs: 3000 };
+export const EARTHSHATTER = { radius: 11, damage: 60, lift: 13, push: 8, slowMs: 2000 };
+export const KNIVES = { count: 14 };
+export const ASSASSINATE = { range: 20, damage: 55 };
+export const PHANTOM = { range: 18, targets: 4, damage: 45 };
+export const HOLYNOVA = { radius: 9, heal: 40, damage: 30 };
+export const GUARDIAN = { radius: 14, shield: 60 };
+export const WRATH = { range: 30, targets: 6, heal: 40 };
+export const THORNSTORM = { count: 24 };
+export const WILDHUNT = { wolves: 4 };
+export const DRAGON = { shield: 80, taken: 0.7, fireMs: 450, climb: 7, speed: 1.35 };
+export const HUNDREDFISTS = { range: 5, arcDeg: 80, damage: 50 };
+export const CYCLONE = { radius: 5, damage: 35, push: 18, lift: 11 };
+export const ASCEND = { taken: 0.5, damage: 2, speed: 1.6 };
+
 // A lasting area an ability leaves on the ground (drawn by the client,
 // enforced by the server). Lines (flames) have a yaw and a length; circles a
 // radius; a tornado moves along d at TORNADO.speed from p, starting at `time`.
-export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary" | "entangle";
+export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary" | "entangle" | "meteor" | "blackhole";
 export type FieldInfo = { id: number; kind: FieldKind; owner: number; p: Vec3; r: number; yaw?: number; len?: number; d?: Vec3; time: number; ms: number };
 
 export const fieldCenter = (f: FieldInfo, now: number): Vec3 => {
@@ -188,7 +258,7 @@ export function inField(f: FieldInfo, p: Vec3, now: number): boolean {
   const c = fieldCenter(f, now);
   // How far above or below the center still counts: the pit to hell reaches
   // up and down slopes, steps and rubble (it works on any ground).
-  const reach = f.kind === "hellpit" ? 4.5 : f.kind === "tornado" ? 5 : f.kind === "smoke" ? 4 : 2.2;
+  const reach = f.kind === "hellpit" || f.kind === "blackhole" ? 5 : f.kind === "tornado" ? 5 : f.kind === "smoke" ? 4 : 2.2;
   if (Math.abs(p[1] - c[1]) > reach) return false;
   if (f.kind === "flames") {
     // Along the line (yaw), within half its length; across it, within r.

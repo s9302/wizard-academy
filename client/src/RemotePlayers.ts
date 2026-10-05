@@ -17,6 +17,7 @@ import {
   glowAvatar,
   createAvatar,
   dieAvatar,
+  disguiseAvatar,
   reviveAvatar,
   disposeAvatar,
   flashAvatar,
@@ -139,6 +140,12 @@ export class RemotePlayers {
     if (!remote) return;
     remote.scale = scale;
     remote.scaleUntil = performance.now() + ms;
+  }
+
+  // Another body for a while (Dragon Form), or their own back (null).
+  disguise(id: number, model: THREE.Object3D | null): void {
+    const remote = this.remotes.get(id);
+    if (remote) disguiseAvatar(remote.avatar, model);
   }
 
   // Hide players who are out of the round (they're spectating).

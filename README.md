@@ -435,6 +435,24 @@ text in `shared/src/abilityInfo.ts`.
 | **Monk** | **Wind Step** (50% faster for 4 s), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |
 | **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (a high leap, then 9 s of very slow falling and 80% more speed), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
 
+**Legendary abilities (levels 15, 20 and 25).** Each class gets three more,
+one at each of those levels (`HIGH_LEVEL` in `shared/src/abilities.ts`);
+the level 25 one is the big one. Check script: `legend-check` (admin).
+
+| Class | Level 15 | Level 20 | Level 25 |
+|---|---|---|---|
+| **Wizard** | **Meteor** (marks a spot up to 30 m; 1.2 s later 60 within 4.5 m, thrown) | **Frost Nova** (everyone within 9 m frozen solid 2.5 s, 20 damage) | **Black Hole** (8 m, 6 s: drags everyone into its middle, 25/s) |
+| **Knight** | **Whirlwind** (32 within 4 m, thrown back) | **War Cry** (you and teammates within 12 m take 40% less for 6 s; enemies take 15 and are slowed) | **Earthshatter** (60 within 11 m, launched and slowed) |
+| **Rogue** | **Fan of Knives** (14 knives all around, 14 each) | **Assassinate** (appear behind the enemy you aim at, 55) | **Phantom Strike** (flash between up to 4 enemies within 18 m, 45 each, untouchable for a moment) |
+| **Cleric** | **Holy Nova** (heal 40 around you, 30 to enemies) | **Guardian Angel** (60 shield on you and teammates within 14 m) | **Wrath of Heaven** (a pillar of light on every enemy within 30 m, up to 6; heal 40) |
+| **Druid** | **Thorn Storm** (24 thorns all around) | **Wild Hunt** (4 shadow wolves for 15 s, over the limit) | **Dragon Form** (15 s as a dragon: fly with Space/C, every attack is a 18-damage fireball, 80 shield, 30% less damage) |
+| **Monk** | **Hundred Fists** (50 in a 5 m cone) | **Cyclone Kick** (35 within 5 m, sent flying) | **Transcendence** (10 s: 60% faster, double melee damage, half damage taken, can't be slowed or shoved) |
+
+Dragon Form's flight is your own movement (`PlayerController.soar`, walls
+still stop you); the server stops checking your moves while it lasts
+(`MoveCheck.freeUntil`), and everyone else sees a dragon in your place
+(`disguiseAvatar`).
+
 Being thrown (Shockwave, Tornado, Chain Pull, the pit's drag) is a "knock"
 message to that player's own client, which moves them; the server grants
 the extra distance in their movement check. Check script: `mastery-check`

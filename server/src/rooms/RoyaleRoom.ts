@@ -42,6 +42,24 @@ import {
   PALM,
   SUMMON_LIMIT,
   WINDSTEP_SPEED,
+  ASCEND,
+  ASSASSINATE,
+  BLACKHOLE,
+  CYCLONE,
+  DRAGON,
+  EARTHSHATTER,
+  FROSTNOVA,
+  GUARDIAN,
+  HOLYNOVA,
+  HUNDREDFISTS,
+  KNIVES,
+  METEOR,
+  PHANTOM,
+  THORNSTORM,
+  WARCRY,
+  WHIRLWIND,
+  WILDHUNT,
+  WRATH,
   HEAL,
   JUDGMENT,
   SANCTUARY,
@@ -136,6 +154,9 @@ type Fighter = {
   judgedUntil: number; // Judgment: takes more damage until then
   barkUntil: number; // Barkskin (Druid)
   evadeUntil: number; // Evasion (Monk): untouchable
+  dragonUntil: number; // Dragon Form (Druid, level 25): flying, breathing fire
+  ascendUntil: number; // Transcendence (Monk, level 25)
+  rallyUntil: number; // War Cry (Knight): takes less damage
   chargeDamage: number; // what this rush does to whoever it hits (Charge, Flurry Dash)
   chargeKnocks: boolean; // ...and whether it shoves them aside (Charge only)
 };
@@ -684,6 +705,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       judgedUntil: 0,
       barkUntil: 0,
       evadeUntil: 0,
+      dragonUntil: 0,
+      ascendUntil: 0,
+      rallyUntil: 0,
       chargeDamage: CHARGE_DAMAGE,
       chargeKnocks: true,
     };
@@ -815,6 +839,13 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const f = this.fighters.get(player.conn.id);
     if (!this.canAct(player, f) || now < f.handReadyAt) return;
     this.breakStealth(player);
+    // Dragon Form: every attack is a blast of fire.
+    if (now < f.dragonUntil) {
+      if (now < f.nextCast.primary || this.inNullZone(player.p, now)) return;
+      f.nextCast.primary = now + DRAGON.fireMs * COOLDOWN_SLACK;
+      this.launch(player, "flame", o, d, seq, now);
+      return;
+    }
     const weapon = weaponOf(f.cls, f.hand);
     const def = WEAPONS[weapon];
     if (def.kind === "spell") {
@@ -839,8 +870,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private swing(attacker: Player, weapon: WeaponId, d: Vec3, now: number): void {
     const base = WEAPONS[weapon].melee!;
     // Giant Form: more reach, harder hits.
-    const giant = now < (this.fighters.get(attacker.conn.id)?.giantUntil ?? 0);
-    const m = giant ? { ...base, reach: base.reach * GIANT.reach, damage: base.damage * GIANT.damage } : base;
+    const af = this.fighters.get(attacker.conn.id);
+    const giant = now < (af?.giantUntil ?? 0);
+    let m = giant ? { ...base, reach: base.reach * GIANT.reach, damage: base.damage * GIANT.damage } : base;
+    if (now < (af?.ascendUntil ?? 0)) m = { ...m, damage: m.damage * ASCEND.damage }; // Transcendence
     const from = eye(attacker.p);
     const yaw = Math.atan2(-d[0], -d[2]);
     const candidates: { target: Player; dist: number }[] = [];
@@ -1083,7 +1116,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (!f || !this.alive.has(id) || raw <= 0 || target.conn.isAdmin) return false; // admins can't be hurt
     if (attacker && attacker !== target && this.allies(attacker, target)) return false; // on the same side
     if (Date.now() < f.evadeUntil) return false; // Evasion: nothing touches you
-    let amount = raw * (1 - CLASSES[f.cls].defense) * (Date.now() < f.fortifyUntil ? FORTIFY_FACTOR : 1) * (Date.now() < f.giantUntil ? GIANT.taken : 1) * (Date.now() < f.judgedUntil ? JUDGMENT.factor : 1) * (Date.now() < f.barkUntil ? BARKSKIN.taken : 1);
+    let amount = raw * (1 - CLASSES[f.cls].defense) * (Date.now() < f.fortifyUntil ? FORTIFY_FACTOR : 1) * (Date.now() < f.giantUntil ? GIANT.taken : 1) * (Date.now() < f.judgedUntil ? JUDGMENT.factor : 1) * (Date.now() < f.barkUntil ? BARKSKIN.taken : 1) * (Date.now() < f.dragonUntil ? DRAGON.taken : 1) * (Date.now() < f.ascendUntil ? ASCEND.taken : 1) * (Date.now() < f.rallyUntil ? WARCRY.taken : 1);
     const held = WEAPONS[weaponOf(f.cls, f.hand)];
     const blocked =
       !!source && !!held.block && Date.now() >= f.handReadyAt && inFront(target.ry, [source[0] - target.p[0], source[2] - target.p[2]], held.blockArcDeg!);
@@ -1537,6 +1570,139 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "stealth", ms: 0 });
         this.broadcast({ t: "effect", id: pid, kind: "glide", ms: 0 });
         return null;
+      // ---- Levels 15, 20 and 25 ----
+      case "meteor": {
+        const spot = this.aimedFloor(player, d, METEOR.range) ?? this.groundAhead(player, d, METEOR.range);
+        this.addField({ kind: "meteor", owner: pid, p: spot, r: METEOR.radius }, METEOR.delayMs, now);
+        return null;
+      }
+      case "frostnova":
+        this.areaHit(player, player.p, FROSTNOVA.radius, FROSTNOVA.damage, { freezeMs: ms });
+        this.broadcast({ t: "effect", id: pid, kind: "frostnova", ms: 0, from: player.p });
+        return null;
+      case "blackhole": {
+        const spot = this.aimedFloor(player, d, BLACKHOLE.range) ?? this.groundAhead(player, d, BLACKHOLE.range);
+        if (this.touchesNullZone(spot, BLACKHOLE.radius * 0.5, now)) return "A Null Zone is in the way.";
+        this.addField({ kind: "blackhole", owner: pid, p: spot, r: BLACKHOLE.radius }, ms, now);
+        return null;
+      }
+      case "whirlwind":
+        this.areaHit(player, player.p, WHIRLWIND.radius, WHIRLWIND.damage, { push: WHIRLWIND.push, lift: 4 });
+        this.broadcast({ t: "effect", id: pid, kind: "whirlwind", ms: 0, from: player.p });
+        return null;
+      case "warcry": {
+        for (const p of this.players.values()) {
+          if (p !== player && (!this.allies(player, p) || dist3(p.p, player.p) > WARCRY.radius)) continue;
+          const pf = this.fighters.get(p.conn.id);
+          if (pf) pf.rallyUntil = now + ms;
+          this.broadcast({ t: "effect", id: p.conn.id, kind: "rally", ms });
+        }
+        this.areaHit(player, player.p, WARCRY.radius, WARCRY.damage, { slowMs: WARCRY.slowMs });
+        this.broadcast({ t: "effect", id: pid, kind: "shockwave", ms: 0, from: player.p });
+        return null;
+      }
+      case "earthshatter":
+        this.areaHit(player, player.p, EARTHSHATTER.radius, EARTHSHATTER.damage, { push: EARTHSHATTER.push, lift: EARTHSHATTER.lift, slowMs: EARTHSHATTER.slowMs });
+        this.broadcast({ t: "effect", id: pid, kind: "quake", ms: 0, from: player.p });
+        return null;
+      case "knives":
+        this.ringShots(player, "knife", KNIVES.count, now);
+        return null;
+      case "assassinate": {
+        const target = this.aimedPlayer(player, d, ASSASSINATE.range);
+        if (!target) return "Missed: nobody there.";
+        if (!this.stepBehind(player, target.p, target.ry)) return "No room behind them.";
+        if (this.state === "playing") this.damage(target, ASSASSINATE.damage, player, player.p);
+        return null;
+      }
+      case "phantom": {
+        const from = eye(player.p);
+        const targets: { p: Vec3; ry: number; hit: () => void }[] = [];
+        for (const t of this.players.values()) {
+          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || this.isStealthed(t.conn.id)) continue;
+          if (dist3(t.p, player.p) > PHANTOM.range || !lineOfSight(from, eye(t.p), this.allBoxes())) continue;
+          targets.push({ p: t.p, ry: t.ry, hit: () => this.state === "playing" && this.damage(t, PHANTOM.damage, player, player.p) });
+        }
+        for (const m of this.monsters.bodies()) {
+          if (this.monsters.ownerOf(m.id) === pid || dist3(m.p, player.p) > PHANTOM.range || !lineOfSight(from, m.p, this.allBoxes())) continue;
+          targets.push({ p: m.p, ry: 0, hit: () => this.hitMonster(m.id, PHANTOM.damage, player) });
+        }
+        if (!targets.length) return "Nobody in reach.";
+        targets.sort((a, b) => dist3(a.p, player.p) - dist3(b.p, player.p));
+        const picked = targets.slice(0, PHANTOM.targets);
+        for (const t of picked) {
+          const before = player.p;
+          if (this.stepBehind(player, t.p, t.ry, false)) this.broadcast({ t: "effect", id: pid, kind: "blink", ms: 0, from: before, to: player.p });
+          t.hit();
+        }
+        f.evadeUntil = now + 1000;
+        return null;
+      }
+      case "holynova":
+        for (const p of this.players.values()) {
+          if (p !== player && (!this.allies(player, p) || dist3(p.p, player.p) > HOLYNOVA.radius)) continue;
+          this.heal(p, HOLYNOVA.heal);
+        }
+        this.areaHit(player, player.p, HOLYNOVA.radius, HOLYNOVA.damage, {});
+        this.broadcast({ t: "effect", id: pid, kind: "holynova", ms: 0, from: player.p });
+        return null;
+      case "guardian":
+        for (const p of this.players.values()) {
+          if (p !== player && (!this.allies(player, p) || dist3(p.p, player.p) > GUARDIAN.radius)) continue;
+          const pf = this.fighters.get(p.conn.id);
+          if (!pf || (this.state === "playing" && !this.alive.has(p.conn.id))) continue;
+          pf.shield = Math.min(MAX_SHIELD, pf.shield + GUARDIAN.shield);
+          this.broadcast({ t: "health", id: p.conn.id, hp: pf.hp, max: pf.maxHp, shield: pf.shield });
+          this.broadcast({ t: "effect", id: p.conn.id, kind: "aegis", ms: 0 });
+        }
+        return null;
+      case "wrath": {
+        const spots: Vec3[] = [];
+        for (const t of this.players.values()) {
+          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || dist3(t.p, player.p) > WRATH.range) continue;
+          spots.push(t.p);
+        }
+        for (const m of this.monsters.bodies()) if (this.monsters.ownerOf(m.id) === undefined && dist3(m.p, player.p) <= WRATH.range) spots.push(m.p);
+        spots.sort((a, b) => dist3(a, player.p) - dist3(b, player.p));
+        spots.slice(0, WRATH.targets).forEach((p, i) => {
+          const floor = floorBelow(p[0], p[2], p[1], this.allBoxes()) ?? p[1] - 0.95;
+          this.addField({ kind: "smite", owner: pid, p: [p[0], floor, p[2]], r: SMITE.radius }, SMITE.delayMs + i * 120, now);
+        });
+        for (const p of this.players.values()) if (p === player || this.allies(player, p)) this.heal(p, WRATH.heal);
+        this.broadcast({ t: "effect", id: pid, kind: "holynova", ms: 0, from: player.p });
+        return null;
+      }
+      case "thornstorm":
+        this.ringShots(player, "thorn", THORNSTORM.count, now);
+        return null;
+      case "wildhunt":
+        if (this.monsters.beastsOf(pid) + WILDHUNT.wolves > SUMMON_LIMIT + WILDHUNT.wolves) return "You have as many beasts out as you can.";
+        for (let i = 0; i < WILDHUNT.wolves; i++) this.monsters.callBeast("wolf", player.p, pid, now + ms);
+        this.broadcast({ t: "monsters", list: this.monsters.list() });
+        this.broadcast({ t: "effect", id: pid, kind: "heal", ms: 0 });
+        return null;
+      case "dragonform":
+        f.dragonUntil = now + ms;
+        f.shield = Math.min(MAX_SHIELD, f.shield + DRAGON.shield);
+        this.broadcast({ t: "health", id: pid, hp: f.hp, max: f.maxHp, shield: f.shield });
+        player.moveCheck.freeUntil = now + ms + 2000; // flying (and landing after)
+        this.padGrace.set(pid, now + ms + 4000);
+        this.broadcast({ t: "effect", id: pid, kind: "dragon", ms });
+        return null;
+      case "hundredfists":
+        this.areaHit(player, player.p, HUNDREDFISTS.range, HUNDREDFISTS.damage, { arc: { yaw: Math.atan2(-d[0], -d[2]), deg: HUNDREDFISTS.arcDeg }, push: 6 });
+        this.broadcast({ t: "effect", id: pid, kind: "fists", ms: 0, from: player.p, to: [player.p[0] + flat[0] * 3, player.p[1], player.p[2] + flat[1] * 3] });
+        return null;
+      case "cyclone":
+        this.areaHit(player, player.p, CYCLONE.radius, CYCLONE.damage, { push: CYCLONE.push, lift: CYCLONE.lift });
+        this.broadcast({ t: "effect", id: pid, kind: "cyclone", ms: 0, from: player.p });
+        return null;
+      case "ascend":
+        f.ascendUntil = now + ms;
+        f.slowedUntil = 0;
+        player.moveCheck.grant(RUN_SPEED * CLASSES[f.cls].speed * (ASCEND.speed - 1) * (ms / 1000) + 4);
+        this.broadcast({ t: "effect", id: pid, kind: "ascend", ms });
+        return null;
       case "decoys": {
         const yaw = Math.atan2(flat[0], flat[1]);
         for (let i = 0; i < DECOYS.count; i++) {
@@ -1549,6 +1715,87 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       }
     }
     return "Not available.";
+  }
+
+  // Everyone against `attacker` within `radius` of `center` (and in the arc,
+  // if given, and not behind a wall) takes `damage`, and may be thrown,
+  // slowed or frozen; monsters too. Returns how many it hit.
+  private areaHit(
+    attacker: Player | null,
+    center: Vec3,
+    radius: number,
+    damage: number,
+    o: { arc?: { yaw: number; deg: number }; push?: number; lift?: number; slowMs?: number; freezeMs?: number; cause?: string },
+  ): number {
+    const now = Date.now();
+    let hits = 0;
+    for (const target of this.players.values()) {
+      if (target === attacker || !this.canBeHit(target.conn.id) || target.conn.isAdmin || (attacker && this.allies(attacker, target))) continue;
+      const dx = target.p[0] - center[0];
+      const dz = target.p[2] - center[2];
+      const dist = Math.hypot(dx, dz);
+      if (dist > radius || Math.abs(target.p[1] - center[1]) > 3.5 || (o.arc && !inFront(o.arc.yaw, [dx, dz], o.arc.deg))) continue;
+      if (!lineOfSight([center[0], center[1] + 0.6, center[2]], eye(target.p), this.allBoxes())) continue;
+      hits++;
+      if (this.state === "playing") this.damage(target, damage, attacker, center, o.cause);
+      if (!this.alive.has(target.conn.id) && this.state === "playing") continue;
+      const tf = this.fighters.get(target.conn.id);
+      if (o.push || o.lift) {
+        const len = dist || 1;
+        this.knock(target, (dx / len) * (o.push ?? 0), (dz / len) * (o.push ?? 0), o.lift ?? 0, 0.4);
+      }
+      if ((o.slowMs || o.freezeMs) && tf && !this.unstoppable(target, now)) {
+        tf.slowedUntil = now + (o.freezeMs ?? o.slowMs!);
+        if (o.freezeMs) this.broadcast({ t: "effect", id: target.conn.id, kind: "freeze", ms: o.freezeMs });
+        else this.broadcast({ t: "slowed", id: target.conn.id, ms: o.slowMs! });
+      }
+    }
+    for (const m of this.bodies()) {
+      const dx = m.p[0] - center[0];
+      const dz = m.p[2] - center[2];
+      const dist = Math.hypot(dx, dz);
+      if (dist > radius + m.radius || Math.abs(m.p[1] - center[1]) > 4.5 || (o.arc && !inFront(o.arc.yaw, [dx, dz], o.arc.deg))) continue;
+      hits++;
+      this.hitMonster(m.id, damage, attacker);
+      if (!this.monsters.has(m.id)) continue;
+      const len = dist || 1;
+      if (o.push || o.lift) this.monsters.shove(m.id, [(dx / len) * (o.push ?? 0), o.lift ?? 0, (dz / len) * (o.push ?? 0)], 0.4);
+      else if (o.freezeMs) this.monsters.shove(m.id, [0, 0, 0], o.freezeMs / 1000); // frozen in place
+    }
+    return hits;
+  }
+
+  // A ring of projectiles out of you in every direction (two heights).
+  private ringShots(player: Player, spell: SpellId, n: number, now: number): void {
+    const o = eye(player.p);
+    for (let k = 0; k < n; k++) {
+      const a = (k / n) * Math.PI * 2;
+      const up = k % 2 ? 0.08 : -0.06;
+      const len = Math.hypot(1, up);
+      const d: Vec3 = [Math.sin(a) / len, up / len, Math.cos(a) / len];
+      const p: Projectile = { id: nextSpellId++, caster: player.conn.id, spell, o, d, t: 0, p: o };
+      this.projectiles.set(p.id, p);
+      this.broadcast({ t: "spell", id: p.id, caster: player.conn.id, seq: 0, k, spell, o, d, time: now });
+    }
+  }
+
+  // Teleport right behind someone at `p` facing `ry` (or in front, if
+  // there's no room behind). False if neither works.
+  private stepBehind(player: Player, p: Vec3, ry: number, effect = true): boolean {
+    const before = player.p;
+    for (const side of [1, -1]) {
+      const spot: Vec3 = [p[0] + Math.sin(ry) * 1.3 * side, p[1] + 0.6, p[2] + Math.cos(ry) * 1.3 * side];
+      const floor = floorBelow(spot[0], spot[2], spot[1], this.allBoxes());
+      if (floor === null) continue;
+      const at: Vec3 = [spot[0], floor + 0.95, spot[2]];
+      if ((this.level.pits ?? []).some((pit) => inPit(at, pit))) continue;
+      if (this.allBoxes().some((b) => boxTouchesPlayer(b, [at[0], at[1] + 0.05, at[2]]))) continue;
+      this.falls.delete(player.conn.id);
+      this.teleport(player, at, side > 0 ? ry : ry + Math.PI);
+      if (effect) this.broadcast({ t: "effect", id: player.conn.id, kind: "blink", ms: 0, from: before, to: at });
+      return true;
+    }
+    return false;
   }
 
   // The first other player along your aim (within range, not behind a wall).
@@ -1651,14 +1898,15 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const owner = this.players.get(field.owner) ?? null;
       // A Knight's Null Zone breaks up a tornado that reaches it, and closes a
       // Pit to Hell under it (whichever came first).
-      if ((field.kind === "tornado" || field.kind === "hellpit") && this.touchesNullZone(fieldCenter(field, now), field.kind === "tornado" ? field.r * 0.6 : field.r * 0.5, now)) {
+      if ((field.kind === "tornado" || field.kind === "hellpit" || field.kind === "blackhole") && this.touchesNullZone(fieldCenter(field, now), field.kind === "tornado" ? field.r * 0.6 : field.r * 0.5, now)) {
         this.fields.delete(field.id);
         this.broadcast({ t: "fieldEnd", id: field.id });
-        this.broadcast({ t: "announce", text: field.kind === "tornado" ? "The Null Zone breaks up the tornado!" : "The Null Zone seals the Pit to Hell!" });
+        this.broadcast({ t: "announce", text: field.kind === "tornado" ? "The Null Zone breaks up the tornado!" : field.kind === "blackhole" ? "The Null Zone closes the black hole!" : "The Null Zone seals the Pit to Hell!" });
         continue;
       }
       if (now >= field.until) {
         if (field.kind === "smite") this.smite(field, owner, now);
+        if (field.kind === "meteor") this.areaHit(owner, field.p, METEOR.radius, METEOR.damage, { push: METEOR.push, lift: METEOR.lift, cause: "was crushed by a meteor" });
         this.fields.delete(field.id);
         this.broadcast({ t: "fieldEnd", id: field.id });
         continue;
@@ -1670,12 +1918,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         }
         continue;
       }
-      const hurts = field.kind === "flames" || field.kind === "hellpit" || field.kind === "entangle";
+      const hurts = field.kind === "flames" || field.kind === "hellpit" || field.kind === "entangle" || field.kind === "blackhole";
       if (field.kind === "tornado") {
         this.stepTornado(field, owner, now);
       } else if (hurts && now >= field.nextTick) {
         field.nextTick = now + FIELD_TICK_MS;
-        const dps = field.kind === "flames" ? FLAMES.dps : field.kind === "entangle" ? ENTANGLE.dps : HELLPIT.dps;
+        const dps = field.kind === "flames" ? FLAMES.dps : field.kind === "entangle" ? ENTANGLE.dps : field.kind === "blackhole" ? BLACKHOLE.dps : HELLPIT.dps;
         const amount = Math.round((dps * FIELD_TICK_MS) / 1000);
         for (const target of this.players.values()) {
           if (target.conn.id === field.owner || !this.alive.has(target.conn.id) || !inField(field, target.p, now)) continue;
@@ -1685,17 +1933,27 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
             if (f) f.slowedUntil = now + 500;
             this.broadcast({ t: "slowed", id: target.conn.id, ms: 500 });
           }
-          if (field.kind === "hellpit" && !this.allies(owner, target) && !this.unstoppable(target, now)) {
+          if ((field.kind === "hellpit" || field.kind === "blackhole") && !this.allies(owner, target) && !this.unstoppable(target, now)) {
             const f = this.fighters.get(target.conn.id);
             if (f) f.slowedUntil = now + 500;
             this.broadcast({ t: "slowed", id: target.conn.id, ms: 500 });
+            const pull = field.kind === "blackhole" ? BLACKHOLE.pull : HELLPIT.pull;
             const dx = field.p[0] - target.p[0];
             const dz = field.p[2] - target.p[2];
             const dist = Math.hypot(dx, dz);
-            if (dist > 0.6) this.knock(target, (dx / dist) * HELLPIT.pull, (dz / dist) * HELLPIT.pull, 0, FIELD_TICK_MS / 1000);
+            if (dist > 0.6) this.knock(target, (dx / dist) * pull, (dz / dist) * pull, field.kind === "blackhole" ? 1.5 : 0, FIELD_TICK_MS / 1000);
           }
         }
-        for (const m of this.bodies()) if (inField(field, m.p, now)) this.hitMonster(m.id, amount, owner);
+        for (const m of this.bodies()) {
+          if (!inField(field, m.p, now)) continue;
+          this.hitMonster(m.id, amount, owner);
+          if (field.kind === "blackhole" && this.monsters.has(m.id)) {
+            const dx = field.p[0] - m.p[0];
+            const dz = field.p[2] - m.p[2];
+            const dist = Math.hypot(dx, dz) || 1;
+            if (dist > 0.8) this.monsters.shove(m.id, [(dx / dist) * BLACKHOLE.pull, 1, (dz / dist) * BLACKHOLE.pull], FIELD_TICK_MS / 1000);
+          }
+        }
       }
     }
     // Rogue copies run straight on; at a wall or an edge they turn.
@@ -1885,7 +2143,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // A fortified Knight can't be slowed or shoved.
   private unstoppable(player: Player, now = Date.now()): boolean {
-    return now < (this.fighters.get(player.conn.id)?.fortifyUntil ?? 0);
+    const f = this.fighters.get(player.conn.id);
+    return !!f && (now < f.fortifyUntil || now < f.ascendUntil);
   }
 
   // ---- Falling and stomping ----

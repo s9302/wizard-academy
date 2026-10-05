@@ -38,6 +38,11 @@ const POSE: Record<WeaponId, { pos: [number, number, number]; rot: [number, numb
 
 export class Viewmodel {
   private root = new THREE.Group();
+
+  // Nothing in your hands for a while (Dragon Form).
+  setHidden(hidden: boolean): void {
+    this.root.visible = !hidden;
+  }
   private current: THREE.Group | null = null;
   private weapon: WeaponId | null = null;
   private swingAt = -Infinity;

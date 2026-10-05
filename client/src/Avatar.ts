@@ -1067,6 +1067,21 @@ export function setAvatarWeapon(group: THREE.Group, weapon: WeaponId | null): vo
   hand.add(model);
 }
 
+// Show a different body (Dragon Form): hides the player's own and puts
+// `model` in its place; null brings them back.
+export function disguiseAvatar(group: THREE.Group, model: THREE.Object3D | null): void {
+  const parts = group.userData.parts as AvatarParts;
+  const old = group.userData.disguise as THREE.Object3D | undefined;
+  if (old) {
+    group.remove(old);
+    disposeTree(old);
+  }
+  group.userData.disguise = model ?? undefined;
+  parts.rig.body.visible = !model;
+  parts.hat.visible = !model;
+  if (model) group.add(model);
+}
+
 // ---- Dying ----
 
 const DIE_MS = 700; // falling over
