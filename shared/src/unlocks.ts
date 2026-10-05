@@ -199,6 +199,17 @@ function sanitizeAbilities(raw: unknown, unlocked: Set<string>): Pick<Loadout, "
 
 // What other players see of you.
 export type Look = { hat: Hat; robe: Robe } & Appearance;
+
+// What a bot wears for its class (players dress themselves): Knights in
+// armor, Wizards in robes, Rogues in leathers, and so on.
+export const CLASS_LOOK: Record<ClassId, Pick<Look, "outfit" | "hat" | "robe">> = {
+  knight: { outfit: "battlemage", hat: "horned", robe: "auto" },
+  wizard: { outfit: "robe", hat: "classic", robe: "auto" },
+  rogue: { outfit: "rogue", hat: "hood", robe: "midnight" },
+  cleric: { outfit: "archmage", hat: "none", robe: "ivory" },
+  druid: { outfit: "druid", hat: "none", robe: "emerald" },
+  monk: { outfit: "monk", hat: "none", robe: "crimson" },
+};
 export const DEFAULT_LOOK: Look = { hat: "classic", robe: "auto", ...DEFAULT_APPEARANCE };
 
 export function lookOf(l: Loadout): Look {

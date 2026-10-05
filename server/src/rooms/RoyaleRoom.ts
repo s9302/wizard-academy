@@ -101,7 +101,7 @@ import {
   WARD_SHIELD,
 } from "../../../shared/src/combat.ts";
 import { EYE_HEIGHT, GRAVITY, PLAYER_RADIUS, RUN_SPEED } from "../../../shared/src/constants.ts";
-import { abilitiesFor, abilityAllowed } from "../../../shared/src/unlocks.ts";
+import { abilitiesFor, abilityAllowed, CLASS_LOOK } from "../../../shared/src/unlocks.ts";
 import { boxTouchesPlayer, floorBelow, lerp3, lineOfSight, segmentHitsCapsule, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
 import { isMonsterId, MAX_MONSTERS, type MonsterKind, MONSTERS } from "../../../shared/src/monsters.ts";
 import { Monsters } from "../monsters/Monsters.ts";
@@ -715,7 +715,15 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const id = player.conn.id;
     this.fighters.set(id, f);
     const bot = this.bots.get(id);
-    if (bot) bot.cls = cls; // a bot plays the class it now has
+    if (bot) {
+      bot.cls = cls; // a bot plays the class it now has
+      // ...and dresses for it.
+      const look = { ...player.conn.look, ...CLASS_LOOK[cls] };
+      if (JSON.stringify(look) !== JSON.stringify(player.conn.look)) {
+        player.conn.look = look;
+        this.broadcast({ t: "look", id, look });
+      }
+    }
     player.moveCheck.speedMul = CLASSES[cls].speed;
     this.monsters.dismiss(id); // a new life: a Druid's beasts go back to the wild
     // ...and a Knight's Null Aura goes out.
@@ -1438,7 +1446,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         if (this.state === "playing") this.damage(target, CHAIN.damage, player, player.p);
         if (away > 2.2) {
           const dir = norm2([player.p[0] - from[0], 0, player.p[2] - from[2]]);
-          this.knock(target, dir[0] * CHAIN.speed, dir[1] * CHAIN.speed, 3, (away - 2) / CHAIN.speed);
+          this.knock(target, dir[0] * CHAIN.speed, dir[1] * CHAIN.speed, 0, (away - 2) / CHAIN.speed); // along the ground: through any lava in the way
         }
         this.broadcast({ t: "effect", id: target.conn.id, kind: "chain", ms: Math.round(((away - 2) / CHAIN.speed) * 1000), from: player.p, to: from });
         return null;
@@ -2304,13 +2312,19 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const grid = navGridFor(this.level);
       const nx = me.p[0] + push.v[0] * dt;
       const nz = me.p[2] + push.v[2] * dt;
-      const ok = grid.isWalkable(nx, nz);
+      // (Lava and the void aren't on the walking map, but you can be thrown in.)
+      const pit = (this.level.pits ?? []).find((pt) => Math.abs(nx - pt.pos[0]) < pt.size[0] / 2 && Math.abs(nz - pt.pos[2]) < pt.size[1] / 2);
+      const ok = grid.isWalkable(nx, nz) || !!pit;
       push.v[1] -= GRAVITY * dt;
-      const floor = grid.floorAt(ok ? nx : me.p[0], ok ? nz : me.p[2]);
+      const mapFloor = grid.floorAt(ok ? nx : me.p[0], ok ? nz : me.p[2]);
+      const floor = pit && Number.isNaN(mapFloor) ? pit.pos[1] : mapFloor;
       const ground = (Number.isNaN(floor) ? me.p[1] - 0.95 : floor) + 0.95;
       const y = Math.max(ground, me.p[1] + push.v[1] * dt);
       if (now >= push.until && y <= ground + 0.01) this.botPush.delete(me.conn.id);
       this.moveBot(me, ok ? [nx, y, nz] : [me.p[0], y, me.p[2]], me.ry, now);
+      // Thrown into lava or the void (bots never walk into them themselves).
+      const into = (this.level.pits ?? []).find((pt) => inPit(me.p, pt));
+      if (into) this.onPit(me, into);
       return;
     }
     const f = this.fighters.get(me.conn.id);

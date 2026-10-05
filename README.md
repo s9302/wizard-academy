@@ -384,6 +384,7 @@ teleporters, jump pads and ladders are in `arenas3.ts`:
 - **The storm** starts at each arena's size (35 / 50 / 72 m) and its stages
   scale with it.
 - **Falling** never hurts (there's no fall damage).
+- **Bots dress for their class** (`CLASS_LOOK` in `shared/src/unlocks.ts`): Knights in Battlemage armor and a horned helm, Wizards in a robe and hat, Rogues in leathers and a hood, Clerics in ivory regalia, Druids in the leaf mantle, Monks in their wraps.
 - **Lava** burns (20 each time it catches you, at most every 0.4 s) and
   throws you up and out over its nearest edge; it only kills if you're low.
   The void still takes you out.
@@ -430,7 +431,7 @@ text in `shared/src/abilityInfo.ts`.
 | Class | Mastery abilities |
 |---|---|
 | **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
-| **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no magic at all reaches anyone inside: no Wizard, Rogue, Cleric or Druid ability can hurt, heal, curse, pull or throw them, even from outside; walls and pillars can't be raised in it; a Tornado that reaches it breaks up; a Pit to Hell or Black Hole can be opened over it but doesn't touch anyone inside), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
+| **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no magic at all reaches anyone inside: no Wizard, Rogue, Cleric or Druid ability can hurt, heal, curse, pull or throw them, even from outside; walls and pillars can't be raised in it; a Tornado that reaches it breaks up; a Pit to Hell or Black Hole can be opened over it but doesn't touch anyone inside), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage; they're dragged along the ground, through any lava or void in the way) |
 | **Druid** | **Call Golem** (a stone golem fights for you), **Imp Swarm** (three fire imps that throw fire), **Barkskin** (half damage taken and healing 6/s) |
 | **Monk** | **Wind Step** (50% faster for 4 s), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |
 | **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (a high leap, then 9 s of very slow falling and 80% more speed), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
