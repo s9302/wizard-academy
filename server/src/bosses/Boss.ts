@@ -415,7 +415,7 @@ export class Boss {
 
   // Frost breath: a fan of shards at someone.
   private breath(at: Vec3, now: number, n: number): void {
-    for (let i = 0; i < n; i++) this.shoot([this.p[0], this.p[1] - 0.6, this.p[2]], at, 15, 0.4, "orb", now, (i - (n - 1) / 2) * 0.09);
+    for (let i = 0; i < n; i++) this.shoot([this.p[0], this.p[1] - 0.6, this.p[2]], at, 15, 0.4, "frost", now, (i - (n - 1) / 2) * 0.09);
   }
 
   // Ice spikes: a line of marked circles from under the wyrm toward someone.
@@ -428,7 +428,7 @@ export class Boss {
       const t = (i / 7) * Math.min(28, len + 6);
       const p: Vec3 = [from[0] + (dx / len) * t, 0, from[2] + (dz / len) * t];
       p[1] = this.groundBelow(p);
-      this.strike(p, now + 900 + i * 140, 2.2, "meteor");
+      this.strike(p, now + 900 + i * 140, 2.2, "ice");
     }
   }
 
@@ -587,7 +587,7 @@ export class Boss {
       const wall = segmentHitsLevel(prev, p, this.host.boxes(), 0.05);
       let hit: BossFighter | null = null;
       for (const f of fighters) if (segmentHitsPlayer(prev, p, f.p, s.radius) !== null) hit = f;
-      if (hit) this.host.hurt(hit.id, s.kind === "rock" ? "a boulder" : "a storm orb", s.kind === "rock" ? TYRANT.damage.rock : TYRANT.damage.orb);
+      if (hit) this.host.hurt(hit.id, { rock: "a boulder", orb: "a storm orb", frost: "the Wyrm's frost breath" }[s.kind], TYRANT.damage[s.kind]);
       if (hit || wall !== null || t * s.speed > SHOT_RANGE) {
         this.shots.delete(s.id);
         this.host.broadcast({ t: "bossShotEnd", id: s.id, p });
@@ -615,7 +615,7 @@ export class Boss {
   private stepStrikes(fighters: BossFighter[], now: number): void {
     this.strikes = this.strikes.filter((s) => {
       if (now < s.at) return true;
-      const by = s.kind === "leap" ? `the ${BOSSES[this.kind].name.replace(/^The /, "")}'s landing` : s.kind;
+      const by = s.kind === "leap" ? `the ${BOSSES[this.kind].name.replace(/^The /, "")}'s landing` : { lightning: "lightning", meteor: "a meteor", ice: "ice spikes" }[s.kind];
       for (const f of fighters) {
         // A fighter on something high (a platform) is safe from the Tyrant's landing.
         if (s.kind === "leap" && f.p[1] - s.p[1] > 2.5) continue;

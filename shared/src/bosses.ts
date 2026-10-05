@@ -36,7 +36,7 @@ export const BOSSES: Record<BossKind, BossDef> = {
 // meaner as it's hurt: phase 2 below 66% health, phase 3 below 33%.
 export const TYRANT = {
   // Damage to a fighter (before class defense, shields and Fortify).
-  damage: { slam: 28, rock: 20, leap: 38, orb: 14, lightning: 24, meteor: 30 },
+  damage: { slam: 28, rock: 20, leap: 38, orb: 14, frost: 14, lightning: 24, meteor: 30, ice: 26 },
   phase2: 0.66,
   phase3: 0.33,
   leapRadius: 4.5, // the marked circle it lands in
@@ -55,7 +55,7 @@ export const PLAYER_BOLT_DAMAGE = 18;
 export const PLAYER_BOLT_COOLDOWN_MS = 420;
 
 // Projectiles the boss throws: they fly straight at `speed` from o along d.
-export type BossShot = { id: number; o: Vec3; d: Vec3; speed: number; radius: number; kind: "rock" | "orb"; time: number };
+export type BossShot = { id: number; o: Vec3; d: Vec3; speed: number; radius: number; kind: "rock" | "orb" | "frost"; time: number };
 export const bossShotAt = (s: BossShot, t: number): Vec3 => [s.o[0] + s.d[0] * s.speed * t, s.o[1] + s.d[1] * s.speed * t, s.o[2] + s.d[2] * s.speed * t];
 export const SHOT_RANGE = 45;
 
@@ -69,4 +69,4 @@ export const WAVE_HEIGHT = 0.6; // your feet must be at least this high to clear
 export const STRIKE_DELAY_MS = 1300;
 export const STRIKE_RADIUS = 2.4;
 // What a marked circle is (lightning by default; the Tyrant also leaps and calls meteors).
-export type StrikeKind = "lightning" | "leap" | "meteor";
+export type StrikeKind = "lightning" | "leap" | "meteor" | "ice"; // ice: the Frost Wyrm's spikes, out of the ground

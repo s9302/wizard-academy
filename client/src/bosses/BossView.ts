@@ -213,10 +213,10 @@ function bossModel(kind: BossKind): Model {
 
 type Flying = { shot: BossShot; mesh: THREE.Mesh };
 type WaveView = { mesh: THREE.Mesh; start: number };
-type StrikeView = { marker: THREE.Mesh; at: number; p: Vec3; r: number; kind: StrikeKind; struck: boolean; effect: THREE.Mesh | null; delay: number };
+type StrikeView = { marker: THREE.Mesh; at: number; p: Vec3; r: number; kind: StrikeKind; struck: boolean; effect: THREE.Object3D | null; delay: number };
 
-const STRIKE_COLOR: Record<StrikeKind, string> = { lightning: "#ff4a3d", leap: "#ff8a2a", meteor: "#ffb347" };
-const STRIKE_DELAY: Record<StrikeKind, number> = { lightning: STRIKE_DELAY_MS, leap: TYRANT.leapDelayMs, meteor: TYRANT.meteorDelayMs };
+const STRIKE_COLOR: Record<StrikeKind, string> = { lightning: "#ff4a3d", leap: "#ff8a2a", meteor: "#ffb347", ice: "#8fe3ff" };
+const STRIKE_DELAY: Record<StrikeKind, number> = { lightning: STRIKE_DELAY_MS, leap: TYRANT.leapDelayMs, meteor: TYRANT.meteorDelayMs, ice: 1200 };
 
 export class BossView {
   readonly kind: BossKind;
@@ -299,7 +299,7 @@ export class BossView {
         const s = msg.shot;
         const mesh = new THREE.Mesh(
           s.kind === "rock" ? new THREE.DodecahedronGeometry(s.radius, 0) : new THREE.IcosahedronGeometry(s.radius, 1),
-          s.kind === "rock" ? new THREE.MeshLambertMaterial({ color: "#7d7890", flatShading: true }) : glowMat("#c58fff", 2.8),
+          s.kind === "rock" ? new THREE.MeshLambertMaterial({ color: "#7d7890", flatShading: true }) : glowMat(s.kind === "frost" ? "#cff4ff" : "#c58fff", 2.8),
         );
         mesh.castShadow = true;
         mesh.position.set(...s.o);
@@ -314,7 +314,7 @@ export class BossView {
           this.scene.remove(f.mesh);
           f.mesh.geometry.dispose();
           this.shots.delete(msg.id);
-          particles.emit({ at: msg.p, count: 18, color: f.shot.kind === "rock" ? "#9a96aa" : "#c58fff", speed: 3, life: 0.5, size: 0.2, gravity: f.shot.kind === "rock" ? 8 : 0 });
+          particles.emit({ at: msg.p, count: 18, color: f.shot.kind === "rock" ? "#9a96aa" : f.shot.kind === "frost" ? "#cff4ff" : "#c58fff", speed: 3, life: 0.5, size: 0.2, gravity: f.shot.kind === "rock" ? 8 : 0 });
           sound.play(f.shot.kind === "rock" ? "mining1" : "glass", { at: msg.p, volume: 0.7 });
         }
         return true;
@@ -401,7 +401,7 @@ export class BossView {
         this.scene.remove(f.mesh);
         this.shots.delete(id);
       }
-      if (f.shot.kind === "orb" && Math.random() < 0.5) particles.emit({ at: f.mesh.position, count: 1, color: "#c58fff", speed: 0.2, life: 0.4, size: 0.2 });
+      if (f.shot.kind !== "rock" && Math.random() < 0.5) particles.emit({ at: f.mesh.position, count: 1, color: f.shot.kind === "frost" ? "#e6fbff" : "#c58fff", speed: 0.2, life: 0.4, size: 0.2 });
     }
     this.waves = this.waves.filter((w) => {
       const r = ((serverNow - w.start) / 1000) * WAVE_SPEED;
@@ -435,7 +435,24 @@ export class BossView {
     if (left <= 0 && !s.struck) {
       s.struck = true;
       const at: Vec3 = [s.p[0], s.p[1] + 0.3, s.p[2]];
-      if (s.kind === "lightning") {
+      if (s.kind === "ice") {
+        // Ice spikes burst up out of the ground.
+        const g = new THREE.Group();
+        const ice = glowMat("#cff4ff", 1.6);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + Math.random();
+          const r = i === 0 ? 0 : s.r * 0.5;
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2 + Math.random() * 1.4, 5), ice);
+          spike.position.set(Math.cos(a) * r, 1, Math.sin(a) * r);
+          spike.rotation.set((Math.random() - 0.5) * 0.5, 0, (Math.random() - 0.5) * 0.5);
+          g.add(spike);
+        }
+        g.position.set(s.p[0], s.p[1], s.p[2]);
+        s.effect = g;
+        this.scene.add(g);
+        particles.emit({ at, count: 40, color: "#ffffff", color2: "#8fe3ff", speed: 4, up: 3, life: 0.7, size: 0.25, gravity: 8 });
+        sound.play("glass", { at: s.p, rate: 0.8 });
+      } else if (s.kind === "lightning") {
         s.effect = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.6, 40, 8, 1, true), glowMat("#dff6ff", 4));
         s.effect.position.set(s.p[0], s.p[1] + 20, s.p[2]);
         this.scene.add(s.effect);
