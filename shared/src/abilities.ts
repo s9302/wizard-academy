@@ -88,7 +88,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   wolf: { name: "Call Wolf", cooldownMs: 14_000, durationMs: 20_000, description: "A shadow wolf fights at your side for 20 s (three beasts at most)." },
   entangle: { name: "Entangle", cooldownMs: 12_000, durationMs: 4_000, description: "Vines burst up where you aim (up to 20 m): enemies in 4 m are rooted to a crawl for 4 s, and take 8 a second." },
   golem: { name: "Call Golem", cooldownMs: 26_000, durationMs: 25_000, description: "A stone golem fights for you for 25 s: slow, tough, and it hits hard." },
-  swarm: { name: "Slime Swarm", cooldownMs: 18_000, durationMs: 15_000, description: "Three slimes burst out around you and hunt your enemies for 15 s." },
+  swarm: { name: "Imp Swarm", cooldownMs: 18_000, durationMs: 15_000, description: "Three fire imps burst out around you and throw fire at your enemies for 15 s." },
   barkskin: { name: "Barkskin", cooldownMs: 18_000, durationMs: 6_000, description: "Your skin turns to bark for 6 s: take half damage, and heal 6 a second." },
   // Monk
   flurry: { name: "Flurry Dash", cooldownMs: 6_000, description: "Dash 10 m in a blink; the first enemy you pass takes 22." },

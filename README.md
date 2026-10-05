@@ -84,7 +84,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
 `hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `story-check`, `admin-check`,
-`trials-check`, `features-check`, `boss-check` (`BOSS_ROOM=trial8` or `trial9` for the later bosses), `teams-check`, `horde-check` and `druid-monk-check` (both need an admin account), `ready-check` (needs `ROUND_READY=on`), `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
+`trials-check`, `features-check`, `boss-check` (`BOSS_ROOM=trial8` or `trial9` for the later bosses), `teams-check`, `horde-check`, `druid-monk-check` and `nullzone-imps-check` (all need an admin account), `ready-check` (needs `ROUND_READY=on`), `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -430,8 +430,8 @@ text in `shared/src/abilityInfo.ts`.
 | Class | Mastery abilities |
 |---|---|
 | **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
-| **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no Wizard/Rogue/Cleric abilities), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
-| **Druid** | **Call Golem** (a stone golem fights for you), **Slime Swarm** (three slimes), **Barkskin** (half damage taken and healing 6/s) |
+| **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no Wizard/Rogue/Cleric abilities; a Tornado that reaches it breaks up, and a Pit to Hell can't open in it or under it), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
+| **Druid** | **Call Golem** (a stone golem fights for you), **Imp Swarm** (three fire imps that throw fire), **Barkskin** (half damage taken and healing 6/s) |
 | **Monk** | **Wind Step** (50% faster for 4 s), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |
 | **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (a high leap, then 9 s of very slow falling and 80% more speed), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
 
@@ -490,7 +490,7 @@ The **Druid** fights with beasts: **Call Wolf** (E) brings a shadow wolf
 that fights for you (a green ring under it; it hunts your enemies and wild
 monsters, never you or your team), and **Entangle** (R) roots a 4 m circle
 up to 20 m away (slowed to 30%, 8 damage a second). At most three beasts at
-once (a Slime Swarm can take you to five); they go back to the wild when you die or change class. The **Monk** is
+once (an Imp Swarm can take you to five); they go back to the wild when you die or change class. The **Monk** is
 the fastest class: **Flurry Dash** (E) dashes 10 m and hits the first enemy for
 22, **Inner Peace** (R) heals 30 and shakes off slows, and Null Zones don't
 stop a Monk. Bots don't pick either (you can give them the class in the Esc

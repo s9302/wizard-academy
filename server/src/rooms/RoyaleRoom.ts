@@ -152,7 +152,7 @@ let nextDecoyId = DECOY_ID_BASE;
 
 // Flown by time since launch, so arrows can arc (see projectileAt).
 // caster: a player, or a monster (a Fire Imp's bolt; `power` scales its damage).
-type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3; power?: number };
+type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3; power?: number; owner?: number };
 type Pickup = PickupInfo & { spot: number };
 
 let nextSpellId = 1;
@@ -257,7 +257,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         if (!def.ranged) return;
         const d: Vec3 = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
         const l = Math.hypot(...d) || 1;
-        const p: Projectile = { id: nextSpellId++, caster: monsterId, spell: def.ranged.spell, o: from, d: [d[0] / l, d[1] / l, d[2] / l], t: 0, p: from, power };
+        const p: Projectile = { id: nextSpellId++, caster: monsterId, spell: def.ranged.spell, o: from, d: [d[0] / l, d[1] / l, d[2] / l], t: 0, p: from, power, owner: this.monsters.ownerOf(monsterId) };
         this.projectiles.set(p.id, p);
         this.broadcast({ t: "spell", id: p.id, caster: monsterId, seq: 0, k: 0, spell: p.spell, o: from, d: p.d, time: Date.now() });
       },
@@ -977,10 +977,13 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       let hitT = segmentHitsLevel(spell.p, to, this.allBoxes(), 0.05);
       let hitPlayer: Player | null = null;
       let hitMonster: number | null = null;
-      const casterPlayer = this.players.get(spell.caster) ?? null;
       const byMonster = isMonsterId(spell.caster);
+      // A monster's bolt: a Druid's imp fights on its Druid's side (and the
+      // Druid gets the credit); a wild one is nobody's.
+      const owner = byMonster ? (spell.owner ?? null) : null;
+      const casterPlayer = this.players.get(byMonster ? (owner ?? -1) : spell.caster) ?? null;
       for (const target of this.players.values()) {
-        if (target.conn.id === spell.caster || !this.canBeHit(target.conn.id) || this.allies(casterPlayer, target) || (byMonster && target.conn.isAdmin)) continue;
+        if (target.conn.id === spell.caster || target.conn.id === owner || !this.canBeHit(target.conn.id) || this.allies(casterPlayer, target) || (byMonster && target.conn.isAdmin)) continue;
         const t = segmentHitsPlayer(spell.p, to, target.p, def.radius);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
@@ -989,7 +992,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       }
       for (const m of this.bodies()) {
         // A monster's bolt only hits what monsters hunt: Druid beasts and Rogue copies.
-        if (byMonster && (m.id === spell.caster || !(this.monsters.ownerOf(m.id) !== undefined || this.decoys.has(m.id)))) continue;
+        if (byMonster && m.id === spell.caster) continue;
+        if (byMonster && owner === null && !(this.monsters.ownerOf(m.id) !== undefined || this.decoys.has(m.id))) continue;
+        if (byMonster && owner !== null && (this.monsters.kindOf(m.id) === null || this.monsters.ownerOf(m.id) === owner)) continue; // monsters only, not its own pack
         const t = segmentHitsCapsule(spell.p, to, m.p, Math.max(0, m.height - m.radius), m.radius, def.radius);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
@@ -1002,7 +1007,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.projectiles.delete(spell.id);
         this.broadcast({ t: "spellEnd", id: spell.id, p: at, hit: hitMonster });
         if (byMonster && this.decoys.has(hitMonster)) this.breakDecoy(hitMonster);
-        else this.hitMonster(hitMonster, Math.round(def.damage * (spell.power ?? 1)), this.players.get(spell.caster) ?? null);
+        else this.hitMonster(hitMonster, Math.round(def.damage * (spell.power ?? 1)), casterPlayer);
         this.splash(spell, at, null);
         continue;
       }
@@ -1032,7 +1037,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const attacker = this.players.get(spell.caster) ?? null;
     if (hit && isMonsterId(spell.caster)) {
       const kind = this.monsters.kindOf(spell.caster);
-      this.damage(hit, Math.round(def.damage * (spell.power ?? 1)), null, spell.p, `was scorched by a ${kind ? MONSTERS[kind].name : "monster"}`);
+      const druid = spell.owner !== undefined ? (this.players.get(spell.owner) ?? null) : null;
+      this.damage(hit, Math.round(def.damage * (spell.power ?? 1)), druid, spell.p, `was scorched by a ${kind ? MONSTERS[kind].name : "monster"}`);
     } else if (hit) {
       this.damage(hit, def.damage, attacker, spell.p);
       if (def.slowMs && this.alive.has(hit.conn.id) && !this.unstoppable(hit)) {
@@ -1355,6 +1361,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         // Anywhere: where your aim meets the ground, or (aiming at the sky or
         // over an edge) the ground at the end of your aim.
         const spot = this.aimedFloor(player, d) ?? this.groundAhead(player, d, CONJURE_RANGE);
+        if (this.touchesNullZone(spot, HELLPIT.radius * 0.5, now)) return "A Null Zone is in the way.";
         this.addField({ kind: "hellpit", owner: pid, p: spot, r: HELLPIT.radius }, ms, now);
         return null;
       }
@@ -1466,7 +1473,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "wolf":
       case "golem":
       case "swarm": {
-        const kind = id === "wolf" ? "wolf" : id === "golem" ? "golem" : "slime";
+        const kind = id === "wolf" ? "wolf" : id === "golem" ? "golem" : "imp";
         const n = id === "swarm" ? 3 : 1;
         if (this.monsters.beastsOf(pid) + n > SUMMON_LIMIT + (id === "swarm" ? 2 : 0)) return "You have as many beasts out as you can.";
         for (let i = 0; i < n; i++) this.monsters.callBeast(kind, player.p, pid, now + ms);
@@ -1621,6 +1628,17 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     return false;
   }
 
+  // Does a circle (a tornado, a pit) touch a Null Zone's bubble? (Flat
+  // distance, and within the bubble's height.)
+  private touchesNullZone(p: Vec3, r: number, now: number): boolean {
+    for (const f of this.fields.values()) {
+      if (f.kind !== "nullzone") continue;
+      const c = fieldCenter(f, now);
+      if (Math.hypot(p[0] - c[0], p[2] - c[2]) < f.r + r && Math.abs(p[1] - c[1]) < f.r) return true;
+    }
+    return false;
+  }
+
   private inSmoke(p: Vec3, now: number): boolean {
     for (const f of this.fields.values()) if (f.kind === "smoke" && inField(f, p, now)) return true;
     return false;
@@ -1630,6 +1648,14 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private stepFields(now: number, dt: number): void {
     for (const field of [...this.fields.values()]) {
       const owner = this.players.get(field.owner) ?? null;
+      // A Knight's Null Zone breaks up a tornado that reaches it, and closes a
+      // Pit to Hell under it (whichever came first).
+      if ((field.kind === "tornado" || field.kind === "hellpit") && this.touchesNullZone(fieldCenter(field, now), field.kind === "tornado" ? field.r * 0.6 : field.r * 0.5, now)) {
+        this.fields.delete(field.id);
+        this.broadcast({ t: "fieldEnd", id: field.id });
+        this.broadcast({ t: "announce", text: field.kind === "tornado" ? "The Null Zone breaks up the tornado!" : "The Null Zone seals the Pit to Hell!" });
+        continue;
+      }
       if (now >= field.until) {
         if (field.kind === "smite") this.smite(field, owner, now);
         this.fields.delete(field.id);
