@@ -7,6 +7,7 @@ import { ROOMS, type RoomInfo } from "../../shared/src/rooms.ts";
 import type { Level } from "../../shared/src/levels/types.ts";
 import type { Connection } from "./Connection.ts";
 import { BossRoom } from "./rooms/BossRoom.ts";
+import { CtfRoom } from "./rooms/CtfRoom.ts";
 import { HubRoom } from "./rooms/HubRoom.ts";
 import { InfectionRoom } from "./rooms/InfectionRoom.ts";
 import { ParkourRoom } from "./rooms/ParkourRoom.ts";
@@ -29,6 +30,8 @@ function createRoom(info: RoomInfo, level: Level, manager: RoomManager): Room {
       return new RoyaleRoom(info, level);
     case "boss":
       return new BossRoom(info, level);
+    case "ctf":
+      return new CtfRoom(info, level);
     case "free":
       return new PlaygroundRoom(info, level);
   }

@@ -273,10 +273,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.stage = 0;
     this.nextStormTick = now + STORM_TICK_MS;
     if (!NO_STORM && this.stormOn) this.startStage([0, 0, this.level.arena?.stormRadius ?? STORM_START_RADIUS], now);
-    this.broadcast({ t: "announce", text: this.teamsMode ? "Team round! Red against Blue: last team standing wins." : this.playStartText() });
+    this.broadcast({ t: "announce", text: this.playStartText() });
   }
 
   protected playStartText(): string {
+    if (this.teamsMode) return "Team round! Red against Blue: last team standing wins.";
     return "The storm is gathering. Last wizard standing wins!";
   }
 
@@ -387,6 +388,14 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Rounds start when most players vote for it (Enter, or the Esc panel).
   protected override readyVote(): boolean {
     return true;
+  }
+
+  // Someone was just knocked out of the round (CtfRoom respawns them).
+  protected onEliminated(_target: Player, _attacker: Player | null): void {}
+
+  // Their team this round (team rounds), or undefined.
+  protected teamOf(id: number): 0 | 1 | undefined {
+    return this.teams.get(id);
   }
 
   // ---- Sides ----
@@ -508,7 +517,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       team: this.teams.get(p.conn.id) ?? this.teamPick.get(p.conn.id) ?? null,
       pick: this.teamPick.get(p.conn.id) ?? null,
     }));
-    this.broadcast({ t: "lineup", players, mode: this.teamsMode ? "teams" : "ffa", next: this.nextTeams ? "teams" : "ffa" });
+    // (Without the vote/switch, the next round's mode is this one's: capture the flag.)
+    const next = this.voting ? this.nextTeams : this.teamsMode;
+    this.broadcast({ t: "lineup", players, mode: this.teamsMode ? "teams" : "ffa", next: next ? "teams" : "ffa" });
   }
 
   private vote(player: Player, arena: string): void {
@@ -612,7 +623,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     return cls;
   }
 
-  private resetFighter(player: Player, tell = true): void {
+  protected resetFighter(player: Player, tell = true): void {
     const cls = this.classOf(player);
     const maxHp = CLASSES[cls].maxHealth;
     const f: Fighter = {
@@ -1016,6 +1027,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
     this.alive.delete(id);
     this.outOrder.push(id);
+    this.onEliminated(target, attacker);
     const byOther = attacker && attacker !== target;
     if (byOther) {
       const af = this.fighters.get(attacker.conn.id);

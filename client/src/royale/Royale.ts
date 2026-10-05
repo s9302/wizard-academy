@@ -128,7 +128,7 @@ export class Royale {
         this.applyLoadout();
         hooks.send({ t: "abilities", cls: this.cls, e, r });
       },
-    }, !!level.bossFight);
+    }, level.bossFight ? "boss" : level.ctf ? "ctf" : "royale");
     this.applyLoadout();
     window.addEventListener("keydown", this.onKey);
   }

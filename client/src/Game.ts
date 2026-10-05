@@ -39,6 +39,7 @@ import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
 import { Royale } from "./royale/Royale.ts";
 import { BossView } from "./bosses/BossView.ts";
+import { CtfView } from "./ctf/CtfView.ts";
 import { ServerClock } from "./ServerClock.ts";
 import { animateAvatar, createAvatar, dieAvatar, disposeAvatar, reviveAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
 
@@ -65,6 +66,7 @@ const HELP: Record<string, string> = {
   infection: "Click curse \u00b7 R respawn",
   royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
   boss: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
+  ctf: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 grab the enemy flag",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
 const STEP_EVERY = 2.1; // meters walked per footstep sound
@@ -98,6 +100,8 @@ export class Game {
   private features: Features | null = null;
   private trial: Trial | null = null;
   private bossView: BossView | null = null; // Trial VII
+  private ctfView: CtfView | null = null; // capture the flag
+  private myTeam: 0 | 1 | null = null;
   private npcs: Npcs | null = null;
   private talkHint: HTMLElement | null = null;
   // Third person (V): your own body, and a camera over your shoulder.
@@ -205,7 +209,7 @@ export class Game {
         onUnstuck: () => this.net.send({ t: "unstuck" }),
         onGrapple: (on) => this.net.send({ t: "chaseSetting", grapple: on }),
       });
-    } else if (room.mode === "royale" || room.mode === "boss") {
+    } else if (room.mode === "royale" || room.mode === "boss" || room.mode === "ctf") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
       this.scene.add(this.camera); // the weapon in view is a child of the camera
@@ -237,6 +241,14 @@ export class Game {
           const next = LEVELS[id];
           if (next && next !== this.level) this.loadLevel(next);
         },
+      });
+    }
+    // Capture the flag: the arena's combat, plus the flags.
+    if (room.mode === "ctf" && level.ctf) {
+      this.ctfView = new CtfView(this.scene, hud, level.ctf.flags, {
+        positionOf: (id) => (id === this.myId ? this.player.position : this.remotes.positionOf(id) ? new THREE.Vector3(...this.remotes.positionOf(id)!) : null),
+        myTeam: () => this.myTeam,
+        myId: () => this.myId,
       });
     }
     // Trial VII: the arena's combat, plus the boss.
@@ -414,6 +426,8 @@ export class Game {
   private onServerMessage(msg: ServerMsg): void {
     if (this.disposed) return; // still in flight when we left
     if (this.bossView?.onMessage(msg)) return;
+    if (this.ctfView?.onMessage(msg)) return;
+    if (msg.t === "teams") this.myTeam = msg.teams ? (msg.teams[0].includes(this.myId) ? 0 : msg.teams[1].includes(this.myId) ? 1 : null) : null;
     if (msg.t === "round" && msg.state === "playing") this.story?.hideSoon(); // Trial VII's fight begins
     if (this.royale?.onMessage(msg)) return;
     if (this.trial?.onMessage(msg, this.myId)) return;
@@ -695,6 +709,7 @@ export class Game {
     this.chase?.dispose();
     this.trial?.dispose();
     this.bossView?.dispose();
+    this.ctfView?.dispose();
     this.npcs?.dispose();
     this.story?.dispose();
     this.postfx?.dispose();
@@ -994,6 +1009,7 @@ export class Game {
     this.props?.update(now / 1000, dt);
     this.trial?.update(now / 1000);
     this.bossView?.update(now / 1000);
+    this.ctfView?.update(now / 1000);
     this.npcs?.update(now / 1000, dt, this.player.position);
     this.features?.update(now / 1000, dt);
     this.particleSystem.update(dt);

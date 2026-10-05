@@ -51,6 +51,7 @@ export class RoyaleHud {
   private calloutEl: HTMLElement;
   private picker: HTMLElement;
   private boss: boolean;
+  private ctf: boolean;
   private actions: { onMode: (mode: RoyaleMode) => void; onPickTeam: (team: 0 | 1 | null) => void; onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void };
   private match: HTMLElement; // left column: ready, mode, teams, arena vote, monsters
   private modeBox: HTMLElement;
@@ -108,10 +109,11 @@ export class RoyaleHud {
       onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void;
       onReady: () => void;
     },
-    boss = false, // Trial VII: a boss fight, not a battle royale (other words; no monster buttons)
+    variant: "royale" | "boss" | "ctf" = "royale", // a boss fight (other words; no monsters, no teams) or capture the flag (always teams)
   ) {
     this.clock = clock;
-    this.boss = boss;
+    this.boss = variant === "boss";
+    this.ctf = variant === "ctf";
     this.onVote = actions.onVote;
     this.storm = storm;
 
@@ -163,10 +165,11 @@ export class RoyaleHud {
     this.teamBox.id = "team-box";
     this.match.append(this.readyButton, this.modeBox, this.teamBox, this.votePanel, document.getElementById("monster-controls")!);
     pausePanel.appendChild(this.match);
-    if (boss) {
+    if (this.boss) {
       document.getElementById("monster-controls")!.hidden = true;
       this.modeBox.hidden = this.teamBox.hidden = true;
     }
+    if (this.ctf) document.getElementById("monster-controls")!.hidden = true;
 
     document.body.classList.add("in-royale");
     this.crosshairEl = document.getElementById("crosshair")!;
@@ -408,6 +411,7 @@ export class RoyaleHud {
       row.appendChild(b);
     }
     this.modeBox.append(title, row);
+    this.modeBox.hidden = this.ctf; // capture the flag is always teams
     // Teams: who's on which side; Join to switch (Either to let it balance).
     this.teamBox.replaceChildren();
     this.teamBox.hidden = next !== "teams";

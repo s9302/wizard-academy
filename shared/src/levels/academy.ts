@@ -1,6 +1,6 @@
 // The hub: a plaza in front of the academy, where everyone arrives. A ring of
 // portal arches leads to every other room: the three trials on the west side,
-// tag, infection and the playground on the east, and the battle royale at
+// tag, infection and capture the flag on the east, and the battle royale at
 // the north end, in front of the academy door.
 //
 // The story opens more of it: Chapter I opens the Spell Garden (southwest
@@ -264,7 +264,7 @@ const portalAngles: [string, number, string][] = [
   ["trial3", 210, "#5ad1ff"],
   ["tag", 30, "#ff5a4a"],
   ["infection", 0, "#7dff5a"],
-  ["playground", 330, "#ffd25a"],
+  ["ctf", 330, "#ffd25a"],
   ["royale", 270, "#ff3d8b"],
 ];
 

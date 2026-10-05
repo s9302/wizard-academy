@@ -519,6 +519,11 @@ body.spectating #royale-bottom { opacity: 0.4; }
 #class-picker #ability-picker button:disabled { opacity: 0.3; cursor: not-allowed; }
 #ability-picker .ability-names { font-size: 12px; opacity: 0.85; text-align: center; }
 
+/* Capture the flag: the score and flags, top middle under the round panel. */
+#ctf-score { position: absolute; top: 104px; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 8px; background: rgba(0, 0, 0, 0.45); text-align: center; pointer-events: none; }
+#ctf-score .ctf-line { font-size: 20px; font-weight: 800; text-shadow: 0 1px 3px #000; }
+#ctf-score .ctf-flags { font-size: 12px; opacity: 0.9; }
+
 /* Tag and infection: Respawn and the map picker, in the pause panel. */
 #chase-extras { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #3d3263; }
 #chase-maps { display: grid; gap: 6px; }

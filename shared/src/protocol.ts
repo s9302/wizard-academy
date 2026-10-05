@@ -177,6 +177,10 @@ export type LineupMsg = { t: "lineup"; players: LineupEntry[]; mode: RoyaleMode;
 // Tag and infection: the maps on offer, this round's and the next one's.
 export type ChaseMapsMsg = { t: "chaseMaps"; maps: string[]; current: string; next: string };
 export type ChaseSettingsMsg = { t: "chaseSettings"; grapple: boolean };
+// Capture the flag: the score, and each team's flag (red, blue): at its
+// stand, carried by someone, or dropped somewhere.
+export type CtfFlag = { state: "home" | "carried" | "dropped"; p: Vec3; carrier: number | null };
+export type CtfMsg = { t: "ctf"; score: [number, number]; flags: [CtfFlag, CtfFlag]; toWin: number };
 // Who has voted to start the next round, and how many votes it needs.
 // on: false when the vote is switched off (tests).
 export type ReadyStateMsg = { t: "readyState"; ids: number[]; needed: number; on: boolean };
@@ -263,6 +267,7 @@ export type ServerMsg =
   | LineupMsg
   | ChaseMapsMsg
   | ChaseSettingsMsg
+  | CtfMsg
   | AbilityFailedMsg
   | WarpMsg
   | MonstersMsg
