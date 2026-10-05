@@ -41,6 +41,8 @@ type Monster = {
   windupTarget: number | null;
   owner?: number; // a Druid's beast: whose
   until?: number; // ...and when it goes back to the wild
+  max?: number; // tougher than usual (Horde waves): its full health
+  dmgMul?: number; // ...and how much harder it hits
   // Thrown (a shockwave, a tornado): moving at v until then, helpless.
   push: { v: Vec3; until: number } | null;
 };
@@ -107,6 +109,7 @@ export class Monsters {
       hp: m.hp,
       attacking: m.windupUntil > 0,
       owner: m.owner,
+      max: m.max,
     }));
   }
 
@@ -156,7 +159,7 @@ export class Monsters {
 
   // Bring in n monsters of one kind around a spot, on top of the wanted
   // count (the Storm Tyrant's summons). Killed ones don't come back.
-  summon(kind: MonsterKind, near: Vec3, n: number): void {
+  summon(kind: MonsterKind, near: Vec3, n: number, tough?: { hp: number; damage: number }): void {
     const grid = this.host.grid();
     const def = MONSTERS[kind];
     for (let i = 0; i < n; i++) {
@@ -166,7 +169,11 @@ export class Monsters {
         const x = near[0] + Math.cos(a) * r;
         const z = near[2] + Math.sin(a) * r;
         if (!grid.isWalkable(x, z)) continue;
-        this.add(kind, [x, grid.floorAt(x, z) + def.height, z]);
+        const m = this.monsters.get(this.add(kind, [x, grid.floorAt(x, z) + def.height, z]))!;
+        if (tough) {
+          m.hp = m.max = Math.round(def.hp * tough.hp);
+          m.dmgMul = tough.damage;
+        }
         break;
       }
     }
@@ -201,6 +208,11 @@ export class Monsters {
   // A Druid left: their beasts go with them.
   dismiss(owner: number): void {
     for (const [id, m] of this.monsters) if (m.owner === owner) this.monsters.delete(id);
+  }
+
+  // How many wild ones (not a Druid's) are alive.
+  get wildCount(): number {
+    return [...this.monsters.values()].filter((m) => m.owner === undefined).length;
   }
 
   // How many of one kind are alive.
@@ -277,8 +289,9 @@ export class Monsters {
       m.windupUntil = 0;
       const t = prey.find((p) => p.id === m.windupTarget);
       if (t && this.inReach(m, t.p, 0.5)) {
-        if (this.monsters.has(t.id)) this.host.hurtMonster?.(t.id, def.damage, m.owner);
-        else this.host.hurt(t.id, def.damage, m.p, m.kind, m.owner);
+        const damage = Math.round(def.damage * (m.dmgMul ?? 1));
+        if (this.monsters.has(t.id)) this.host.hurtMonster?.(t.id, damage, m.owner);
+        else this.host.hurt(t.id, damage, m.p, m.kind, m.owner);
       }
       m.windupTarget = null;
       m.nextAttack = now + def.cooldownMs;

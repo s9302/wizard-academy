@@ -10,7 +10,7 @@ import { attachTooltip, hideTooltip } from "../ui/Tooltip.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
 import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
-import type { LineupEntry, RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
+import type { HordeMsg, LineupEntry, RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
 import { BotControls } from "../BotControls.ts";
 import type { ServerClock } from "../ServerClock.ts";
 import type { Storm } from "./Storm.ts";
@@ -53,6 +53,8 @@ export class RoyaleHud {
   private boss: boolean;
   bossHint = "get out of the red circles"; // what the boss fight's HUD line says (Game sets it)
   private ctf: boolean;
+  private horde: boolean;
+  private hordeInfo: HordeMsg = { t: "horde", wave: 0, left: 0, nextAt: null, best: 0 };
   private respawnEl!: HTMLElement;
   private respawnAt = 0; // performance.now(): knocked out, back then (capture the flag)
   private actions: { onMode: (mode: RoyaleMode) => void; onPickTeam: (team: 0 | 1 | null) => void; onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void };
@@ -112,10 +114,11 @@ export class RoyaleHud {
       onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void;
       onReady: () => void;
     },
-    variant: "royale" | "boss" | "ctf" = "royale", // a boss fight (other words; no monsters, no teams) or capture the flag (always teams)
+    variant: "royale" | "boss" | "ctf" | "horde" = "royale", // a boss fight (other words; no monsters, no teams), capture the flag (always teams), or Horde (like a boss fight, in waves)
   ) {
     this.clock = clock;
-    this.boss = variant === "boss";
+    this.boss = variant === "boss" || variant === "horde";
+    this.horde = variant === "horde";
     this.ctf = variant === "ctf";
     this.onVote = actions.onVote;
     this.storm = storm;
@@ -572,14 +575,20 @@ export class RoyaleHud {
     this.showReady();
     if (this.lastLineup) this.lineup(...this.lastLineup); // "next round" wording depends on the state
     if (state === "countdown") this.banner("Get ready!", 1500);
-    if (state === "playing") this.banner(this.boss ? "Bring it down!" : "Last wizard standing wins!", 2500);
+    if (state === "playing") this.banner(this.horde ? "Hold the line!" : this.boss ? "Bring it down!" : "Last wizard standing wins!", 2500);
+  }
+
+  // Horde: the wave, monsters left, the breather.
+  hordeState(msg: HordeMsg): void {
+    if (this.horde && msg.wave > this.hordeInfo.wave && msg.nextAt === null) this.banner(msg.wave % 5 === 0 ? `Wave ${msg.wave}: elite!` : `Wave ${msg.wave}`, 2000);
+    this.hordeInfo = msg;
   }
 
   alive(count: number, amAlive: boolean): void {
     const wasAlive = this.amAlive;
     this.aliveCount = count;
     this.amAlive = amAlive;
-    if (this.state === "playing" && wasAlive && !amAlive) this.banner(this.boss ? "You're down! Watching the others" : "You're out! Spectating", 3000);
+    if (this.state === "playing" && wasAlive && !amAlive) this.banner(this.horde ? "You're down! Back next wave" : this.boss ? "You're down! Watching the others" : "You're out! Spectating", 3000);
     document.body.classList.toggle("spectating", this.state === "playing" && !amAlive);
   }
 
@@ -660,6 +669,14 @@ export class RoyaleHud {
         break;
       }
       case "playing": {
+        if (this.horde) {
+          const { wave, left: monsters, nextAt, best } = this.hordeInfo;
+          const breather = nextAt !== null ? Math.max(1, Math.ceil((nextAt - now) / 1000)) : 0;
+          this.timerEl.textContent = nextAt !== null ? `Wave ${wave + 1} in ${breather}` : `Wave ${wave}`;
+          const status = this.amAlive ? `${this.aliveCount} fighting` : "Down · back next wave";
+          this.infoEl.textContent = nextAt !== null ? `Breather · ${status}${best ? ` · best ${best}` : ""}` : `${monsters} monster${monsters === 1 ? "" : "s"} left · ${status}`;
+          break;
+        }
         if (this.boss) {
           this.timerEl.textContent = clockText(Math.max(0, left));
           this.infoEl.textContent = this.amAlive ? `${this.aliveCount} fighting · ${this.bossHint}` : "Down · watching the others";

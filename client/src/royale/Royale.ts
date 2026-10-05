@@ -36,6 +36,7 @@ const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export type RoyaleHooks = {
   send: (msg: ClientMsg) => void;
   myId: () => number;
+  horde?: boolean; // Horde mode (on an ordinary arena)
   onSlowed: (ms: number) => void; // hit by Frost Shard: slow the player down
   onSpeed: (multiplier: number) => void; // class and hand set how fast you move
   feed: (text: string) => void; // a line in the message feed
@@ -128,7 +129,7 @@ export class Royale {
         this.applyLoadout();
         hooks.send({ t: "abilities", cls: this.cls, e, r });
       },
-    }, level.bossFight ? "boss" : level.ctf ? "ctf" : "royale");
+    }, hooks.horde ? "horde" : level.bossFight ? "boss" : level.ctf ? "ctf" : "royale");
     this.applyLoadout();
     window.addEventListener("keydown", this.onKey);
   }
@@ -310,6 +311,9 @@ export class Royale {
         return true;
       case "respawnIn":
         this.hud.respawnIn(msg.ms);
+        return true;
+      case "horde":
+        this.hud.hordeState(msg);
         return true;
       case "readyState":
         this.hud.readyState(msg.ids.length, msg.needed, msg.ids.includes(me), msg.on);

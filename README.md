@@ -84,7 +84,7 @@ docker compose -p wizard-test --env-file .env.test down -v         # delete it a
 
 Scripts: `security-check`, `parkour-check`, `chase-check`, `bots-check`,
 `hub-check`, `royale-check`, `classes-check`, `abilities-check`, `arena-check`, `unlocks-check`, `story-check`, `admin-check`,
-`trials-check`, `features-check`, `boss-check`, `teams-check`, `ready-check` (needs `ROUND_READY=on`), `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
+`trials-check`, `features-check`, `boss-check` (`BOSS_ROOM=trial8` or `trial9` for the later bosses), `teams-check`, `horde-check` and `druid-monk-check` (both need an admin account), `ready-check` (needs `ROUND_READY=on`), `mastery-check` (needs an admin account) (the boss ones want `BOSS_HP_SCALE=0.05` on the server),
 `accounts-check` (run it last:
 it trips the login rate limit for your IP). Each new test account starts with
 a failed login (try login, then register), so running everything back to
@@ -413,6 +413,8 @@ text in `shared/src/abilityInfo.ts`.
 |---|---|
 | **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
 | **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no Wizard/Rogue/Cleric abilities), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage) |
+| **Druid** | **Stone Golem** (a golem fights for you), **Swarm** (three slimes), **Barkskin** (half damage taken and healing 6/s) |
+| **Monk** | **Windstep** (much faster for a while), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |
 | **Rogue** | **Mirror Images** (two copies run off for 7 s; players, bots and monsters fall for them; one hit breaks one), **Glide** (a high leap, then 9 s of very slow falling and 80% more speed), **Smoke Bomb** (5 m cloud, 8 s: anyone inside is hidden) |
 
 Being thrown (Shockwave, Tornado, Chain Pull, the pit's drag) is a "knock"
@@ -449,13 +451,13 @@ Pick a class in the arena's pause panel (Esc). It's saved to your account;
 picked mid-round, it applies from the next round. Classes only exist in the
 battle royale.
 
-| | Knight | Rogue | Wizard | Cleric |
-|---|---|---|---|---|
-| Health | 180 | 85 | 100 | 120 |
-| Speed | 92% | 112% | 100% | 97% |
-| Defense | takes 15% less damage | none | none | takes 10% less damage |
-| Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** | **Mace**: 24, 2.6 m reach |
-| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range | **Holy Light**: 15, straight shots, 42 m |
+| | Knight | Rogue | Wizard | Cleric | Druid | Monk |
+|---|---|---|---|---|---|---|
+| Health | 180 | 85 | 100 | 120 | 105 | 90 |
+| Speed | 92% | 112% | 100% | 97% | 100% | 132% |
+| Defense | takes 15% less damage | none | none | takes 10% less damage | takes 5% less damage | none |
+| Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** | **Mace**: 24, 2.6 m reach | **Thorns**: two thorns at once, 9 each, slow a little | **Fists**: 11, very fast |
+| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range | **Holy Light**: 15, straight shots, 42 m | **Sickle**: 19 | **Staff**: 18 |
 
 The **Cleric** hits softer than the others and makes up for it by healing:
 **Healing Light** (E, 12 s) heals 35, and every teammate within 9 m in a team
@@ -465,6 +467,16 @@ Level 11 adds **Sanctuary** (a 6 m circle healing you and teammates 12/s for
 6 s), **Aegis** (a 50 shield on the teammate you aim at, or yourself) and
 **Judgment** (the enemy you aim at takes 35% more damage for 15 s). Bots
 don't play Clerics.
+
+The **Druid** fights with beasts: **Call Wolf** (E) brings a shadow wolf
+that fights for you (a green ring under it; it hunts your enemies and wild
+monsters, never you or your team), and **Entangle** (R) roots a 4 m circle
+up to 20 m away (slowed to 30%, 8 damage a second). At most three beasts at
+once; they go back to the wild when you die or change class. The **Monk** is
+the fastest class: **Flurry** (E) dashes 10 m and hits the first enemy for
+22, **Inner Peace** (R) heals 30 and shakes off slows, and Null Zones don't
+stop a Monk. Bots don't pick either (you can give them the class in the Esc
+panel). Check script: `druid-monk-check`.
 
 - **1 / 2 / mouse wheel** switch hands. Switching takes 0.4 s (no attacking
   meanwhile), so it can't be used to skip a cooldown; both hands share one
@@ -528,12 +540,46 @@ Chapter VI is done.
   everyone goes down, it heals and you try again. **Bots** added from the
   Esc panel fight on your side.
 
+## Trials VIII and IX: the Frost Wyrm and the Lich Sovereign
+
+Two more boss fights, built exactly like Trial VII (BossRoom, your class,
+bots on your side), each unlocked by the chapter before it. Their portals
+are in the Sanctum: VIII on the west wall, IX on the front wall right of
+the door.
+
+- **The Frost Wyrm** (`trial8.ts`, the Frozen Summit, 2600 health): circles
+  high over the middle, out of a sword's reach, breathing fans of frost and
+  sending lines of ice spikes at you. Now and then it swoops down at whoever
+  is furthest away (a marked circle) and stays on the ground a few seconds:
+  that's the melee classes' moment. Below 66% it calls lightning; below 33%,
+  meteors. 800 XP the first time.
+- **The Lich Sovereign** (`trial9.ts`, the Hollow Throne, 2400 health):
+  floats in one spot, then blinks somewhere else every few seconds. Soul
+  bolts, death rings to jump, lightning; below 66% it raises wolves; below
+  33%, a soul storm of meteors. 1000 XP the first time, and the story's end.
+
+Each also gives a robe (Wyrmfrost, Sovereign).
+
+## Horde mode
+
+The **Horde** portal is in the plaza between Battle Royale and Capture the
+Flag (`server/src/rooms/HordeRoom.ts`, on the arena). It's endless and
+co-op: everyone (bots too) against waves of monsters. Slimes first, wolves
+from wave 2, stone golems from wave 4, and every fifth wave is an elite
+wave. Each wave has more monsters, 12% more health and 6% more damage than
+the last, and more again for each extra player; they come in from away from
+everyone, up to 22 at a time. After each wave, a 10 s breather: everyone
+who went down comes back, and everyone gets XP (10 x the wave number, up to
+120). When everyone is down at once, it's over, and your score is the waves
+you survived. Check script: `horde-check`.
+
 ## Story, spells and unlocks
 
 **The story** is told through the trials and the hub. Headmaster Orrin Vale
 vanished into the storm (the battle royale's), leaving three trials for a
 successor; three more, through the Sanctum, follow him into it; and in the
-seventh, the storm comes back as the Storm Tyrant. Each trial is a chapter: its opening text appears when you
+seventh, the storm comes back as the Storm Tyrant; the eighth (the Frost
+Wyrm) and ninth (the Lich Sovereign, who was behind it all) finish the story. Each trial is a chapter: its opening text appears when you
 arrive, and its ending (plus what it unlocked) the first time you clear it.
 A chapter is complete once you have a time on its trial. The text is in
 `shared/src/story.ts`.
@@ -571,7 +617,9 @@ looks.
 | Trial V, Storm robe | Chapter IV |
 | Trial VI, Ember robe | Chapter V |
 | Stormcaller's hat, Trial VII | Chapter VI |
-| Tyrant's crown | Chapter VII |
+| Tyrant's crown, Trial VIII | Chapter VII |
+| Wyrmfrost robe, Trial IX | Chapter VIII |
+| Sovereign robe | Chapter IX |
 
 **Perks are off in the trials**, so trial times stay comparable.
 

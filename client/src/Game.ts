@@ -210,13 +210,14 @@ export class Game {
         onUnstuck: () => this.net.send({ t: "unstuck" }),
         onGrapple: (on) => this.net.send({ t: "chaseSetting", grapple: on }),
       });
-    } else if (room.mode === "royale" || room.mode === "boss" || room.mode === "ctf") {
+    } else if (room.mode === "royale" || room.mode === "boss" || room.mode === "ctf" || room.mode === "horde") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
       this.scene.add(this.camera); // the weapon in view is a child of the camera
       this.royale = new Royale(this.scene, this.camera, hud, this.clock, level, room.name, this.remotes, this.profile.loadout.primary, this.profile.loadout.cls, {
         send,
         myId: () => this.myId,
+        horde: room.mode === "horde",
         onSlowed: (ms) => this.player.slow(ms / 1000, slowFactor),
         onSpeed: (m) => (this.player.speedMul = m),
         feed: (text) => this.addFeed(text),

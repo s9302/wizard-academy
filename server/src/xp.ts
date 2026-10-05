@@ -21,6 +21,8 @@ export const XP = {
   royaleTopThree: 20, // 2nd or 3rd
   perElimination: 15, // max maxTagsPaid per round
   teamWin: 50, // each member of the winning team (team rounds)
+  hordeWave: 10, // Horde: per wave cleared, times the wave number (up to hordeWaveMax)
+  hordeWaveMax: 120,
 
   // Monsters (battle royale and the Tyrant's wolves), paid on the kill.
   // Capped so a room full of monsters can't be farmed: at most

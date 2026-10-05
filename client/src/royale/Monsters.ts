@@ -179,7 +179,7 @@ export class MonsterViews {
       if (m.hp !== v.hp) {
         if (v.hp >= 0 && m.hp < v.hp) v.flashUntil = now + 140;
         v.hp = m.hp;
-        drawBar(v.bar, m.hp / MONSTERS[m.kind].hp);
+        drawBar(v.bar, m.hp / (m.max ?? MONSTERS[m.kind].hp));
       }
       if (m.attacking && !v.attacking) this.growl(v);
       v.attacking = m.attacking;

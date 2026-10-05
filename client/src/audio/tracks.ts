@@ -18,6 +18,6 @@ export function moodFor(mode: string): MusicMood {
   if (mode === "hub") return "academy";
   if (mode === "parkour") return "trials";
   if (mode === "royale") return "arenaLobby";
-  if (mode === "boss" || mode === "ctf") return "arenaBattle";
+  if (mode === "boss" || mode === "ctf" || mode === "horde") return "arenaBattle";
   return "chase";
 }

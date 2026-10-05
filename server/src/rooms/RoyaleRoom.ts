@@ -175,7 +175,7 @@ export type Body = { id: number; p: Vec3; radius: number; height: number };
 export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   protected fighters = new Map<number, Fighter>();
   protected alive = new Set<number>();
-  private inRound = new Set<number>(); // started this round (for XP)
+  protected inRound = new Set<number>(); // started this round (for XP)
   private outOrder: number[] = []; // eliminated, first out first
   private projectiles = new Map<number, Projectile>();
   private pickups = new Map<number, Pickup>();

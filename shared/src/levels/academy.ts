@@ -268,6 +268,7 @@ const portalAngles: [string, number, string][] = [
   ["infection", 0, "#7dff5a"],
   ["ctf", 330, "#ffd25a"],
   ["royale", 270, "#ff3d8b"],
+  ["horde", 300, "#ff7a2a"],
 ];
 
 const ringPortals: Portal[] = portalAngles.map(([room, degrees, color]) => {
@@ -362,7 +363,7 @@ for (const [x, z] of [[-35, -22], [-35, -8], [35, -22], [35, 14], [-35, 14], [-8
 // Bushes, rocks and flower beds.
 for (const [x, z] of [[-9, -8], [9, -8], [-9, 8], [9, 8], [-24, -18], [24, -18]]) props.push({ kind: "bush", pos: [x, 0, z] });
 for (const [x, z, sc] of [[-29, -30, 1.4], [30, -29, 1.1], [-33, 4, 1], [33, 22.5, 0.8], [15, -33, 1.2]]) props.push({ kind: "rock", pos: [x, 0, z], scale: sc });
-for (const [x, z] of [[-6.5, -12], [6.5, -12], [-6.5, 12.5], [6.5, 12.5]]) props.push({ kind: "flowers", pos: [x, 0, z], size: [3, 1.2] });
+for (const [x, z] of [[-6.5, -12], [10, -10], [-6.5, 12.5], [6.5, 12.5]]) props.push({ kind: "flowers", pos: [x, 0, z], size: [3, 1.2] });
 // Lamps along the paths (a few give real light on Ultra).
 for (const z of [-11, -19]) for (const x of [-2.2, 2.2]) props.push({ kind: "lamp", pos: [x, 0, z], light: z === -19 });
 for (const z of [12, 19, 25, 32]) for (const x of [-2.2, 2.2]) props.push({ kind: "lamp", pos: [x, 0, z], light: z === 12 });

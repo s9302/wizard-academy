@@ -2,7 +2,7 @@
 // rooms could share a level (tag and infection each have their own now). You
 // arrive in the hub and walk through its portals to reach the others.
 
-export type RoomMode = "hub" | "free" | "parkour" | "tag" | "infection" | "royale" | "boss" | "ctf";
+export type RoomMode = "hub" | "free" | "parkour" | "tag" | "infection" | "royale" | "boss" | "ctf" | "horde";
 
 export type RoomInfo = {
   id: string;
@@ -28,6 +28,7 @@ export const ROOMS: RoomInfo[] = [
   { id: "infection", name: "Infection: The Moonlit Graveyard", levelId: "graveyard", mode: "infection" },
   { id: "royale", name: "Battle Royale: Last Wizard Standing", levelId: "arena", mode: "royale" },
   { id: "ctf", name: "Capture the Flag: Twin Keeps", levelId: "ctf", mode: "ctf" },
+  { id: "horde", name: "Horde: Endless Waves", levelId: "arena", mode: "horde" },
 ];
 
 export function findRoom(id: string): RoomInfo | undefined {

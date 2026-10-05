@@ -39,4 +39,5 @@ export type MonsterState = {
   hp: number;
   attacking: boolean; // winding up a hit
   owner?: number; // a Druid's beast: whose (it fights for them)
+  max?: number; // its full health, when it's tougher than usual (Horde)
 };
