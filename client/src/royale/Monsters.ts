@@ -164,61 +164,123 @@ function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; 
     hex.position.set(0.3, 0.15, -0.3);
     body.add(hex);
   } else if (kind === "dragon") {
-    // A young red dragon: a long body on four legs, a neck and horned head
-    // ahead (fire glowing in its mouth as it winds up), a tail, and wings.
-    const scale = lambert("#b8322a");
-    const belly = lambert("#e8a35a");
-    const dark = lambert("#6e1a14");
-    add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 2.0), scale)).position.set(0, 0, 0);
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 1.8), belly)).position.set(0, -0.45, 0);
-    const neck = add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1.1), scale));
-    neck.position.set(0, 0.45, -1.3);
-    neck.rotation.x = 0.6;
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.8), scale)).position.set(0, 0.85, -1.85);
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.2, 0.5), belly)).position.set(0, 0.65, -2.1); // jaw
-    eyes(body, 1.0, -2.2, 0.18, 0.06, "#ffd23a");
+    // A red dragon in flight (its front is -z): a sleek body with gold belly
+    // plates, a curving neck up to a wedge of a head (horns swept back, fire
+    // in its jaws as it winds up), a long tail with a spade tip, legs tucked
+    // up, and two big bat wings, bones and stretched membrane.
+    const red = lambert("#a8241c");
+    const gold = lambert("#e0a040");
+    const dark = lambert("#5a1410");
+    const bone = lambert("#efe6cc");
+    const torso = add(new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 10), red));
+    torso.scale.set(0.85, 0.7, 1.55);
+    const belly = add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), gold));
+    belly.scale.set(0.7, 0.5, 1.4);
+    belly.position.set(0, -0.14, -0.02);
+    // A bone between two points (a neck or tail segment, a wing spar).
+    const between = (a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, m: THREE.Material, parent: THREE.Object3D = body) => {
+      const len = a.distanceTo(b);
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 7), m);
+      seg.position.copy(a).lerp(b, 0.5);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      seg.castShadow = true;
+      if (m instanceof THREE.MeshLambertMaterial && !mats.includes(m)) mats.push(m);
+      parent.add(seg);
+      return seg;
+    };
+    // The neck: a curve up and forward.
+    const neck = [new THREE.Vector3(0, 0.12, -0.75), new THREE.Vector3(0, 0.32, -1.15), new THREE.Vector3(0, 0.48, -1.52), new THREE.Vector3(0, 0.58, -1.9)];
+    for (let i = 0; i < neck.length - 1; i++) between(neck[i], neck[i + 1], 0.27 - i * 0.04, 0.23 - i * 0.04, red);
+    for (let i = 0; i < 3; i++) between(neck[i].clone().add(new THREE.Vector3(0, -0.12, -0.03)), neck[i + 1].clone().add(new THREE.Vector3(0, -0.12, -0.03)), 0.15, 0.13, gold); // throat plates
+    // The head: skull, snout, jaw, horns, a brow ridge and eyes.
+    const head = new THREE.Group();
+    head.position.copy(neck[3]);
+    head.rotation.x = 0.05;
+    head.scale.setScalar(0.9);
+    body.add(head);
+    const part = (g: THREE.BufferGeometry, m: THREE.MeshLambertMaterial, x: number, y: number, z: number) => {
+      const mesh = new THREE.Mesh(g, m);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      if (!mats.includes(m)) mats.push(m);
+      head.add(mesh);
+      return mesh;
+    };
+    part(new THREE.BoxGeometry(0.38, 0.3, 0.42), red, 0, 0.05, -0.1);
+    const snout = part(new THREE.BoxGeometry(0.28, 0.18, 0.46), red, 0, 0.0, -0.5);
+    snout.scale.x = 0.9;
+    part(new THREE.BoxGeometry(0.26, 0.08, 0.5), gold, 0, -0.14, -0.42); // the lower jaw
+    part(new THREE.BoxGeometry(0.4, 0.06, 0.12), dark, 0, 0.2, -0.22); // brow
     for (const sx of [-1, 1]) {
-      const horn = add(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.45, 5), lambert("#e6dcc0")));
-      horn.position.set(sx * 0.2, 1.2, -1.6);
-      horn.rotation.x = 0.7;
+      const horn = part(new THREE.ConeGeometry(0.06, 0.55, 5), bone, sx * 0.14, 0.26, 0.15);
+      horn.rotation.x = 2.2; // swept back
+      horn.rotation.z = -sx * 0.25;
+      const small = part(new THREE.ConeGeometry(0.035, 0.22, 4), bone, sx * 0.2, 0.1, 0.12);
+      small.rotation.x = 2.0;
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 4), new THREE.MeshBasicMaterial({ color: "#ffc93a", toneMapped: false }));
+      eye.position.set(sx * 0.15, 0.12, -0.28);
+      head.add(eye);
+      part(new THREE.BoxGeometry(0.04, 0.04, 0.04), dark, sx * 0.07, 0.07, -0.73); // nostril
     }
-    for (let i = 0; i < 5; i++) add(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.3, 4), dark)).position.set(0, 0.55, -0.7 + i * 0.4);
-    for (let i = 0; i < 3; i++) {
-      const w = 0.6 - i * 0.16;
-      add(new THREE.Mesh(new THREE.BoxGeometry(w, w * 0.8, 0.8), scale)).position.set(0, -0.05 - i * 0.08, 1.35 + i * 0.75);
+    const fire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 1), new THREE.MeshBasicMaterial({ color: "#ffb347", toneMapped: false }));
+    fire.name = "fire";
+    fire.position.set(0, -0.06, -0.8);
+    fire.scale.setScalar(0.3);
+    head.add(fire);
+    // Spines down the back.
+    for (let i = 0; i < 6; i++) {
+      const sp = add(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22 - i * 0.02, 4), dark));
+      sp.position.set(0, 0.42 - i * 0.02, -0.55 + i * 0.25);
+      sp.rotation.x = 0.5;
     }
-    const tip = add(new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 4), dark));
-    tip.rotation.x = Math.PI / 2;
-    tip.position.set(0, -0.25, 3.2);
-    for (const [x, z] of [[-0.45, -0.6], [0.45, -0.6], [-0.45, 0.6], [0.45, 0.6]]) {
+    // The tail: tapering segments with a gentle curve, and a spade at the tip.
+    const tail = [new THREE.Vector3(0, 0, 0.85), new THREE.Vector3(0, -0.05, 1.45), new THREE.Vector3(0, -0.02, 2.0), new THREE.Vector3(0, 0.08, 2.5), new THREE.Vector3(0, 0.2, 2.95)];
+    for (let i = 0; i < tail.length - 1; i++) between(tail[i], tail[i + 1], 0.26 - i * 0.055, 0.21 - i * 0.05, red);
+    const spade = add(new THREE.Mesh(new THREE.OctahedronGeometry(0.2), dark));
+    spade.position.copy(tail[4]).add(new THREE.Vector3(0, 0.04, 0.15));
+    spade.scale.set(1, 0.25, 1.4);
+    // Legs, tucked up under the body while it flies.
+    for (const [x, z, k] of [[-0.35, -0.45, 0.8], [0.35, -0.45, 0.8], [-0.35, 0.5, 1], [0.35, 0.5, 1]] as const) {
       const leg = new THREE.Group();
-      leg.position.set(x, -0.35, z);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.75, 0.3), scale);
-      m.position.y = -0.37;
-      m.castShadow = true;
-      leg.add(m);
+      leg.position.set(x, -0.3, z);
+      leg.rotation.x = 1.1;
+      const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.45 * k, 0.22), red);
+      thigh.position.y = -0.2 * k;
+      thigh.castShadow = true;
+      const claw = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.2), dark);
+      claw.position.set(0, -0.44 * k, -0.06);
+      leg.add(thigh, claw);
       body.add(leg);
-      legs.push(leg);
     }
-    const sail = new THREE.MeshLambertMaterial({ color: "#7a1e16", flatShading: true, side: THREE.DoubleSide });
+    // Wings: an arm (shoulder, elbow, wrist), three fingers fanning back,
+    // and the membrane stretched between them and the body.
+    const sail = new THREE.MeshLambertMaterial({ color: "#6e1a14", flatShading: true, side: THREE.DoubleSide });
     mats.push(sail);
     for (const sx of [-1, 1]) {
       const wing = new THREE.Group();
-      wing.position.set(sx * 0.5, 0.4, -0.3);
-      const spar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 0.1), dark);
-      spar.position.set(sx * 0.9, 0.25, 0);
-      spar.rotation.z = sx * 0.3;
-      const membrane = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.04, 1.1), sail);
-      membrane.position.set(sx * 0.85, 0.15, 0.55);
-      wing.add(spar, membrane);
+      wing.position.set(sx * 0.38, 0.3, -0.35);
+      wing.scale.x = sx; // the left wing is the right one, mirrored
+      const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+      const S = V(0, 0, 0);
+      const E = V(0.95, 0.3, 0.05);
+      const W = V(1.8, 0.42, -0.12);
+      const F = [V(2.9, 0.15, 0.45), V(2.45, 0.0, 1.15), V(1.65, -0.05, 1.55)];
+      const B = V(0.15, -0.05, 1.05);
+      between(S, E, 0.08, 0.07, dark, wing);
+      between(E, W, 0.07, 0.05, dark, wing);
+      for (const f of F) between(W, f, 0.04, 0.02, dark, wing);
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.16, 4), bone);
+      claw.position.copy(W).add(V(0, 0.08, -0.05));
+      wing.add(claw);
+      const tris = [W, F[0], F[1], W, F[1], F[2], W, F[2], E, E, F[2], B, E, B, S];
+      const g = new THREE.BufferGeometry().setFromPoints(tris);
+      g.computeVertexNormals();
+      const membrane = new THREE.Mesh(g, sail);
+      membrane.castShadow = true;
+      wing.add(membrane);
       body.add(wing);
       wings.push(wing);
     }
-    const fire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 1), new THREE.MeshBasicMaterial({ color: "#ffb347", toneMapped: false }));
-    fire.name = "fire";
-    fire.position.set(0, 0.7, -2.4);
-    fire.scale.setScalar(0.3);
-    body.add(fire);
   } else if (kind === "imp") {
     // A Fire Imp: a small red demon with horns, bat wings and a tail,
     // hovering, a ball of fire in its hand (it flares up as it winds up).
@@ -429,7 +491,7 @@ export class MonsterViews {
         return false;
       }
       d.v.root.rotation.z = Math.min(1, k * 2.5) * (Math.PI / 2) * 0.9; // over onto its side
-      d.v.root.position.y = d.y - k * 0.6;
+      d.v.root.position.y = d.y - Math.min(1, k * 2) * (MONSTERS[d.v.kind].fly ?? 0) - k * 0.6; // fliers fall out of the sky first
       d.v.root.scale.setScalar(1 - Math.max(0, k - 0.5) * 2);
       return true;
     });
@@ -459,12 +521,15 @@ export class MonsterViews {
         const hop = Math.abs(Math.sin(v.phase * 2.2));
         v.body.position.y = hop * 0.35 - 0.1;
         v.body.scale.set(1 + (1 - hop) * 0.15, 0.85 + hop * 0.25, 1 + (1 - hop) * 0.15);
+      } else if (v.kind === "dragon") {
+        // Flying: a slow rise and fall with each beat of the wings.
+        v.body.position.y = Math.sin(now / 260 + v.phase) * 0.18;
       } else {
         v.legs.forEach((leg, i) => (leg.rotation.x = (i % 2 ? s : -s) * Math.min(1, speed / 3) * 0.7));
         v.body.position.y = v.kind === "golem" ? Math.abs(s) * 0.06 : Math.abs(s) * 0.05;
       }
       if (v.wings.length) {
-        const flap = Math.sin(now / (v.attacking ? 90 : 220)) * 0.5;
+        const flap = Math.sin(now / (v.attacking ? 110 : 260) + v.phase) * 0.55 - 0.05;
         v.wings.forEach((w, i) => (w.rotation.z = i ? -flap : flap));
       }
       if (v.kind === "dragon") {

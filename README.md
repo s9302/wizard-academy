@@ -592,9 +592,9 @@ Druid beast.
 | **Fire Imp** | 40 | **ranged**: a fire bolt for 10 from up to 24 m (dodgeable, 20 m/s); it needs a clear shot, backs off if you get within 9 m, and winds up (its fireball flares) before each throw |
 | **Skeleton** | 50 | 12 up close, quick, with a rusty sword |
 | **Zombie** | 120 | 16 up close, slow and tough |
-| **Witch** | 60 | **ranged**: hexes from her broom (8, and they slow you), from up to 22 m; keeps 10 m away |
+| **Witch** | 60 | **flies** (about 2.4 m up); **ranged**: hexes from her broom (8, and they slow you), from up to 22 m; keeps 10 m away |
 | **Stone Golem** | 180 | 22 up close, slow and heavy |
-| **Dragon** | 320 | **ranged**: balls of fire (18) from up to 20 m; big and tough |
+| **Dragon** | 320 | **flies** (about 3.4 m up, out of a sword's reach); **ranged**: balls of fire (18) from up to 22 m; big and tough |
 
 A Druid's beasts are tinted: **blue** if they're on your side (yours, a
 teammate's, or anyone's in Horde and the boss fights), **red** if they're

@@ -7,7 +7,7 @@
 // reach when the wind-up ends does it land. Backing off or jumping away
 // in time dodges it.
 
-import { MAX_MONSTERS, MONSTER_ID_BASE, MONSTER_KINDS, type MonsterKind, MONSTERS, type MonsterState } from "../../../shared/src/monsters.ts";
+import { MAX_MONSTERS, MONSTER_ID_BASE, MONSTER_KINDS, type MonsterKind, MONSTERS, type MonsterState, rideHeight } from "../../../shared/src/monsters.ts";
 import type { Vec3 } from "../../../shared/src/protocol.ts";
 import { followPath, type Vec2 } from "../bots/followPath.ts";
 import type { NavGrid } from "../bots/NavGrid.ts";
@@ -193,7 +193,7 @@ export class Monsters {
         const x = near[0] + Math.cos(a) * r;
         const z = near[2] + Math.sin(a) * r;
         if (!grid.isWalkable(x, z)) continue;
-        const m = this.monsters.get(this.add(kind, [x, grid.floorAt(x, z) + def.height, z]))!;
+        const m = this.monsters.get(this.add(kind, [x, grid.floorAt(x, z) + rideHeight(def), z]))!;
         if (tough) {
           m.hp = m.max = Math.round(def.hp * tough.hp);
           m.dmgMul = tough.damage;
@@ -212,7 +212,7 @@ export class Monsters {
       const x = near[0] + Math.cos(a) * r;
       const z = near[2] + Math.sin(a) * r;
       if (!grid.isWalkable(x, z)) continue;
-      const id = this.add(kind, [x, grid.floorAt(x, z) + MONSTERS[kind].height, z]);
+      const id = this.add(kind, [x, grid.floorAt(x, z) + rideHeight(MONSTERS[kind]), z]);
       const m = this.monsters.get(id)!;
       m.owner = owner;
       m.until = until;
@@ -290,7 +290,7 @@ export class Monsters {
     const kind = this.nextKind();
     const def = MONSTERS[kind];
     const floor = grid.floorAt(spot[0], spot[1]);
-    const id = this.add(kind, [spot[0], (Number.isNaN(floor) ? 0 : floor) + def.height, spot[1]]);
+    const id = this.add(kind, [spot[0], (Number.isNaN(floor) ? 0 : floor) + rideHeight(def), spot[1]]);
     this.monsters.get(id)!.managed = true;
   }
 
@@ -375,7 +375,7 @@ export class Monsters {
     const ok = grid.isWalkable(nx, nz);
     push.v[1] -= 20 * dt;
     const floor = grid.floorAt(ok ? nx : m.p[0], ok ? nz : m.p[2]);
-    const ground = (Number.isNaN(floor) ? m.p[1] - def.height : floor) + def.height;
+    const ground = (Number.isNaN(floor) ? m.p[1] - rideHeight(def) : floor) + rideHeight(def);
     const y = Math.max(ground, m.p[1] + push.v[1] * dt);
     m.p = ok ? [nx, y, nz] : [m.p[0], y, m.p[2]];
     if (now >= push.until && y <= ground + 0.01) m.push = null;
@@ -398,7 +398,7 @@ export class Monsters {
     const def = MONSTERS[m.kind];
     // (A ranged one comes right in: it stops on its own once it has a clear shot.)
     const stop = chasing ? (def.ranged ? 1.5 : def.reach * 0.7) : 0;
-    const moved = followPath(this.host.grid(), m.p, m.path, speed, dt, stop, def.height);
+    const moved = followPath(this.host.grid(), m.p, m.path, speed, dt, stop, rideHeight(def));
     m.p = moved.p;
     if (!chasing && moved.dir) m.ry = Math.atan2(-moved.dir[0], -moved.dir[1]);
   }
