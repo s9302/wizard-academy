@@ -154,7 +154,7 @@ check("Inner Peace", !a.since(mark).some((m) => m.t === "abilityFailed"));
 // ---- A Monk outruns a Wizard (the server lets them move that fast) ----
 const from = a.me.pos;
 mark = a.msgs.length;
-await a.walkTo([from[0], from[1], from[2] - 25], 0.5); // 10 m/s for 2.5 s: over a Wizard's run, under a Monk's
+await a.walkTo([from[0], from[1], from[2] - 25], 0.6); // 12 m/s for 2 s: well over a Wizard's run (8), under a Monk's (12.4)
 await sleep(300);
 check("Monk speed isn't pulled back", !a.since(mark).some((m) => m.t === "teleport"));
 

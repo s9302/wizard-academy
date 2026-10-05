@@ -472,7 +472,7 @@ battle royale.
 | | Knight | Rogue | Wizard | Cleric | Druid | Monk |
 |---|---|---|---|---|---|---|
 | Health | 180 | 85 | 100 | 120 | 105 | 90 |
-| Speed | 92% | 112% | 100% | 97% | 100% | 132% |
+| Speed | 92% | 112% | 100% | 97% | 100% | 155% |
 | Defense | takes 15% less damage | none | none | takes 10% less damage | takes 5% less damage | none |
 | Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** | **Mace**: 24, 2.6 m reach | **Thorns**: two thorns at once, 9 each, slow a little | **Fists**: 11, very fast |
 | Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range | **Holy Light**: 15, straight shots, 42 m | **Sickle**: 19 | **Staff**: 18 |

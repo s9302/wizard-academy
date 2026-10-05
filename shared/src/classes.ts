@@ -72,7 +72,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   monk: {
     name: "Monk",
     maxHealth: 90,
-    speed: 1.32,
+    speed: 1.55,
     defense: 0,
     main: "fists",
     backup: "staff",
