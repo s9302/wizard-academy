@@ -154,7 +154,7 @@ export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<st
 export type ConjureMsg = { t: "conjure"; id: number; box: Box; ms: number };
 export type UnconjureMsg = { t: "unconjure"; id: number };
 // Someone vanished, fortified, charged or shadow-stepped (ms 0: it ended).
-export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment" | "spin" | "windstep";
+export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment" | "spin" | "windstep" | "burn";
 // id: who it's on (for chain: who was pulled; from = the Knight's position).
 export type EffectMsg = { t: "effect"; id: number; kind: EffectKind; ms: number; from?: Vec3; to?: Vec3 };
 // Level 11+ abilities: areas on the ground, being thrown, and Rogue copies.

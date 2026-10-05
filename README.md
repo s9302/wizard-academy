@@ -353,8 +353,22 @@ GAME_PIN=... node server/scripts/bots-check.ts http://localhost:3000     # inclu
 
 ## Arenas (battle royale)
 
-Nine arenas, three of each size, all with high ground: ramps lead up
-everything you're meant to stand on.
+Sixteen arenas of three sizes, all with high ground: ramps lead up
+everything you're meant to stand on. The table has the first nine; the
+Ember Forge and Sky Temple are in `arenas2.ts`, and five more built around
+teleporters, jump pads and ladders are in `arenas3.ts`:
+
+- **The Spire** (medium): four levels, ground, corner terraces (4 m), side
+  ledges (8 m) and the summit (12 m), climbed by ramps, or skipped with
+  ladders, big jump pads and a teleporter to the top.
+- **The Magma Islands** (large): stone islands and bridges over a lava lake,
+  a volcano in the middle, basalt lookouts, teleporters between corners.
+- **The Treetops** (medium): platforms 5 m up joined by rope bridges, a big
+  platform at 9 m, crow's nests at 13 m (ladders and a teleporter).
+- **The Quarry** (small): terraces at 2 and 4 m, a bottomless shaft in the
+  middle, crane towers with ladders.
+- **The Cloud Citadel** (large): islands over the void on narrow bridges,
+  a keep, towers with ladders and pads, teleporters across.
 
 | Small (48 m) | Medium (84 m) | Large (120 m) |
 |---|---|---|
@@ -363,12 +377,16 @@ everything you're meant to stand on.
 | **The Ziggurat**: a stepped pyramid, corner watchtowers | **The Canyon**: two plateaus, bridges across, a mesa below | **The Rooftops**: a city of roofs, ramps up, a bridge ring at 6 m |
 
 - **Voting:** while the room is waiting and on the results screen (now 12 s),
-  one arena of each size is on offer: Esc to vote, the tally shows on screen.
+  four arenas are on offer (one of each size, and one more of any size):
+  Esc to vote, the tally shows on screen.
   When the next countdown starts, the most votes wins (ties, or no votes:
   random among the leaders). The world is rebuilt in place, no reconnect.
 - **The storm** starts at each arena's size (35 / 50 / 72 m) and its stages
   scale with it.
 - **Falling** never hurts (there's no fall damage).
+- **Lava** burns (20 each time it catches you, at most every 0.4 s) and
+  throws you up and out over its nearest edge; it only kills if you're low.
+  The void still takes you out.
 - **Landing on someone** while falling hurts them (25 + 3 per meter fallen,
   shields don't help) and bounces you off. Once per fall.
 - It's worked out by the server from the positions players send

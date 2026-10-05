@@ -491,6 +491,10 @@ export class Royale {
         this.hooks.onGiant(ms);
         this.hud.callout("Giant!");
       } else this.remotes.setScale(id, GIANT.scale, ms);
+    } else if (kind === "burn") {
+      sound.fx("fireball", { at, volume: 0.6 });
+      if (mine) this.hud.callout("Too hot!");
+      if (where) particles.emit({ at: where, count: 25, color: "#ffb347", color2: "#ff3a1a", speed: 3, up: 3, life: 0.6, size: 0.25, gravity: -1 });
     } else if (kind === "windstep") {
       sound.fx("blink", { at, rate: 1.4, volume: 0.6 });
       if (mine && ms > 0) {

@@ -1,5 +1,5 @@
 // Draws the areas level 11+ abilities leave on the ground: a rolling
-// tornado, a line of fire, the pit to hell, a Null Zone dome, and smoke. The
+// tornado, a line of fire, the pit to hell, a Null Zone bubble, and smoke. The
 // server decides what they do; this only shows them (and says whether a
 // point is in a Null Zone, so the client doesn't bother casting there).
 
@@ -67,7 +67,8 @@ export class Fields {
         break;
       }
       case "nullzone": {
-        const dome = new THREE.Mesh(new THREE.SphereGeometry(info.r, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), see("#bfe4ff", 0.12));
+        // A whole bubble (the lower half shows from below a ledge, or through a slope).
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(info.r, 28, 18), see("#bfe4ff", 0.12));
         const ring = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.2, info.r, 48), see("#e8f6ff", 0.7));
         ring.rotation.x = -Math.PI / 2;
         ring.position.y = 0.05;

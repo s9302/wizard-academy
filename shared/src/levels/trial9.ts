@@ -24,7 +24,7 @@ function hollowThrone(): Level {
     [24, 20],
   ]) {
     k.block(x, z, 8, 6, 3.5, STONE);
-    k.ladder(x - Math.sign(x) * 4.1, z, 3.5, Math.sign(x) > 0 ? Math.PI / 2 : -Math.PI / 2);
+    k.ladder(x - Math.sign(x) * 4.1, z, 3.5, (-Math.sign(x) * Math.PI) / 2); // on the face toward the middle
     k.pickup(x, z, 3.5);
     k.props.push({ kind: "crystal", pos: [x, 5, z], color: VIOLET, scale: 0.6 });
   }

@@ -71,13 +71,14 @@ for (const level of ARENAS) {
   for (const pk of level.pickupSpots!) {
     const floor = grid.floorAt(pk[0], pk[2]);
     if (Math.abs(pk[1] - 0.9 - floor) > 0.05) bad(`pickup ${pk} floats (floor there is ${floor})`);
-    const path = grid.findPath([start[0], start[2]], [pk[0], pk[2]]);
+    // (Ramps only: the walker can't climb ladders, ride pads or teleport.)
+    const path = grid.findPath([start[0], start[2]], [pk[0], pk[2]], false);
     const end = path?.at(-1);
     if (!path || !end || Math.hypot(end[0] - pk[0], end[1] - pk[2]) > 1.4) {
       bad(`pickup ${pk} unreachable for bots`);
       continue;
     }
-    if (!walkPath(w, level, start, path, pk)) bad(`pickup ${pk}: the real movement couldn't follow the route there`);
+    if (!walkPath(world(level), level, start, path, pk)) // a fresh world: no walkers left from before bad(`pickup ${pk}: the real movement couldn't follow the route there`);
   }
   console.log(`${problems ? "FAIL" : "ok  "} ${level.id} (${level.arena?.size}): ${level.spawnPoints!.length} spawns, ${level.pickupSpots!.length} pickups, ${level.boxes.length} boxes`);
 }

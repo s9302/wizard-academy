@@ -94,12 +94,14 @@ import { RoyaleBot } from "../bots/RoyaleBot.ts";
 import type { BotPeer } from "../Connection.ts";
 import { XP } from "../xp.ts";
 import type { Player } from "./Room.ts";
-import { arenasOfSize } from "../../../shared/src/levels/arenas.ts";
+import { ARENAS, arenasOfSize } from "../../../shared/src/levels/arenas.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
 import { type Box, inPit, type Level, type Pit } from "../../../shared/src/levels/types.ts";
 import { navGridFor, navGridIfBuilt, RoundRoom, SCALE } from "./RoundRoom.ts";
 
 const STORM_TICK_MS = 500; // storm damage is dealt twice a second (half the dps each time)
+const LAVA_BURN = 20; // lava: this much each time it catches you (it throws you out)
+const LAVA_EVERY_MS = 400;
 const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle (medium arena)
 const RESULTS_MS = 12_000 * SCALE; // long enough to vote for the next arena
 
@@ -485,7 +487,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const list = arenasOfSize(size);
       return list[Math.floor(Math.random() * list.length)].id;
     };
-    this.voteOptions = [pick("small"), pick("medium"), pick("large")];
+    // One of each size, and a fourth from any size (not one already offered).
+    const options = [pick("small"), pick("medium"), pick("large")];
+    const rest = ARENAS.filter((a) => !options.includes(a.id));
+    if (rest.length) options.push(rest[Math.floor(Math.random() * rest.length)].id);
+    this.voteOptions = options;
     this.votes.clear();
     this.broadcastVote();
   }
@@ -1906,11 +1912,33 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Lava or the void: out of the round (between rounds, just back to a spawn).
   protected override onPit(player: Player, pit: Pit): void {
     const id = player.conn.id;
+    if (pit.kind === "lava") return this.burn(player, pit);
     if (this.state === "playing" && this.alive.has(id) && !player.conn.isAdmin) {
-      this.damage(player, 9999, null, undefined, pit.kind === "lava" ? "fell into the lava" : "was swallowed by the void");
+      this.damage(player, 9999, null, undefined, "was swallowed by the void");
     }
     this.falls.delete(id);
     this.teleport(player, this.spawnPoint());
+  }
+
+  // Lava burns (LAVA_BURN every LAVA_EVERY_MS while you're in it) and
+  // throws you up and out toward the nearest edge; it doesn't kill outright.
+  private burnReady = new Map<number, number>();
+  private burn(player: Player, pit: Pit): void {
+    const id = player.conn.id;
+    const now = Date.now();
+    if (now < (this.burnReady.get(id) ?? 0)) return;
+    this.burnReady.set(id, now + LAVA_EVERY_MS);
+    if (this.state === "playing" && this.alive.has(id)) this.damage(player, LAVA_BURN, null, pit.pos, "burned up in the lava");
+    if (!this.alive.has(id) && this.state === "playing") return;
+    // Out over the nearest edge of the pool.
+    const dx = player.p[0] - pit.pos[0];
+    const dz = player.p[2] - pit.pos[2];
+    const toX = pit.size[0] / 2 - Math.abs(dx);
+    const toZ = pit.size[1] / 2 - Math.abs(dz);
+    const [ux, uz] = toX < toZ ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dz) || 1];
+    const reach = Math.min(toX, toZ) + 1.5;
+    this.knock(player, ux * reach * 2, uz * reach * 2, 7, 0.5);
+    this.broadcast({ t: "effect", id, kind: "burn", ms: 0 });
   }
 
   protected override onJumpPad(player: Player, now: number): void {

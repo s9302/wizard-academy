@@ -1,5 +1,5 @@
 // Checks Phase 11's arena features: the vote between rounds (one arena of
-// each size on offer, the winner loads, spawns are in it, the storm fits
+// each size on offer, plus a fourth, the winner loads, spawns are in it, the storm fits
 // it), no fall damage, and landing on someone (hurts them, bounces you).
 //
 // The server has no collision for movement (by design), so the test
@@ -106,7 +106,7 @@ const a = new P(cookies[0]);
 await waitFor(() => !!a.last("arenaVote")?.options.length, 5000);
 const offer = a.last("arenaVote")!;
 const sizes = offer.options.map((id) => LEVELS[id]?.arena?.size);
-check("a vote opens with one arena of each size", sizes.join(",") === "small,medium,large", offer.options.join(", "));
+check("a vote opens with four arenas: one of each size, and one more", sizes.length === 4 && sizes.slice(0, 3).join(",") === "small,medium,large" && new Set(offer.options).size === 4, offer.options.join(", "));
 const pick = offer.options[0]; // the small one
 a.send({ t: "vote", arena: pick });
 await waitFor(() => a.last("arenaVote")?.votes[pick] === 1, 2000);
@@ -158,7 +158,7 @@ check("...and everyone hears about it", a.since("announce", mark).some((m) => m.
 
 // ---- The vote reopens after the round ----
 a.ws.close();
-check("after the round, a new vote opens", await waitFor(() => (b.since("arenaVote", 0).at(-1)?.options.length ?? 0) === 3 && b.state === "waiting", 15_000), `state=${b.state}`);
+check("after the round, a new vote opens", await waitFor(() => (b.since("arenaVote", 0).at(-1)?.options.length ?? 0) === 4 && b.state === "waiting", 15_000), `state=${b.state}`);
 b.ws.close();
 
 console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");
