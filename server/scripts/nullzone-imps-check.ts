@@ -1,6 +1,8 @@
-// Checks that a Knight's Null Zone breaks up a Wizard's tornado and keeps a
-// Pit to Hell out, and that the Druid's Imp Swarm calls three fire imps that
-// throw fire at enemies, never at the Druid. An admin plays (every unlock).
+// Checks a Knight's Null Zone: it breaks up a Wizard's tornado, and no magic
+// reaches anyone inside it (a Pit to Hell can be opened over it but doesn't
+// touch them; Inversion fails; Shockwave doesn't throw them). And that the
+// Druid's Imp Swarm calls three fire imps that throw fire at enemies, never
+// at the Druid. An admin plays (every unlock).
 //
 //   ROYALE_ARENA=arena ROUND_READY=on ROYALE_STORM=off ROUND_TIME_SCALE=0.25 ... node server/src/index.ts
 //   ADMIN_USER=... ADMIN_PASSWORD=... GAME_PIN=... node server/scripts/nullzone-imps-check.ts http://localhost:3000
@@ -104,8 +106,10 @@ const owned = () => {
   const m = kinds(a.msgs, "monsters").at(-1);
   return m?.t === "monsters" && m.list ? m.list.filter((x) => x.owner === a.me.id) : [];
 };
-// ---- Null Zone vs tornado and pit ----
+// ---- Null Zone: tornadoes break up; no magic reaches anyone inside ----
+// B stands inside the zone (2 m from its middle).
 const z0 = a.me.pos;
+await b.walkTo([z0[0] + 2, z0[1], z0[2]]);
 await a.become("knight");
 await a.equip("knight", "nullzone", "giant");
 a.use(0);
@@ -114,15 +118,36 @@ await a.walkTo([z0[0], z0[1], z0[2] + 13]);
 await a.become("wizard");
 await a.equip("wizard", "tornado", "hellpit");
 let mark = a.msgs.length;
-a.use(0, [0, 0, -1]); // roll it at the zone
+a.use(0, a.aimAt([z0[0], z0[1], z0[2]])); // roll it at the zone
 await waitFor(() => a.since(mark).some((m) => m.t === "fieldEnd"), 3000);
 const tor = a.since(mark).find((m) => m.t === "field" && m.field.kind === "tornado");
 const ended = tor?.t === "field" ? a.since(mark).find((m) => m.t === "fieldEnd" && m.id === tor.field.id) : undefined;
 check("a tornado rolled at a Null Zone breaks up there", !!ended && a.since(mark).some((m) => m.t === "announce" && m.text.includes("breaks up")), JSON.stringify(a.since(mark).filter((m) => m.t === "announce").map((m) => m.t === "announce" && m.text)));
 mark = a.msgs.length;
-a.use(1, a.aimAt([z0[0], z0[1] - 0.95, z0[2]]));
+let bMark = b.msgs.length;
+a.use(1, a.aimAt([b.me.pos[0], b.me.pos[1] - 0.95, b.me.pos[2]])); // a pit right under B
+await sleep(1200);
+check("a Pit to Hell can be opened over a Null Zone", a.since(mark).some((m) => m.t === "field" && m.field.kind === "hellpit") && !a.since(mark).some((m) => m.t === "abilityFailed"));
+check("...but it can't touch someone inside the zone (no drag, no slow)", !b.since(bMark).some((m) => (m.t === "slowed" && m.id === b.me.id) || m.t === "knock"));
+await a.become("wizard");
+await a.equip("wizard", "invert", "shockwave");
+mark = a.msgs.length;
+a.use(0, a.aimAt(b.me.pos));
 await sleep(400);
-check("a Pit to Hell can't open in a Null Zone", a.since(mark).some((m) => m.t === "abilityFailed" && m.reason.includes("Null Zone")), JSON.stringify(a.since(mark).filter((m) => m.t === "abilityFailed")));
+check("Inversion can't curse someone inside a Null Zone", a.since(mark).some((m) => m.t === "abilityFailed" && m.reason.includes("Null Zone")), JSON.stringify(a.since(mark).filter((m) => m.t === "abilityFailed")));
+// Shockwave from just outside the zone's edge: B inside isn't thrown.
+await a.walkTo([z0[0] + 2, z0[1], z0[2] + 8]);
+bMark = b.msgs.length;
+a.use(1);
+await sleep(400);
+check("Shockwave from outside doesn't throw someone inside", !b.since(bMark).some((m) => m.t === "knock"));
+await sleep(6500); // the zone fades
+bMark = b.msgs.length;
+await a.become("wizard");
+await a.equip("wizard", "invert", "shockwave");
+a.use(1);
+await sleep(400);
+check("...and once the zone is gone, it does", b.since(bMark).some((m) => m.t === "knock"));
 
 // ---- Imp Swarm ----
 await a.become("druid");

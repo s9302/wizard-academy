@@ -78,7 +78,7 @@ const ROWS: Record<AbilityId, [string, string][]> = {
   hellpit: [["Damage", `${HELLPIT.dps} per second`], ["Radius", `${HELLPIT.radius} m`], ["Lasts", s(ABILITIES.hellpit.durationMs!)], ["Effect", "Drags enemies in and slows them"]],
   invert: [["Range", `${INVERT_RANGE} m`], ["Lasts", s(ABILITIES.invert.durationMs!)], ["Effect", "Their screen turns upside down"]],
   shockwave: [["Damage", `${SHOCKWAVE.damage}`], ["Radius", `${SHOCKWAVE.radius} m`], ["Effect", "Throws enemies and monsters away from you"]],
-  nullzone: [["Radius", `${NULLZONE_RADIUS} m`], ["Lasts", s(ABILITIES.nullzone.durationMs!)], ["Effect", "No ranged attacks or magic abilities inside; stops Tornado and Pit to Hell"]],
+  nullzone: [["Radius", `${NULLZONE_RADIUS} m`], ["Lasts", s(ABILITIES.nullzone.durationMs!)], ["Effect", "No ranged attacks, and no magic reaches anyone inside (even from outside); breaks up Tornadoes"]],
   giant: [["Lasts", s(ABILITIES.giant.durationMs!)], ["Melee", `x${GIANT.damage} damage, x${GIANT.reach} reach`], ["Damage taken", pct(GIANT.taken)]],
   chain: [["Range", `${CHAIN.range} m`], ["Damage", `${CHAIN.damage}`], ["Effect", "Drags them to you"]],
   decoys: [["Copies", `${DECOYS.count}`], ["Lasts", s(ABILITIES.decoys.durationMs!)], ["Effect", "Fool players, bots and monsters; one hit breaks one"]],

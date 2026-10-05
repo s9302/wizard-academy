@@ -1249,6 +1249,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     return (this.boxCache ??= [...this.level.boxes, ...[...this.conjured.values()].map((c) => c.box)]);
   }
 
+  // Everyone's abilities are magic but a Knight's and a Monk's.
+  private isMagic(player: Player): boolean {
+    const cls = this.fighters.get(player.conn.id)?.cls;
+    return cls !== "knight" && cls !== "monk";
+  }
+
   private isStealthed(id: number, now = Date.now()): boolean {
     if ((this.fighters.get(id)?.stealthUntil ?? 0) > now) return true;
     const p = this.players.get(id)?.p;
@@ -1296,6 +1302,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "wall": {
         const spot = this.aimedFloor(player, d);
         if (!spot) return "Nothing to stand a wall on there.";
+        if (this.shielded([spot[0], spot[1] + 1, spot[2]], now)) return "Magic can't build inside a Null Zone.";
         const yaw = Math.atan2(-d[0], -d[2]);
         const box: Box = { pos: [spot[0], spot[1] + WALL_SIZE[1] / 2, spot[2]], size: WALL_SIZE, color: "#8a7f72", rot: [0, yaw, 0] };
         if ([...this.players.values()].some((p) => boxTouchesPlayer(box, p.p))) return "No room for a wall there.";
@@ -1305,6 +1312,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "pillar": {
         let spot = this.aimedFloor(player, d);
         if (!spot) return "Nothing to raise a pillar on there.";
+        if (this.shielded([spot[0], spot[1] + 1, spot[2]], now)) return "Magic can't build inside a Null Zone.";
         // Aimed at your own feet: it goes right under you and lifts you up.
         const underMe = Math.hypot(spot[0] - player.p[0], spot[2] - player.p[2]) < 1.4;
         if (underMe) {
@@ -1397,7 +1405,6 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         // Anywhere: where your aim meets the ground, or (aiming at the sky or
         // over an edge) the ground at the end of your aim.
         const spot = this.aimedFloor(player, d) ?? this.groundAhead(player, d, CONJURE_RANGE);
-        if (this.touchesNullZone(spot, HELLPIT.radius * 0.5, now)) return "A Null Zone is in the way.";
         this.addField({ kind: "hellpit", owner: pid, p: spot, r: HELLPIT.radius }, ms, now);
         return null;
       }
@@ -1414,6 +1421,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "invert": {
         const target = this.aimedPlayer(player, d, INVERT_RANGE);
         if (!target) return "Missed: nobody there.";
+        if (this.shielded(target.p, now)) return "A Null Zone protects them.";
         this.broadcast({ t: "effect", id: target.conn.id, kind: "invert", ms });
         return null;
       }
@@ -1437,7 +1445,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
           const dx = target.p[0] - from[0];
           const dz = target.p[2] - from[2];
           const dist = Math.hypot(dx, dz);
-          if (dist > SHOCKWAVE.radius || Math.abs(target.p[1] - from[1]) > 3 || !lineOfSight(eye(from), eye(target.p), this.allBoxes())) continue;
+          if (dist > SHOCKWAVE.radius || Math.abs(target.p[1] - from[1]) > 3 || !lineOfSight(eye(from), eye(target.p), this.allBoxes()) || this.shielded(target.p, now)) continue;
           if (this.state === "playing") this.damage(target, SHOCKWAVE.damage, player, from);
           const dir = dist > 0.1 ? [dx / dist, dz / dist] : [Math.sin(Math.random() * 7), Math.cos(Math.random() * 7)];
           this.knock(target, dir[0] * SHOCKWAVE.push, dir[1] * SHOCKWAVE.push, SHOCKWAVE.lift, SHOCKWAVE.pushTime);
@@ -1446,7 +1454,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
           const dx = m.p[0] - from[0];
           const dz = m.p[2] - from[2];
           const dist = Math.hypot(dx, dz);
-          if (dist > SHOCKWAVE.radius + m.radius) continue;
+          if (dist > SHOCKWAVE.radius + m.radius || this.shielded(m.p, now)) continue;
           this.hitMonster(m.id, SHOCKWAVE.damage, player);
           if (this.monsters.has(m.id)) {
             const len = dist || 1;
@@ -1473,6 +1481,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         // You, and your teammates nearby (nobody else is, in free-for-all).
         for (const p of this.players.values()) {
           if (p !== player && (!this.allies(player, p) || dist3(p.p, player.p) > HEAL.radius)) continue;
+          if (this.shielded(p.p, now)) continue;
           this.heal(p, HEAL.amount);
         }
         return null;
@@ -1490,6 +1499,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       }
       case "aegis": {
         const target = this.aimedAlly(player, d, AEGIS.range) ?? player;
+        if (this.shielded(target.p, now)) return "A Null Zone keeps the magic out.";
         const tf = this.fighters.get(target.conn.id);
         if (!tf || !this.alive.has(target.conn.id) && this.state === "playing") return "Nobody to shield.";
         tf.shield = Math.min(MAX_SHIELD, tf.shield + AEGIS.shield);
@@ -1500,6 +1510,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "judgment": {
         const target = this.aimedPlayer(player, d, JUDGMENT.range);
         if (!target) return "Missed: nobody there.";
+        if (this.shielded(target.p, now)) return "A Null Zone protects them.";
         const tf = this.fighters.get(target.conn.id);
         if (tf) tf.judgedUntil = now + ms;
         this.broadcast({ t: "effect", id: target.conn.id, kind: "judgment", ms });
@@ -1584,7 +1595,6 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       case "blackhole": {
         const spot = this.aimedFloor(player, d, BLACKHOLE.range) ?? this.groundAhead(player, d, BLACKHOLE.range);
-        if (this.touchesNullZone(spot, BLACKHOLE.radius * 0.5, now)) return "A Null Zone is in the way.";
         this.addField({ kind: "blackhole", owner: pid, p: spot, r: BLACKHOLE.radius }, ms, now);
         return null;
       }
@@ -1613,6 +1623,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "assassinate": {
         const target = this.aimedPlayer(player, d, ASSASSINATE.range);
         if (!target) return "Missed: nobody there.";
+        if (this.shielded(target.p, now)) return "A Null Zone protects them.";
         if (!this.stepBehind(player, target.p, target.ry)) return "No room behind them.";
         if (this.state === "playing") this.damage(target, ASSASSINATE.damage, player, player.p);
         return null;
@@ -1621,12 +1632,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         const from = eye(player.p);
         const targets: { p: Vec3; ry: number; hit: () => void }[] = [];
         for (const t of this.players.values()) {
-          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || this.isStealthed(t.conn.id)) continue;
+          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || this.isStealthed(t.conn.id) || this.shielded(t.p, now)) continue;
           if (dist3(t.p, player.p) > PHANTOM.range || !lineOfSight(from, eye(t.p), this.allBoxes())) continue;
           targets.push({ p: t.p, ry: t.ry, hit: () => this.state === "playing" && this.damage(t, PHANTOM.damage, player, player.p) });
         }
         for (const m of this.monsters.bodies()) {
-          if (this.monsters.ownerOf(m.id) === pid || dist3(m.p, player.p) > PHANTOM.range || !lineOfSight(from, m.p, this.allBoxes())) continue;
+          if (this.monsters.ownerOf(m.id) === pid || dist3(m.p, player.p) > PHANTOM.range || !lineOfSight(from, m.p, this.allBoxes()) || this.shielded(m.p, now)) continue;
           targets.push({ p: m.p, ry: 0, hit: () => this.hitMonster(m.id, PHANTOM.damage, player) });
         }
         if (!targets.length) return "Nobody in reach.";
@@ -1643,6 +1654,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "holynova":
         for (const p of this.players.values()) {
           if (p !== player && (!this.allies(player, p) || dist3(p.p, player.p) > HOLYNOVA.radius)) continue;
+          if (this.shielded(p.p, now)) continue;
           this.heal(p, HOLYNOVA.heal);
         }
         this.areaHit(player, player.p, HOLYNOVA.radius, HOLYNOVA.damage, {});
@@ -1652,7 +1664,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         for (const p of this.players.values()) {
           if (p !== player && (!this.allies(player, p) || dist3(p.p, player.p) > GUARDIAN.radius)) continue;
           const pf = this.fighters.get(p.conn.id);
-          if (!pf || (this.state === "playing" && !this.alive.has(p.conn.id))) continue;
+          if (!pf || (this.state === "playing" && !this.alive.has(p.conn.id)) || this.shielded(p.p, now)) continue;
           pf.shield = Math.min(MAX_SHIELD, pf.shield + GUARDIAN.shield);
           this.broadcast({ t: "health", id: p.conn.id, hp: pf.hp, max: pf.maxHp, shield: pf.shield });
           this.broadcast({ t: "effect", id: p.conn.id, kind: "aegis", ms: 0 });
@@ -1661,16 +1673,16 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "wrath": {
         const spots: Vec3[] = [];
         for (const t of this.players.values()) {
-          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || dist3(t.p, player.p) > WRATH.range) continue;
+          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || dist3(t.p, player.p) > WRATH.range || this.shielded(t.p, now)) continue;
           spots.push(t.p);
         }
-        for (const m of this.monsters.bodies()) if (this.monsters.ownerOf(m.id) === undefined && dist3(m.p, player.p) <= WRATH.range) spots.push(m.p);
+        for (const m of this.monsters.bodies()) if (this.monsters.ownerOf(m.id) === undefined && dist3(m.p, player.p) <= WRATH.range && !this.shielded(m.p, now)) spots.push(m.p);
         spots.sort((a, b) => dist3(a, player.p) - dist3(b, player.p));
         spots.slice(0, WRATH.targets).forEach((p, i) => {
           const floor = floorBelow(p[0], p[2], p[1], this.allBoxes()) ?? p[1] - 0.95;
           this.addField({ kind: "smite", owner: pid, p: [p[0], floor, p[2]], r: SMITE.radius }, SMITE.delayMs + i * 120, now);
         });
-        for (const p of this.players.values()) if (p === player || this.allies(player, p)) this.heal(p, WRATH.heal);
+        for (const p of this.players.values()) if ((p === player || this.allies(player, p)) && !this.shielded(p.p, now)) this.heal(p, WRATH.heal);
         this.broadcast({ t: "effect", id: pid, kind: "holynova", ms: 0, from: player.p });
         return null;
       }
@@ -1727,9 +1739,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     center: Vec3,
     radius: number,
     damage: number,
-    o: { arc?: { yaw: number; deg: number }; push?: number; lift?: number; slowMs?: number; freezeMs?: number; cause?: string },
+    o: { arc?: { yaw: number; deg: number }; push?: number; lift?: number; slowMs?: number; freezeMs?: number; cause?: string; magic?: boolean },
   ): number {
     const now = Date.now();
+    // Magic doesn't reach into a Null Zone (Knights' and Monks' moves do).
+    const magic = o.magic ?? (!!attacker && this.isMagic(attacker));
     let hits = 0;
     for (const target of this.players.values()) {
       if (target === attacker || !this.canBeHit(target.conn.id) || target.conn.isAdmin || (attacker && this.allies(attacker, target))) continue;
@@ -1737,6 +1751,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const dz = target.p[2] - center[2];
       const dist = Math.hypot(dx, dz);
       if (dist > radius || Math.abs(target.p[1] - center[1]) > 3.5 || (o.arc && !inFront(o.arc.yaw, [dx, dz], o.arc.deg))) continue;
+      if (magic && this.shielded(target.p, now)) continue;
       if (!lineOfSight([center[0], center[1] + 0.6, center[2]], eye(target.p), this.allBoxes())) continue;
       hits++;
       if (this.state === "playing") this.damage(target, damage, attacker, center, o.cause);
@@ -1761,6 +1776,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const dz = m.p[2] - center[2];
       const dist = Math.hypot(dx, dz);
       if (dist > radius + m.radius || Math.abs(m.p[1] - center[1]) > 4.5 || (o.arc && !inFront(o.arc.yaw, [dx, dz], o.arc.deg))) continue;
+      if (magic && this.shielded(m.p, now)) continue;
       hits++;
       this.hitMonster(m.id, damage, attacker);
       if (!this.monsters.has(m.id)) continue;
@@ -1884,6 +1900,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // Does a circle (a tornado, a pit) touch a Null Zone's bubble? (Flat
   // distance, and within the bubble's height.)
+  // Magic (any ability but a Knight's or a Monk's) doesn't reach whoever is
+  // inside a Null Zone: no damage, no healing, no curses, no pulls.
+  private shielded(p: Vec3, now = Date.now()): boolean {
+    return this.inNullZone(p, now);
+  }
+
   private touchesNullZone(p: Vec3, r: number, now: number): boolean {
     for (const f of this.fields.values()) {
       if (f.kind !== "nullzone") continue;
@@ -1902,17 +1924,17 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private stepFields(now: number, dt: number): void {
     for (const field of [...this.fields.values()]) {
       const owner = this.players.get(field.owner) ?? null;
-      // A Knight's Null Zone breaks up a tornado that reaches it, and closes a
-      // Pit to Hell under it (whichever came first).
-      if ((field.kind === "tornado" || field.kind === "hellpit" || field.kind === "blackhole") && this.touchesNullZone(fieldCenter(field, now), field.kind === "tornado" ? field.r * 0.6 : field.r * 0.5, now)) {
+      // A Knight's Null Zone breaks up a tornado that reaches it. (Pits and
+      // black holes stay open, but can't touch anyone inside it.)
+      if (field.kind === "tornado" && this.touchesNullZone(fieldCenter(field, now), field.r * 0.6, now)) {
         this.fields.delete(field.id);
         this.broadcast({ t: "fieldEnd", id: field.id });
-        this.broadcast({ t: "announce", text: field.kind === "tornado" ? "The Null Zone breaks up the tornado!" : field.kind === "blackhole" ? "The Null Zone closes the black hole!" : "The Null Zone seals the Pit to Hell!" });
+        this.broadcast({ t: "announce", text: "The Null Zone breaks up the tornado!" });
         continue;
       }
       if (now >= field.until) {
         if (field.kind === "smite") this.smite(field, owner, now);
-        if (field.kind === "meteor") this.areaHit(owner, field.p, METEOR.radius, METEOR.damage, { push: METEOR.push, lift: METEOR.lift, cause: "was crushed by a meteor" });
+        if (field.kind === "meteor") this.areaHit(owner, field.p, METEOR.radius, METEOR.damage, { push: METEOR.push, lift: METEOR.lift, cause: "was crushed by a meteor", magic: true });
         this.fields.delete(field.id);
         this.broadcast({ t: "fieldEnd", id: field.id });
         continue;
@@ -1920,7 +1942,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       if (field.kind === "sanctuary" && now >= field.nextTick) {
         field.nextTick = now + FIELD_TICK_MS;
         for (const p of this.players.values()) {
-          if ((p === owner || this.allies(owner, p)) && inField(field, p.p, now)) this.heal(p, (SANCTUARY.hps * FIELD_TICK_MS) / 1000, false);
+          if ((p === owner || this.allies(owner, p)) && inField(field, p.p, now) && !this.shielded(p.p, now)) this.heal(p, (SANCTUARY.hps * FIELD_TICK_MS) / 1000, false);
         }
         continue;
       }
@@ -1932,7 +1954,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         const dps = field.kind === "flames" ? FLAMES.dps : field.kind === "entangle" ? ENTANGLE.dps : field.kind === "blackhole" ? BLACKHOLE.dps : HELLPIT.dps;
         const amount = Math.round((dps * FIELD_TICK_MS) / 1000);
         for (const target of this.players.values()) {
-          if (target.conn.id === field.owner || !this.alive.has(target.conn.id) || !inField(field, target.p, now)) continue;
+          if (target.conn.id === field.owner || !this.alive.has(target.conn.id) || !inField(field, target.p, now) || this.shielded(target.p, now)) continue;
           if (this.state === "playing") this.damage(target, amount, owner, field.p, field.kind === "flames" ? "burned up" : "was dragged into the pit");
           if (field.kind === "entangle" && !this.allies(owner, target) && !this.unstoppable(target, now)) {
             const f = this.fighters.get(target.conn.id);
@@ -1951,7 +1973,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
           }
         }
         for (const m of this.bodies()) {
-          if (!inField(field, m.p, now)) continue;
+          if (!inField(field, m.p, now) || this.shielded(m.p, now)) continue;
           this.hitMonster(m.id, amount, owner);
           if (field.kind === "blackhole" && this.monsters.has(m.id)) {
             const dx = field.p[0] - m.p[0];
@@ -1997,7 +2019,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     // Catch.
     for (const target of this.players.values()) {
       const id = target.conn.id;
-      if (id === field.owner || field.hit.has(id) || !this.canBeHit(id) || target.conn.isAdmin || this.allies(owner, target) || !inField(field, target.p, now)) continue;
+      if (id === field.owner || field.hit.has(id) || !this.canBeHit(id) || target.conn.isAdmin || this.allies(owner, target) || !inField(field, target.p, now) || this.shielded(target.p, now)) continue;
       field.hit.add(id);
       if (this.state === "playing") this.damage(target, TORNADO.damage, owner, c);
       if (this.unstoppable(target, now)) continue;
@@ -2005,7 +2027,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       if (!target.conn.isBot) this.broadcast({ t: "effect", id, kind: "spin", ms: TORNADO_HOLD_MS });
     }
     for (const m of this.bodies()) {
-      if (field.hit.has(m.id) || Math.hypot(m.p[0] - c[0], m.p[2] - c[2]) > field.r + m.radius) continue;
+      if (field.hit.has(m.id) || Math.hypot(m.p[0] - c[0], m.p[2] - c[2]) > field.r + m.radius || this.shielded(m.p, now)) continue;
       field.hit.add(m.id);
       this.hitMonster(m.id, TORNADO.damage, owner);
       if (this.monsters.has(m.id)) field.carried.set(m.id, now + TORNADO_HOLD_MS);
@@ -2041,7 +2063,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Divine Smite lands: enemies in the circle are hit and slowed.
   private smite(field: Field, owner: Player | null, now: number): void {
     for (const target of this.players.values()) {
-      if (target === owner || !this.alive.has(target.conn.id) || this.allies(owner, target) || !inField(field, target.p, now)) continue;
+      if (target === owner || !this.alive.has(target.conn.id) || this.allies(owner, target) || !inField(field, target.p, now) || this.shielded(target.p, now)) continue;
       if (this.state === "playing") this.damage(target, SMITE.damage, owner, field.p, "was smitten");
       if (!this.unstoppable(target, now)) {
         const tf = this.fighters.get(target.conn.id);
@@ -2049,7 +2071,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "slowed", id: target.conn.id, ms: SMITE.slowMs });
       }
     }
-    for (const m of this.bodies()) if (Math.hypot(m.p[0] - field.p[0], m.p[2] - field.p[2]) <= field.r + m.radius) this.hitMonster(m.id, SMITE.damage, owner);
+    for (const m of this.bodies()) if (Math.hypot(m.p[0] - field.p[0], m.p[2] - field.p[2]) <= field.r + m.radius && !this.shielded(m.p, now)) this.hitMonster(m.id, SMITE.damage, owner);
   }
 
   private breakDecoy(id: number): void {

@@ -91,7 +91,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   invert: { name: "Inversion", cooldownMs: 14_000, durationMs: 10_000, description: "Curse whoever you aim at (30 m): their world turns upside down for 10 s." },
   shockwave: { name: "Shockwave", cooldownMs: 12_000, description: "Blast everyone within 9 m away from you (18 damage, and a long way back)." },
   // Knight, level 11+
-  nullzone: { name: "Null Zone", cooldownMs: 20_000, durationMs: 7_000, description: "A 7 m circle for 7 s where no ranged attack works: spells, arrows and holy light fizzle, and no magic abilities." },
+  nullzone: { name: "Null Zone", cooldownMs: 20_000, durationMs: 7_000, description: "A 7 m bubble for 7 s: no ranged attack gets in, and no magic reaches anyone inside, not even from outside." },
   giant: { name: "Giant Form", cooldownMs: 22_000, durationMs: 8_000, description: "Double your size for 8 s: hit 60% harder with more reach, take 35% less damage." },
   chain: { name: "Chain Pull", cooldownMs: 11_000, description: "Hook the first enemy in your aim (20 m) and drag them to you. 12 damage." },
   // Rogue, level 11+
