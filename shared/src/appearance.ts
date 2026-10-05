@@ -124,18 +124,27 @@ export const ACCESSORY_NAMES: Record<Accessory, string> = {
   earrings: "Earrings",
 };
 
-export const OUTFITS = ["robe", "tunic", "cloak", "scholar", "battlemage", "archmage"] as const;
+export const OUTFITS = ["robe", "tunic", "cloak", "scholar", "rogue", "druid", "monk", "battlemage", "archmage"] as const;
 export type Outfit = (typeof OUTFITS)[number];
 export const OUTFIT_NAMES: Record<Outfit, string> = {
   robe: "Wizard's robe",
   tunic: "Tunic and boots",
   cloak: "Hooded cloak",
   scholar: "Scholar's vest",
+  rogue: "Rogue's leathers",
+  druid: "Druid's leaf mantle",
+  monk: "Monk's wraps",
   battlemage: "Battlemage armor",
   archmage: "Archmage regalia",
 };
 // Outfits that must be unlocked first (ids in unlocks.ts).
-export const LOCKED_OUTFITS: Partial<Record<Outfit, string>> = { battlemage: "outfit:battlemage", archmage: "outfit:archmage" };
+export const LOCKED_OUTFITS: Partial<Record<Outfit, string>> = {
+  rogue: "outfit:rogue",
+  druid: "outfit:druid",
+  monk: "outfit:monk",
+  battlemage: "outfit:battlemage",
+  archmage: "outfit:archmage",
+};
 
 export type Appearance = { skin: Skin; hair: Hair; hairColor: HairColor; face: Face; features: Feature[]; acc: Accessory; outfit: Outfit };
 export const DEFAULT_APPEARANCE: Appearance = { skin: "light", hair: "short", hairColor: "brown", face: "smile", features: [], acc: "none", outfit: "robe" };

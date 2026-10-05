@@ -33,6 +33,7 @@ const POSE: Record<WeaponId, { pos: [number, number, number]; rot: [number, numb
   thorns: { pos: [0.38, -0.36, -0.75], rot: [-0.3, 0.1, -0.15], scale: 0.7 },
   sickle: { pos: [0.42, -0.42, -0.72], rot: [-0.45, 0.2, -0.3], scale: 0.85 },
   fists: { pos: [0, -0.36, -0.55], rot: [-0.2, 0, 0], scale: 0.9 },
+  guard: { pos: [0.18, -0.3, -0.55], rot: [0.1, -0.2, 0], scale: 0.95 },
 };
 
 export class Viewmodel {
@@ -132,6 +133,7 @@ export class Viewmodel {
         m.rotation.x += up * 1.1 - down * 1.6;
         break;
       }
+      case "guard":
       case "staff": {
         // A jab forward with a twist.
         const jab = span(k, 0, 0.35) * (1 - span(k, 0.45, 1));

@@ -475,7 +475,7 @@ battle royale.
 | Speed | 92% | 112% | 100% | 97% | 100% | 155% |
 | Defense | takes 15% less damage | none | none | takes 10% less damage | takes 5% less damage | none |
 | Main hand (1) | **Sword**: 28, hits everyone in a 110-degree arc, 2.8 m reach | **Longbow**: 34, arrows fly 90 m and drop with distance | your **Spellbook spell** | **Mace**: 24, 2.6 m reach | **Thorns**: two thorns at once, 9 each, slow a little | **Fists**: 11, very fast |
-| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range | **Holy Light**: 15, straight shots, 42 m | **Sickle**: 19 | **Staff**: 18 |
+| Backup (2) | **Shield**: blocks 80% from the front (140 degrees), 75% speed while held; click to bash (10) | **Daggers**: 14, fast; double from behind (backstab) | **Staff**: 18, close range | **Holy Light**: 15, straight shots, 42 m | **Sickle**: 19 | **Guard Hand**: while held, 50% less damage from every side, no slowdown; click to jab (9) |
 
 The **Cleric** hits softer than the others and makes up for it by healing:
 **Healing Light** (E, 12 s) heals 35, and every teammate within 9 m in a team
@@ -640,11 +640,14 @@ looks.
 | Unlock | How |
 |---|---|
 | Crimson robe | Level 2 |
+| Rogue's leathers (outfit) | Level 3 |
 | **Double Jump** (Space again in mid-air) | Level 3 |
 | Emerald robe | Level 4 |
+| Druid's leaf mantle (outfit) | Level 5 |
 | **Blink Dash** (Q: ~3.5 m burst, every 2 s) | Level 5 |
 | Tall hat | Level 6 |
 | Midnight robe | Level 7 |
+| Monk's wraps (outfit: bare-chested, six-pack and all) | Level 7 |
 | Gold robe | Level 10 |
 | Each class's extra E/R abilities, one at a time (pick them in the arena's Esc panel) | Levels 3, 5, 7, 9, 11 |
 | **Frost Shard**, the Spell Garden | Chapter I (clear Trial I) |

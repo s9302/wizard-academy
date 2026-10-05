@@ -31,10 +31,13 @@ export type Unlock = {
 export const UNLOCKS: Unlock[] = [
   { id: "robe:crimson", name: "Crimson robe", kind: "robe", requires: { level: 2 }, description: "A deep red robe." },
   { id: "perk:doubleJump", name: "Double Jump", kind: "perk", requires: { level: 3 }, description: "Press Space again in mid-air." },
+  { id: "outfit:rogue", name: "Rogue's leathers", kind: "outfit", requires: { level: 3 }, description: "Dark leather, a hood, and a strap of throwing knives." },
   { id: "robe:emerald", name: "Emerald robe", kind: "robe", requires: { level: 4 }, description: "A green robe." },
+  { id: "outfit:druid", name: "Druid's leaf mantle", kind: "outfit", requires: { level: 5 }, description: "A robe under a mantle of living leaves, belted with a vine." },
   { id: "perk:dash", name: "Blink Dash", kind: "perk", requires: { level: 5 }, description: "Press Q for a quick burst forward (every 2 s)." },
   { id: "hat:tall", name: "Tall hat", kind: "hat", requires: { level: 6 }, description: "More hat." },
   { id: "robe:midnight", name: "Midnight robe", kind: "robe", requires: { level: 7 }, description: "A robe the color of the night sky." },
+  { id: "outfit:monk", name: "Monk's wraps", kind: "outfit", requires: { level: 7 }, description: "Bare-chested, all muscle: a sash, loose trousers and hand wraps." },
   { id: "outfit:battlemage", name: "Battlemage armor", kind: "outfit", requires: { level: 8 }, description: "Plate shoulders and a belted coat." },
   { id: "robe:gold", name: "Gold robe", kind: "robe", requires: { level: 10 }, description: "For the truly dedicated." },
   // Extra E/R abilities, one at a time (pick them in the arena's Esc panel).

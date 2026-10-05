@@ -425,12 +425,14 @@ function skirt(body: THREE.Group, mat: THREE.Material, length: number, flare: nu
 }
 
 function addOutfit(body: THREE.Group, rig: Rig, outfit: Outfit, c: Clothes): void {
-  const torsoMat = outfit === "scholar" ? flat("#e9e2d2") : outfit === "cloak" ? flat("#6d6577") : c.main;
+  const leather = flat("#3b3442");
+  const torsoMat = outfit === "scholar" ? flat("#e9e2d2") : outfit === "cloak" ? flat("#6d6577") : outfit === "monk" ? c.skin : outfit === "rogue" ? leather : c.main;
   const torso = mesh(new THREE.CylinderGeometry(0.21, 0.17, 0.52, 8), torsoMat, 0, 0.22, 0, true);
   torso.scale.z = 0.72;
   body.add(torso);
-  // Belt.
-  body.add(mesh(new THREE.CylinderGeometry(0.178, 0.178, 0.05, 8).scale(1, 1, 0.75), outfit === "robe" || outfit === "archmage" ? c.trim : flat("#5a3e28"), 0, 0.0, 0));
+  // Belt (a cloth sash for the Monk, a vine for the Druid).
+  const beltMat = outfit === "robe" || outfit === "archmage" ? c.trim : outfit === "monk" ? c.main : outfit === "druid" ? flat("#4f8a3a") : flat("#5a3e28");
+  body.add(mesh(new THREE.CylinderGeometry(0.178, 0.178, outfit === "monk" ? 0.09 : 0.05, 8).scale(1, 1, 0.75), beltMat, 0, 0.0, 0));
   switch (outfit) {
     case "robe":
       skirt(body, c.main, 0.8, 0.14);
@@ -476,6 +478,107 @@ function addOutfit(body: THREE.Group, rig: Rig, outfit: Outfit, c: Clothes): voi
       body.add(mesh(new THREE.BoxGeometry(0.2, 0.18, 0.08), flat("#6b4a30"), -0.2, -0.02, 0.0, true)); // satchel
       break;
     }
+    case "monk": {
+      // Bare-chested and built: pecs, a six-pack, big shoulders (and, below,
+      // biceps); a cloth sash with a tail, loose trousers, hand wraps.
+      const skin = c.skin;
+      const shade = c.skin.clone();
+      shade.color.multiplyScalar(0.78); // the grooves between the muscles
+      const surf = (y: number) => -(0.17 + ((y + 0.04) / 0.52) * 0.04) * 0.72; // the torso's front at height y
+      // Pecs, with a groove down the middle.
+      for (const sx of [-1, 1]) {
+        const pec = mesh(new THREE.BoxGeometry(0.15, 0.1, 0.05), skin, sx * 0.078, 0.37, surf(0.37) + 0.005, true);
+        pec.rotation.y = sx * 0.18;
+        body.add(pec);
+      }
+      body.add(mesh(new THREE.BoxGeometry(0.012, 0.1, 0.02), shade, 0, 0.37, surf(0.37) - 0.012));
+      // The six-pack: a darker plate behind, three rows of two blocks.
+      body.add(mesh(new THREE.BoxGeometry(0.15, 0.21, 0.02), shade, 0, 0.18, surf(0.18) - 0.004));
+      for (let row = 0; row < 3; row++) {
+        const y = 0.255 - row * 0.068;
+        for (const sx of [-1, 1]) body.add(mesh(new THREE.BoxGeometry(0.062, 0.056, 0.035), skin, sx * 0.037, y, surf(y) - 0.012, true));
+      }
+      // Obliques, a little V toward the sash.
+      for (const sx of [-1, 1]) {
+        const ob = mesh(new THREE.BoxGeometry(0.03, 0.16, 0.03), shade, sx * 0.095, 0.12, surf(0.12) + 0.004);
+        ob.rotation.z = sx * 0.35;
+        body.add(ob);
+      }
+      // Big shoulders and traps.
+      for (const sx of [-1, 1]) {
+        const delt = mesh(new THREE.SphereGeometry(0.085, 8, 6), skin, sx * 0.25, SHOULDER_Y - 0.01, 0, true);
+        delt.scale.set(1, 0.9, 1.05);
+        body.add(delt);
+        const trap = mesh(new THREE.BoxGeometry(0.1, 0.05, 0.12), skin, sx * 0.1, 0.5, 0.01);
+        trap.rotation.z = -sx * 0.4;
+        body.add(trap);
+      }
+      // The sash's tail, hanging at the left hip.
+      const tail = mesh(new THREE.BoxGeometry(0.06, 0.28, 0.02), c.main, -0.15, -0.13, -0.08, true);
+      tail.rotation.z = 0.15;
+      body.add(tail);
+      c.pants = c.main.clone();
+      c.pants.color.multiplyScalar(0.75);
+      c.sleeve = skin;
+      c.boots = flat("#8a6a4a"); // sandals
+      break;
+    }
+    case "druid": {
+      // A long robe in your color under a mantle of leaves, leaves on the
+      // hem, and a hood of bark-brown cloth folded at the neck.
+      skirt(body, c.main, 0.78, 0.16);
+      const leafA = flat("#4f9a4a");
+      const leafB = flat("#3a7a36");
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2;
+        const leaf = mesh(new THREE.ConeGeometry(0.06, 0.2, 4), i % 2 ? leafA : leafB, Math.sin(a) * 0.24, 0.42, Math.cos(a) * 0.19, true);
+        leaf.rotation.set(Math.cos(a) * 2.6, 0, -Math.sin(a) * 2.6); // pointing down and out
+        leaf.scale.z = 0.4;
+        body.add(leaf);
+      }
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + 0.2;
+        const leaf = mesh(new THREE.ConeGeometry(0.05, 0.14, 4), i % 3 ? leafB : leafA, Math.sin(a) * 0.32, -0.74, Math.cos(a) * 0.28);
+        leaf.rotation.set(Math.PI + Math.cos(a) * 0.4, 0, -Math.sin(a) * 0.4);
+        leaf.scale.z = 0.4;
+        body.add(leaf);
+      }
+      const hood = mesh(new THREE.CylinderGeometry(0.15, 0.23, 0.12, 12, 1, true), flat("#6b4a30"), 0, 0.53, 0.03, true);
+      (hood.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+      hood.scale.z = 0.85;
+      body.add(hood);
+      // A wooden toggle and an acorn charm on the vine belt.
+      body.add(mesh(new THREE.BoxGeometry(0.06, 0.03, 0.03), flat("#8a6a4a"), 0, 0.5, -0.13));
+      body.add(mesh(new THREE.SphereGeometry(0.03, 6, 4), flat("#a8744f"), 0.09, -0.04, -0.14));
+      break;
+    }
+    case "rogue": {
+      // Dark leathers: a short split skirt, a strap across the chest with
+      // throwing knives, a pauldron on one shoulder, the hood (your color)
+      // down around the neck, and tall boots.
+      skirt(body, leather, 0.26, 0.05);
+      const strap = mesh(new THREE.BoxGeometry(0.05, 0.64, 0.02), flat("#241f2a"), 0, 0.2, -0.155);
+      strap.rotation.z = -0.7;
+      body.add(strap);
+      const steel = flat("#c9cdd6");
+      for (let i = 0; i < 3; i++) {
+        const knife = mesh(new THREE.BoxGeometry(0.025, 0.09, 0.012), steel, 0.04 - i * 0.07, 0.18 + i * 0.08, -0.172);
+        knife.rotation.z = -0.7;
+        body.add(knife);
+      }
+      const pad = mesh(new THREE.SphereGeometry(0.1, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), flat("#2a2430"), 0.26, SHOULDER_Y + 0.02, 0, true);
+      pad.scale.set(1.1, 0.8, 1);
+      body.add(pad);
+      const hood = mesh(new THREE.CylinderGeometry(0.15, 0.24, 0.15, 12, 1, true), c.main, 0, 0.53, 0.03, true);
+      (hood.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+      hood.scale.z = 0.85;
+      body.add(hood);
+      body.add(mesh(new THREE.BoxGeometry(0.16, 0.12, 0.06), flat("#4a3a2a"), 0.16, -0.06, 0.12, true)); // a pouch at the back
+      c.sleeve = leather;
+      c.pants = flat("#2e2934");
+      c.boots = flat("#241f2a");
+      break;
+    }
     case "battlemage": {
       skirt(body, c.main, 0.34, 0.08);
       const steel = flat("#b9bfcc");
@@ -491,9 +594,20 @@ function addOutfit(body: THREE.Group, rig: Rig, outfit: Outfit, c: Clothes): voi
   }
   // Arms: sleeves in the outfit color (rolled up for a tunic).
   for (const arm of [rig.armL, rig.armR]) {
-    arm.shoulder.add(mesh(new THREE.BoxGeometry(0.1, 0.3, 0.1), outfit === "scholar" ? torsoMat : c.sleeve, 0, -0.15, 0, true));
+    arm.shoulder.add(mesh(new THREE.BoxGeometry(outfit === "monk" ? 0.12 : 0.1, 0.3, outfit === "monk" ? 0.12 : 0.1), outfit === "scholar" ? torsoMat : c.sleeve, 0, -0.15, 0, true));
     const forearm = outfit === "tunic" || outfit === "scholar" ? c.skin : c.sleeve;
-    arm.elbow.add(mesh(new THREE.BoxGeometry(0.09, 0.27, 0.09), forearm, 0, -0.13, 0, true));
+    arm.elbow.add(mesh(new THREE.BoxGeometry(outfit === "monk" ? 0.105 : 0.09, 0.27, outfit === "monk" ? 0.105 : 0.09), forearm, 0, -0.13, 0, true));
+    if (outfit === "monk") {
+      // Biceps and forearm muscle, and cloth wraps at the wrists.
+      const bicep = mesh(new THREE.SphereGeometry(0.068, 8, 6), c.skin, 0, -0.14, -0.035, true);
+      bicep.scale.set(1, 1.5, 1);
+      arm.shoulder.add(bicep);
+      const fore = mesh(new THREE.SphereGeometry(0.06, 8, 6), c.skin, 0, -0.07, -0.02);
+      fore.scale.set(1, 1.4, 1);
+      arm.elbow.add(fore);
+      arm.elbow.add(mesh(new THREE.BoxGeometry(0.115, 0.08, 0.115), flat("#e8e0cc"), 0, -0.24, 0));
+    }
+    if (outfit === "rogue") arm.elbow.add(mesh(new THREE.BoxGeometry(0.105, 0.12, 0.105), flat("#5a4636"), 0, -0.2, 0)); // bracers
     if (outfit === "robe" || outfit === "archmage") {
       const cuff = mesh(new THREE.CylinderGeometry(0.075, 0.05, 0.12, 6, 1, true), c.trim, 0, -0.24, 0);
       (cuff.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
@@ -504,7 +618,8 @@ function addOutfit(body: THREE.Group, rig: Rig, outfit: Outfit, c: Clothes): voi
   // Legs: trousers and boots.
   for (const leg of [rig.legL, rig.legR]) {
     leg.hip.add(mesh(new THREE.BoxGeometry(0.13, 0.43, 0.14), c.pants, 0, -0.21, 0, true));
-    leg.knee.add(mesh(new THREE.BoxGeometry(0.12, 0.4, 0.13), outfit === "tunic" || outfit === "battlemage" ? c.boots : c.pants, 0, -0.2, 0, true));
+    if (outfit === "monk") leg.hip.add(mesh(new THREE.BoxGeometry(0.16, 0.36, 0.17), c.pants, 0, -0.2, 0, true)); // loose
+    leg.knee.add(mesh(new THREE.BoxGeometry(outfit === "monk" ? 0.15 : 0.12, 0.4, outfit === "monk" ? 0.15 : 0.13), outfit === "tunic" || outfit === "battlemage" || outfit === "rogue" ? c.boots : c.pants, 0, -0.2, 0, true));
     leg.knee.add(mesh(new THREE.BoxGeometry(0.13, 0.08, 0.25), c.boots, 0, -0.43, -0.04, true));
   }
 }
@@ -1025,6 +1140,11 @@ export function animateAvatar(group: THREE.Group, now: number, speed = 0): void 
   const armed = !!weapon;
   rig.armL.shoulder.rotation.x = -s * amp * 0.8 + (weapon === "shield" ? -0.9 : 0);
   rig.armL.elbow.rotation.x = weapon === "shield" ? -0.8 : -0.15 - breathe;
+  if (weapon === "guard") {
+    // A fighting guard: both forearms up in front.
+    rig.armL.shoulder.rotation.x = -0.8;
+    rig.armL.elbow.rotation.x = -1.5;
+  }
   rig.armR.shoulder.rotation.y = 0;
   rig.armL.shoulder.rotation.y = 0;
   if (weapon === "bow") {
@@ -1070,6 +1190,7 @@ function animateAttack(group: THREE.Group, rig: Rig, weapon: WeaponId | null, ms
       R.elbow.rotation.x = -1.0 - up * 0.6 + down * 0.9;
       break;
     }
+    case "guard":
     case "staff":
     case "daggers": {
       // A thrust: the arm straightens out while the forearm's angle (and so

@@ -19,6 +19,7 @@ export const ICONS: Record<string, string> = {
   staff: svg('<path d="M8 21L16.5 8"/><circle cx="18" cy="5.5" r="3" fill="currentColor" fill-opacity="0.3"/><path d="M14 4l-1.5-1.5M21.5 9.5L20 8"/>'),
   thorns: svg('<path d="M6 21L17 6"/><path d="M9 17l-3-1M11.5 13.5l3 .5M13.5 11l-3-1.5"/><path d="M17 6c1-2 3-3 4.5-3-.2 1.8-1.3 3.6-3.3 4.3z" fill="currentColor" fill-opacity="0.3"/>'),
   sickle: svg('<path d="M5 21l5-6"/><path d="M10 15c-1-6 3-11 10-12-4 3-6 7-5.5 11.5z" fill="currentColor" fill-opacity="0.2"/>'),
+  guard: svg('<path d="M8 21v-6.5L6 11a1.3 1.3 0 012.2-1.3L9.5 12V4.5a1.3 1.3 0 012.6 0V11V3.5a1.3 1.3 0 012.6 0V11V5a1.3 1.3 0 012.6 0v9c0 3.5-2 7-5.5 7z" fill="currentColor" fill-opacity="0.2"/><path d="M3 8l2 1.5M3 13h2.5M20.5 8l-2 1.5"/>'),
   fists: svg('<path d="M6 9.5V7a1.5 1.5 0 013 0v-1a1.5 1.5 0 013 0v.5a1.5 1.5 0 013 0V8a1.5 1.5 0 013 0v5c0 4-2.5 7-6 7s-6-2.5-6-6z" fill="currentColor" fill-opacity="0.2"/><path d="M6 12h6"/>'),
   // Abilities
   wolf: svg('<path d="M4 20l2-8 -2-6 4 3h8l4-3-2 6 2 8" fill="currentColor" fill-opacity="0.2"/><circle cx="9.5" cy="13" r="0.8" fill="currentColor"/><circle cx="14.5" cy="13" r="0.8" fill="currentColor"/><path d="M11 17l1 1 1-1"/>'),

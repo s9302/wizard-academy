@@ -11,7 +11,7 @@
 
 export type ClassId = "knight" | "rogue" | "wizard" | "cleric" | "druid" | "monk";
 export type Hand = "main" | "backup";
-export type WeaponId = "sword" | "shield" | "bow" | "daggers" | "spell" | "staff" | "mace" | "holy" | "thorns" | "sickle" | "fists";
+export type WeaponId = "sword" | "shield" | "bow" | "daggers" | "spell" | "staff" | "mace" | "holy" | "thorns" | "sickle" | "fists" | "guard";
 
 export type ClassDef = {
   name: string;
@@ -75,8 +75,8 @@ export const CLASSES: Record<ClassId, ClassDef> = {
     speed: 1.55,
     defense: 0,
     main: "fists",
-    backup: "staff",
-    blurb: "The fastest class. Lightning fists, a staff, dashes and dodges.",
+    backup: "guard",
+    blurb: "The fastest class. Lightning fists, a guard that halves damage, dashes and dodges.",
   },
 };
 
@@ -125,6 +125,15 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   thorns: { name: "Thorns", kind: "projectile", projectile: "thorn" },
   sickle: { name: "Sickle", kind: "melee", melee: { kind: "melee", damage: 19, reach: 2.4, arcDeg: 100, cooldownMs: 550 } },
   fists: { name: "Fists", kind: "melee", melee: { kind: "melee", damage: 11, reach: 2.1, arcDeg: 90, cooldownMs: 260 } },
+  // The Monk's guard: while it's up, half of every hit is turned aside, from
+  // any side, and you keep your speed; click to jab.
+  guard: {
+    name: "Guard Hand",
+    kind: "shield",
+    melee: { kind: "melee", damage: 9, reach: 2.1, arcDeg: 80, cooldownMs: 400 },
+    block: 0.5,
+    blockArcDeg: 360,
+  },
 };
 
 // Classes bots play (the Cleric's healing is beyond them).

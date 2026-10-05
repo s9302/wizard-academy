@@ -99,6 +99,18 @@ export function makeWeapon(weapon: WeaponId, spellColor = "#b48cff"): THREE.Grou
       }
       break;
     }
+    case "guard": {
+      // An open palm raised, fingers up, with a cloth wrap at the wrist.
+      const skinMat = mat("#e2b48c");
+      g.add(part(new THREE.BoxGeometry(0.12, 0.08, 0.12), mat("#e8e0cc"), 0, 0)); // the wrap
+      g.add(part(new THREE.BoxGeometry(0.14, 0.14, 0.05), skinMat, 0, 0.11)); // the palm
+      for (let i = 0; i < 4; i++) g.add(part(new THREE.BoxGeometry(0.028, 0.1, 0.035), skinMat, -0.05 + i * 0.033, 0.23));
+      const thumb = part(new THREE.BoxGeometry(0.03, 0.08, 0.035), skinMat, 0.085, 0.12);
+      thumb.rotation.z = -0.6;
+      g.add(thumb);
+      g.add(part(new THREE.TorusGeometry(0.11, 0.008, 4, 20), mat("#bff5ff", 0.8), 0, 0.14, -0.04)); // a faint ring of chi
+      break;
+    }
     case "spell": {
       // A glowing orb hovering over an open hand.
       g.add(part(new THREE.BoxGeometry(0.14, 0.05, 0.16), mat("#f3dcc4"), 0, 0));

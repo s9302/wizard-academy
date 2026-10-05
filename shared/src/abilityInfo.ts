@@ -107,6 +107,8 @@ export function weaponInfo(id: WeaponId, spellName?: string): Info {
   const lines: [string, string][] = [["Damage", `${m.damage}`], ["Every", s(m.cooldownMs)], ["Reach", `${m.reach} m`]];
   if (m.cleave) lines.push(["Hits", "Everyone in front"]);
   if (m.backstab) lines.push(["Backstab", `x${m.backstab}`]);
-  if (w.block) lines.push(["Blocks", `${pct(w.block)} from the front`]);
-  return { title: w.name, lines, text: w.kind === "shield" ? "Hold to block; click to bash." : "Melee." };
+  if (w.block) lines.push(["Blocks", `${pct(w.block)} ${(w.blockArcDeg ?? 0) >= 360 ? "from every side" : "from the front"}`]);
+  if (w.kind === "shield" && !w.moveSpeed) lines.push(["Speed", "No slowdown"]);
+  const text = id === "guard" ? "Hold up your guard; click to jab." : w.kind === "shield" ? "Hold to block; click to bash." : "Melee.";
+  return { title: w.name, lines, text };
 }
