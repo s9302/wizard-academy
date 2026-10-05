@@ -121,7 +121,7 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "cast": {
       // Arrows only come from the bow ("attack"), never cast directly.
-      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || msg.spell === "holy" || msg.spell === "thorn" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
+      if (!SPELL_IDS.includes(msg.spell as SpellId) || msg.spell === "arrow" || msg.spell === "holy" || msg.spell === "thorn" || msg.spell === "ember" || !isVec3(msg.o) || !isVec3(msg.d)) return null;
       if (!Number.isSafeInteger(msg.seq) || (msg.seq as number) < 0) return null;
       // Direction must be (roughly) a unit vector; the server renormalizes it.
       const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);

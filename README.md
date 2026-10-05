@@ -139,7 +139,7 @@ no guest play: XP and best times need an owner.
 | First clear of Trial I / II / III | 100 / 150 / 200 |
 | First clear of Trial IV / V / VI | 250 / 300 / 400 |
 | Clearing it again | a quarter of that, +25 for a new personal best |
-| Killing a monster (battle royale, the Tyrant's wolves) | Slime 8, Shadow Wolf 10, Stone Golem 25; at most 12 kills pay XP per 5 minutes |
+| Killing a monster (battle royale, the Tyrant's wolves) | Slime 8, Shadow Wolf 10, Fire Imp 12, Stone Golem 25; at most 12 kills pay XP per 5 minutes |
 | Finishing a tag or infection round | 20 |
 | Tag: least time as It | +40 |
 | Infection: surviving the curse | +50 |
@@ -578,12 +578,30 @@ the door.
 
 Each also gives a robe (Wyrmfrost, Sovereign).
 
+## Monsters
+
+Let in from the arena's Esc panel (up to 8; they come in a mix), or brought
+by Horde waves and the bosses (`shared/src/monsters.ts`,
+`server/src/monsters/Monsters.ts`). They hunt the nearest player, bot or
+Druid beast.
+
+| | Health | Attack |
+|---|---|---|
+| **Slime** | 60 | 10 up close, slow |
+| **Shadow Wolf** | 45 | 8 up close, fast |
+| **Fire Imp** | 40 | **ranged**: a fire bolt for 10 from up to 24 m (dodgeable, 20 m/s); it needs a clear shot, backs off if you get within 9 m, and winds up (its fireball flares) before each throw |
+| **Stone Golem** | 180 | 22 up close, slow and heavy |
+
+The Imp's bolts are ordinary projectiles in the room (`ember` in
+`shared/src/combat.ts`, cast by the monster's id): walls and Null Zones
+stop them, shields block them, and they only hit what monsters hunt.
+
 ## Horde mode
 
 The **Horde** portal is in the plaza between Battle Royale and Capture the
 Flag (`server/src/rooms/HordeRoom.ts`, on the arena). It's endless and
 co-op: everyone (bots too) against waves of monsters. Slimes first, wolves
-from wave 2, stone golems from wave 4, and every fifth wave is an elite
+from wave 2, fire imps from wave 3, stone golems from wave 4, and every fifth wave is an elite
 wave. Each wave has more monsters, 12% more health and 6% more damage than
 the last, and more again for each extra player; they come in from away from
 everyone, up to 22 at a time. After each wave, a 10 s breather: everyone

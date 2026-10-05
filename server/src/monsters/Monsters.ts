@@ -22,6 +22,9 @@ export type MonsterHost = {
   hurt(targetId: number, amount: number, from: Vec3, kind: MonsterKind, owner?: number): void;
   // Druid's beasts: is this player on the owner's side (they leave them be)?
   friendly?(owner: number, playerId: number): boolean;
+  // Ranged monsters: can it see from a to b, and throw its spell (at `power` times its damage).
+  canSee?(a: Vec3, b: Vec3): boolean;
+  shoot?(monsterId: number, from: Vec3, to: Vec3, power: number): void;
   // A monster's hit on another monster (beasts and wild ones fight).
   hurtMonster?(targetId: number, amount: number, owner?: number): void;
 };
@@ -51,7 +54,7 @@ const SPAWN_CLEARANCE = 12; // meters from any player
 const RESPAWN_MS = 6000;
 const REPLAN_MS = 700;
 const BROADCAST_MS = 100;
-const ORDER: MonsterKind[] = ["slime", "wolf", "slime", "golem", "wolf", "slime", "wolf", "golem"];
+const ORDER: MonsterKind[] = ["slime", "wolf", "imp", "golem", "wolf", "slime", "imp", "golem"];
 
 let nextId = MONSTER_ID_BASE;
 
@@ -288,7 +291,10 @@ export class Monsters {
       if (now < m.windupUntil) return; // rooted while it swings
       m.windupUntil = 0;
       const t = prey.find((p) => p.id === m.windupTarget);
-      if (t && this.inReach(m, t.p, 0.5)) {
+      if (t && def.ranged) {
+        // Throw it where they are now (they had the windup to move).
+        if (this.inReach(m, t.p, 2)) this.host.shoot?.(m.id, [m.p[0], m.p[1] + 0.3, m.p[2]], t.p, m.dmgMul ?? 1);
+      } else if (t && this.inReach(m, t.p, 0.5)) {
         const damage = Math.round(def.damage * (m.dmgMul ?? 1));
         if (this.monsters.has(t.id)) this.host.hurtMonster?.(t.id, damage, m.owner);
         else this.host.hurt(t.id, damage, m.p, m.kind, m.owner);
@@ -310,9 +316,21 @@ export class Monsters {
     m.target = best?.id ?? null;
     if (best) {
       m.ry = Math.atan2(-(best.p[0] - m.p[0]), -(best.p[2] - m.p[2]));
-      if (this.inReach(m, best.p, 0) && now >= m.nextAttack) {
+      const ranged = def.ranged;
+      const see = !ranged || (this.host.canSee?.([m.p[0], m.p[1] + 0.3, m.p[2]], best.p) ?? true);
+      if (this.inReach(m, best.p, 0) && see && now >= m.nextAttack) {
         m.windupUntil = now + def.windupMs;
         m.windupTarget = best.id;
+        return;
+      }
+      if (ranged && see && bestD <= ranged.range) {
+        // In range with a clear shot: keep your distance, else hold still.
+        if (bestD < ranged.keep) {
+          const away = Math.atan2(m.p[0] - best.p[0], m.p[2] - best.p[2]);
+          const goal: Vec2 = [m.p[0] + Math.sin(away) * 4, m.p[2] + Math.cos(away) * 4];
+          if (this.host.grid().isWalkable(goal[0], goal[1]) && (now >= m.replanAt || !m.path.length)) this.plan(m, goal, now);
+          this.walk(m, def.speed, dt, false);
+        }
         return;
       }
       const goal: Vec2 = [best.p[0], best.p[2]];
@@ -344,7 +362,7 @@ export class Monsters {
   private inReach(m: Monster, p: Vec3, slack: number): boolean {
     const def = MONSTERS[m.kind];
     const flat = Math.hypot(p[0] - m.p[0], p[2] - m.p[2]);
-    return flat <= def.reach + slack && Math.abs(p[1] - m.p[1]) < def.height + 1.4;
+    return flat <= def.reach + slack && Math.abs(p[1] - m.p[1]) < (def.ranged ? 8 : def.height + 1.4);
   }
 
   private plan(m: Monster, goal: Vec2, now: number): void {
@@ -356,7 +374,9 @@ export class Monsters {
   // Follow the path; the last stretch stops short of whoever it's chasing.
   private walk(m: Monster, speed: number, dt: number, chasing: boolean): void {
     const def = MONSTERS[m.kind];
-    const moved = followPath(this.host.grid(), m.p, m.path, speed, dt, chasing ? def.reach * 0.7 : 0, def.height);
+    // (A ranged one comes right in: it stops on its own once it has a clear shot.)
+    const stop = chasing ? (def.ranged ? 1.5 : def.reach * 0.7) : 0;
+    const moved = followPath(this.host.grid(), m.p, m.path, speed, dt, stop, def.height);
     m.p = moved.p;
     if (!chasing && moved.dir) m.ry = Math.atan2(-moved.dir[0], -moved.dir[1]);
   }

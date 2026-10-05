@@ -27,7 +27,7 @@ export const XP = {
   // Monsters (battle royale and the Tyrant's wolves), paid on the kill.
   // Capped so a room full of monsters can't be farmed: at most
   // monsterKillsPaid kills per account in any monsterWindowMs.
-  perMonster: { slime: 8, wolf: 10, golem: 25 } as Record<string, number>,
+  perMonster: { slime: 8, wolf: 10, golem: 25, imp: 12 } as Record<string, number>,
   monsterKillsPaid: 12,
   monsterWindowMs: 5 * 60_000,
 

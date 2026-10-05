@@ -81,6 +81,44 @@ function build(kind: MonsterKind): { body: THREE.Group; legs: THREE.Object3D[]; 
       body.add(leg);
       legs.push(leg);
     }
+  } else if (kind === "imp") {
+    // A Fire Imp: a small red demon with horns, bat wings and a tail,
+    // hovering, a ball of fire in its hand (it flares up as it winds up).
+    const skin = lambert("#e0452f");
+    const dark = lambert("#7a1e16");
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.38), skin)).position.set(0, 0, 0);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.36, 0.05), lambert("#ffb08a"))).position.set(0, -0.02, -0.2); // belly
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 0.42), skin)).position.set(0, 0.5, -0.02);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.05), dark)).position.set(0, 0.38, -0.24); // a grin
+    eyes(body, 0.56, -0.24, 0.11, 0.07, "#ffd23a");
+    for (const s of [-1, 1]) {
+      const horn = add(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 4), dark));
+      horn.position.set(s * 0.15, 0.8, 0);
+      horn.rotation.z = -s * 0.4;
+      // Wings flap (they're its "legs" for the walk cycle).
+      // A bat wing behind each shoulder: a bony spar and a sail hanging off it.
+      const wing = new THREE.Group();
+      wing.position.set(s * 0.2, 0.2, 0.2);
+      const sailMat = new THREE.MeshLambertMaterial({ color: "#5a1610", flatShading: true, side: THREE.DoubleSide });
+      const spar = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.06, 0.06), dark.clone());
+      spar.position.set(s * 0.37, 0.22, 0);
+      spar.rotation.z = s * 0.5;
+      const sail = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.03), sailMat);
+      sail.position.set(s * 0.34, 0.02, 0);
+      sail.rotation.z = s * 0.25;
+      wing.add(spar, sail);
+      body.add(wing);
+      legs.push(wing);
+      const leg = add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.35, 0.14), dark));
+      leg.position.set(s * 0.13, -0.45, 0);
+    }
+    const tail = add(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.6, 4), dark));
+    tail.position.set(0, -0.3, 0.35);
+    tail.rotation.x = -1.1;
+    const fire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 1), new THREE.MeshBasicMaterial({ color: "#ffb347", toneMapped: false }));
+    fire.name = "fire";
+    fire.position.set(0.35, 0.1, -0.25);
+    body.add(fire);
   } else {
     const stone = lambert("#7d7890");
     const dark = lambert("#5a5568");
@@ -190,6 +228,7 @@ export class MonsterViews {
     const at: [number, number, number] = [v.to.x, v.to.y, v.to.z];
     if (v.kind === "golem") sound.play(["mining0", "mining1"], { at, rate: 0.6 });
     else if (v.kind === "wolf") sound.fx("sting", { at, volume: 0.5, rate: 1.6 });
+    else if (v.kind === "imp") sound.fx("charge", { at, volume: 0.5, rate: 1.8 }); // winding up a throw
     else sound.play("softHeavy", { at, rate: 1.4 });
   }
 
@@ -197,7 +236,7 @@ export class MonsterViews {
   died(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
-    const color = v.kind === "slime" ? "#5ad16e" : v.kind === "wolf" ? "#6a5a9a" : "#9a96aa";
+    const color = v.kind === "slime" ? "#5ad16e" : v.kind === "wolf" ? "#6a5a9a" : v.kind === "imp" ? "#ff7a2e" : "#9a96aa";
     particles.emit({ at: v.root.position, count: 50, color, color2: "#ffffff", speed: 4, up: 1.5, life: 1, size: 0.3, gravity: 6 });
     sound.play(v.kind === "golem" ? "metalHeavy0" : "punchHeavy1", { at: [v.root.position.x, v.root.position.y, v.root.position.z] });
     // It keels over and shrinks away (see update) instead of vanishing.
@@ -256,7 +295,13 @@ export class MonsterViews {
       const speed = before.distanceTo(v.root.position) * 60;
       v.phase += Math.min(speed, 8) * 0.03 + 0.02;
       const s = Math.sin(v.phase * 3);
-      if (v.kind === "slime") {
+      if (v.kind === "imp") {
+        // Hovering, wings beating; the fire in its hand swells as it winds up.
+        v.body.position.y = Math.sin(now / 220 + v.phase) * 0.12;
+        v.legs.forEach((w, i) => (w.rotation.y = (i ? 1 : -1) * (0.3 + Math.sin(now / 70) * 0.5)));
+        v.body.getObjectByName("fire")?.scale.setScalar(v.attacking ? 1.8 + Math.sin(now / 40) * 0.3 : 1);
+        if (Math.random() < 0.15) particles.emit({ at: [v.root.position.x, v.root.position.y + 0.1, v.root.position.z], count: 1, color: "#ffb347", color2: "#ff3a1a", speed: 0.4, up: 1, life: 0.5, size: 0.12, gravity: -1 });
+      } else if (v.kind === "slime") {
         const hop = Math.abs(Math.sin(v.phase * 2.2));
         v.body.position.y = hop * 0.35 - 0.1;
         v.body.scale.set(1 + (1 - hop) * 0.15, 0.85 + hop * 0.25, 1 + (1 - hop) * 0.15);

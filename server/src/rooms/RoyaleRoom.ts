@@ -86,7 +86,7 @@ import {
 import { EYE_HEIGHT, GRAVITY, PLAYER_RADIUS, RUN_SPEED } from "../../../shared/src/constants.ts";
 import { abilitiesFor, abilityAllowed } from "../../../shared/src/unlocks.ts";
 import { boxTouchesPlayer, floorBelow, lerp3, lineOfSight, segmentHitsCapsule, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
-import { MAX_MONSTERS, type MonsterKind, MONSTERS } from "../../../shared/src/monsters.ts";
+import { isMonsterId, MAX_MONSTERS, type MonsterKind, MONSTERS } from "../../../shared/src/monsters.ts";
 import { Monsters } from "../monsters/Monsters.ts";
 import type { CastMsg, ClientMsg, DecoyState, PickupInfo, RoyaleMode, Vec3, ZoneState } from "../../../shared/src/protocol.ts";
 import { saveLoadout } from "../accounts.ts";
@@ -151,7 +151,8 @@ let nextFieldId = 1;
 let nextDecoyId = DECOY_ID_BASE;
 
 // Flown by time since launch, so arrows can arc (see projectileAt).
-type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3 };
+// caster: a player, or a monster (a Fire Imp's bolt; `power` scales its damage).
+type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3; power?: number };
 type Pickup = PickupInfo & { spot: number };
 
 let nextSpellId = 1;
@@ -250,6 +251,16 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return !!a && !!b && this.allies(a, b);
       },
       hurtMonster: (id, amount, owner) => this.hitMonster(id, amount, owner !== undefined ? (this.players.get(owner) ?? null) : null),
+      canSee: (a, b) => lineOfSight(a, b, this.allBoxes()),
+      shoot: (monsterId, from, to, power) => {
+        const def = MONSTERS[this.monsters.kindOf(monsterId) ?? "imp"];
+        if (!def.ranged) return;
+        const d: Vec3 = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+        const l = Math.hypot(...d) || 1;
+        const p: Projectile = { id: nextSpellId++, caster: monsterId, spell: def.ranged.spell, o: from, d: [d[0] / l, d[1] / l, d[2] / l], t: 0, p: from, power };
+        this.projectiles.set(p.id, p);
+        this.broadcast({ t: "spell", id: p.id, caster: monsterId, seq: 0, k: 0, spell: p.spell, o: from, d: p.d, time: Date.now() });
+      },
     });
   }
 
@@ -967,8 +978,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       let hitPlayer: Player | null = null;
       let hitMonster: number | null = null;
       const casterPlayer = this.players.get(spell.caster) ?? null;
+      const byMonster = isMonsterId(spell.caster);
       for (const target of this.players.values()) {
-        if (target.conn.id === spell.caster || !this.canBeHit(target.conn.id) || this.allies(casterPlayer, target)) continue;
+        if (target.conn.id === spell.caster || !this.canBeHit(target.conn.id) || this.allies(casterPlayer, target) || (byMonster && target.conn.isAdmin)) continue;
         const t = segmentHitsPlayer(spell.p, to, target.p, def.radius);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
@@ -976,6 +988,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         }
       }
       for (const m of this.bodies()) {
+        // A monster's bolt only hits what monsters hunt: Druid beasts and Rogue copies.
+        if (byMonster && (m.id === spell.caster || !(this.monsters.ownerOf(m.id) !== undefined || this.decoys.has(m.id)))) continue;
         const t = segmentHitsCapsule(spell.p, to, m.p, Math.max(0, m.height - m.radius), m.radius, def.radius);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
@@ -987,7 +1001,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         const at = lerp3(spell.p, to, hitT);
         this.projectiles.delete(spell.id);
         this.broadcast({ t: "spellEnd", id: spell.id, p: at, hit: hitMonster });
-        this.hitMonster(hitMonster, def.damage, this.players.get(spell.caster) ?? null);
+        if (byMonster && this.decoys.has(hitMonster)) this.breakDecoy(hitMonster);
+        else this.hitMonster(hitMonster, Math.round(def.damage * (spell.power ?? 1)), this.players.get(spell.caster) ?? null);
         this.splash(spell, at, null);
         continue;
       }
@@ -1015,7 +1030,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (this.state !== "playing") return;
     const def = SPELLS[spell.spell];
     const attacker = this.players.get(spell.caster) ?? null;
-    if (hit) {
+    if (hit && isMonsterId(spell.caster)) {
+      const kind = this.monsters.kindOf(spell.caster);
+      this.damage(hit, Math.round(def.damage * (spell.power ?? 1)), null, spell.p, `was scorched by a ${kind ? MONSTERS[kind].name : "monster"}`);
+    } else if (hit) {
       this.damage(hit, def.damage, attacker, spell.p);
       if (def.slowMs && this.alive.has(hit.conn.id) && !this.unstoppable(hit)) {
         const f = this.fighters.get(hit.conn.id);

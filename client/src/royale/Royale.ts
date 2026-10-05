@@ -27,7 +27,7 @@ import { sound } from "../audio/Sound.ts";
 import type { SynthId } from "../audio/synth.ts";
 
 // The sound of casting each spell (and loosing an arrow).
-const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark", thorn: "arrow" };
+const CAST_SOUND: Record<SpellId, SynthId> = { bolt: "bolt", frost: "frost", spark: "spark", fireball: "fireball", arrow: "arrow", holy: "spark", thorn: "arrow", ember: "fireball" };
 const HITS = ["punch0", "punch1", "punch2"] as const;
 const TEAM_COLORS = ["#ff4a4a", "#4a8cff"];
 

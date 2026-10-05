@@ -37,7 +37,7 @@ export const NPCS: Record<string, Npc> = {
       "Looking for a fight? The arena portal's right there.",
       "Watch the ground in there. Lava burns, the void swallows, and green pads will throw you sky-high.",
       "Blue pads are teleporters. Step on one and you're across the arena before anyone can blink.",
-      "Bored of wizards? Press Esc in the arena and add monsters. Slimes, wolves, golems. They hunt everyone, bots included.",
+      "Bored of wizards? Press Esc in the arena and add monsters. Slimes, wolves, golems, and fire imps that throw fire from a distance. They hunt everyone, bots included.",
     ],
   },
   quill: {

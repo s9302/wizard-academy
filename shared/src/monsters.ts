@@ -2,8 +2,10 @@
 // They hunt whoever is closest, wizards and bots alike, and anyone can
 // fight them. Numbers shared so the client can draw health bars and sizes.
 
-export type MonsterKind = "slime" | "wolf" | "golem";
-export const MONSTER_KINDS: MonsterKind[] = ["slime", "wolf", "golem"];
+import type { SpellId } from "./combat.ts";
+
+export type MonsterKind = "slime" | "wolf" | "golem" | "imp";
+export const MONSTER_KINDS: MonsterKind[] = ["slime", "wolf", "golem", "imp"];
 
 export type MonsterDef = {
   name: string;
@@ -17,11 +19,15 @@ export type MonsterDef = {
   height: number; // its center's height above the floor
   sight: number; // meters: how far it notices you
   heal: number; // health the wizard who finishes it off gets back
+  // A ranged attacker: it throws `spell` at you from up to `range` (needs a
+  // clear line), and backs off if you get closer than `keep`.
+  ranged?: { spell: SpellId; range: number; keep: number };
 };
 
 export const MONSTERS: Record<MonsterKind, MonsterDef> = {
   slime: { name: "Slime", hp: 60, speed: 3.4, damage: 10, reach: 1.7, cooldownMs: 1300, windupMs: 450, radius: 0.75, height: 0.6, sight: 26, heal: 15 },
   wolf: { name: "Shadow Wolf", hp: 45, speed: 6.6, damage: 8, reach: 1.8, cooldownMs: 900, windupMs: 300, radius: 0.6, height: 0.7, sight: 34, heal: 15 },
+  imp: { name: "Fire Imp", hp: 40, speed: 4.2, damage: 10, reach: 24, cooldownMs: 1800, windupMs: 550, radius: 0.5, height: 1.3, sight: 30, heal: 15, ranged: { spell: "ember", range: 24, keep: 9 } },
   golem: { name: "Stone Golem", hp: 180, speed: 2.5, damage: 22, reach: 2.5, cooldownMs: 2200, windupMs: 700, radius: 1.1, height: 1.4, sight: 24, heal: 40 },
 };
 
