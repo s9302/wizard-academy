@@ -157,6 +157,7 @@ type Fighter = {
   dragonUntil: number; // Dragon Form (Druid, level 25): flying, breathing fire
   ascendUntil: number; // Transcendence (Monk, level 25)
   rallyUntil: number; // War Cry (Knight): takes less damage
+  frozenUntil: number; // Frost Nova: can't move
   chargeDamage: number; // what this rush does to whoever it hits (Charge, Flurry Dash)
   chargeKnocks: boolean; // ...and whether it shoves them aside (Charge only)
 };
@@ -708,6 +709,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       dragonUntil: 0,
       ascendUntil: 0,
       rallyUntil: 0,
+      frozenUntil: 0,
       chargeDamage: CHARGE_DAMAGE,
       chargeKnocks: true,
     };
@@ -1746,7 +1748,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       }
       if ((o.slowMs || o.freezeMs) && tf && !this.unstoppable(target, now)) {
         tf.slowedUntil = now + (o.freezeMs ?? o.slowMs!);
-        if (o.freezeMs) this.broadcast({ t: "effect", id: target.conn.id, kind: "freeze", ms: o.freezeMs });
+        if (o.freezeMs) {
+          tf.frozenUntil = now + o.freezeMs;
+          target.moveCheck.frozenUntil = now + o.freezeMs - 150; // (a little slack for the message getting there)
+          this.broadcast({ t: "effect", id: target.conn.id, kind: "freeze", ms: o.freezeMs });
+        }
         else this.broadcast({ t: "slowed", id: target.conn.id, ms: o.slowMs! });
       }
     }
@@ -2289,7 +2295,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       pickups: this.pickupList(),
       objective: this.botObjective(me),
     });
-    this.moveBot(me, action.p, action.ry, now);
+    if (now >= (f?.frozenUntil ?? 0)) this.moveBot(me, action.p, action.ry, now); // (frozen bots stay put)
     if (action.hand) this.setHand(me, action.hand);
     if (action.cast) this.cast(me, { ...action.cast, o: eye(me.p), seq: 0 });
     if (action.attack) this.attack(me, eye(me.p), action.attack, 0);

@@ -227,6 +227,7 @@ export class Game {
         onKnock: (v, seconds) => this.player.knock(v[0], v[1], v[2], seconds),
         onGlide: (seconds) => this.player.glide(seconds, GLIDE.lift, GLIDE.fall, GLIDE.speed),
         onSoar: (seconds) => this.player.soar(seconds, DRAGON.climb, DRAGON.speed),
+        onFreeze: (seconds) => this.player.freeze(seconds),
         onInvert: (ms) => (this.invertUntil = performance.now() + ms),
         onGiant: (ms) => (this.giantUntil = performance.now() + ms),
         onSpin: (ms) => (this.spinUntil = performance.now() + ms),

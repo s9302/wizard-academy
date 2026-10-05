@@ -58,6 +58,7 @@ export class PlayerController {
   private burstSpeed = DASH_SPEED;
   private glideLeft = 0;
   private soarLeft = 0;
+  private frozenLeft = 0;
   private soarClimb = 0;
   private soarSpeed = 1;
   private glideFall = 0;
@@ -141,6 +142,11 @@ export class PlayerController {
   // Glide (Rogue): a leap up, then a slow fall and more speed for `seconds`.
   // Dragon Form: no gravity for a while; Space climbs, C dives, and you're
   // a little faster. Walls still stop you.
+  // Frost Nova: frozen solid, no walking or jumping (you can still fall).
+  freeze(seconds: number): void {
+    this.frozenLeft = Math.max(this.frozenLeft, seconds);
+  }
+
   soar(seconds: number, climb: number, speedMul: number): void {
     this.soarLeft = seconds;
     this.soarClimb = climb;
@@ -193,14 +199,16 @@ export class PlayerController {
     this.slowLeft = Math.max(0, this.slowLeft - dt);
     this.glideLeft = Math.max(0, this.glideLeft - dt);
     this.soarLeft = Math.max(0, this.soarLeft - dt);
+    this.frozenLeft = Math.max(0, this.frozenLeft - dt);
+    const frozen = this.frozenLeft > 0;
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 
     // Horizontal movement relative to where the camera faces.
     const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1) * (this.glideLeft > 0 ? this.glideSpeed : 1) * (this.soarLeft > 0 ? this.soarSpeed : 1);
     const sin = Math.sin(input.yaw);
     const cos = Math.cos(input.yaw);
-    let dx = -sin * input.forward + cos * input.strafe;
-    let dz = -cos * input.forward - sin * input.strafe;
+    let dx = frozen ? 0 : -sin * input.forward + cos * input.strafe;
+    let dz = frozen ? 0 : -cos * input.forward - sin * input.strafe;
     const length = Math.hypot(dx, dz);
     if (length > 1) {
       // Don't let diagonal movement be faster than straight movement.
@@ -209,7 +217,7 @@ export class PlayerController {
     }
 
     // Jumping, with coyote time and jump buffering.
-    this.timeSinceJumpPressed = input.consumeJump() ? 0 : this.timeSinceJumpPressed + dt;
+    this.timeSinceJumpPressed = input.consumeJump() && !frozen ? 0 : this.timeSinceJumpPressed + dt;
     this.timeSinceGrounded = this.grounded ? 0 : this.timeSinceGrounded + dt;
     if (this.grounded) this.airJumpUsed = false;
     if (this.timeSinceJumpPressed <= JUMP_BUFFER_TIME && this.timeSinceGrounded <= COYOTE_TIME) {
@@ -226,7 +234,7 @@ export class PlayerController {
     }
 
     // Dash: a short burst the way you're moving (or looking, if standing still).
-    if (this.perks.dash && input.consumeDash() && this.dashCooldown === 0) {
+    if (this.perks.dash && input.consumeDash() && this.dashCooldown === 0 && !frozen) {
       const moving = dx !== 0 || dz !== 0;
       const len = moving ? Math.hypot(dx, dz) : 1;
       this.dashDir = moving ? { x: dx / len, z: dz / len } : { x: -sin, z: -cos };
@@ -251,7 +259,7 @@ export class PlayerController {
     // Ladders: W climbs, S goes down, nothing holds on. Jumping lets go.
     const here: [number, number, number] = [this.current.x, this.current.y, this.current.z];
     const ladder = this.ladders.find((l) => onLadder(here, l));
-    if (ladder && this.timeSinceJumpPressed > 0.05) {
+    if (ladder && this.timeSinceJumpPressed > 0.05 && !frozen) {
       const climb = input.forward * CLIMB_SPEED;
       if (climb !== 0 || !this.grounded) {
         this.velocityY = climb;

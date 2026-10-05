@@ -118,14 +118,14 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   evasion: { name: "Evasion", cooldownMs: 16_000, durationMs: 2_000, description: "For 2 s, nothing can touch you." },
   // ---- Levels 15, 20 and 25 ----
   meteor: { name: "Meteor", cooldownMs: 18_000, description: "Call a meteor down where you aim (up to 30 m). It lands 1.2 s later: 60 damage within 4.5 m, and everyone there is thrown." },
-  frostnova: { name: "Frost Nova", cooldownMs: 20_000, durationMs: 2_500, description: "Everyone within 9 m freezes solid for 2.5 s, and takes 20." },
+  frostnova: { name: "Frost Nova", cooldownMs: 20_000, durationMs: 2_500, description: "Everyone within 9 m freezes solid for 2.5 s: they can't move or jump. And 20 damage." },
   blackhole: { name: "Black Hole", cooldownMs: 30_000, durationMs: 6_000, description: "Tear open a black hole where you aim (up to 25 m) for 6 s: it drags everyone within 8 m into its middle and rips at them (25 a second)." },
   whirlwind: { name: "Whirlwind", cooldownMs: 12_000, description: "Spin with your blade: 32 to everyone within 4 m, and they're thrown back." },
   warcry: { name: "War Cry", cooldownMs: 22_000, durationMs: 6_000, description: "A roar: you and your teammates within 12 m take 40% less damage for 6 s; enemies within 12 m take 15 and are slowed for 3 s." },
   earthshatter: { name: "Earthshatter", cooldownMs: 30_000, description: "Bring your weight down on the ground: everyone within 11 m takes 60, is launched into the air and slowed." },
   knives: { name: "Fan of Knives", cooldownMs: 12_000, description: "Throw 14 knives in every direction at once, 14 damage each." },
   assassinate: { name: "Assassinate", cooldownMs: 18_000, description: "Vanish and reappear behind the enemy you aim at (up to 20 m) with a stab for 55." },
-  phantom: { name: "Phantom Strike", cooldownMs: 30_000, description: "Flash between up to 4 enemies within 18 m, striking each for 45, and end up behind the last, untouchable for a moment." },
+  phantom: { name: "Phantom Strike", cooldownMs: 30_000, description: "Flash between up to 4 enemies within 30 m, striking each for 45, and end up behind the last, untouchable for a moment." },
   holynova: { name: "Holy Nova", cooldownMs: 14_000, description: "A burst of holy light: you and your teammates within 9 m heal 40, and enemies there take 30." },
   guardian: { name: "Guardian Angel", cooldownMs: 22_000, description: "A 60-point shield on you and on every teammate within 14 m." },
   wrath: { name: "Wrath of Heaven", cooldownMs: 32_000, description: "Pillars of holy light fall on every enemy within 30 m (up to 6, 40 each), and you and your teammates heal 40." },
@@ -230,7 +230,7 @@ export const WARCRY = { radius: 12, taken: 0.6, damage: 15, slowMs: 3000 };
 export const EARTHSHATTER = { radius: 11, damage: 60, lift: 13, push: 8, slowMs: 2000 };
 export const KNIVES = { count: 14 };
 export const ASSASSINATE = { range: 20, damage: 55 };
-export const PHANTOM = { range: 18, targets: 4, damage: 45 };
+export const PHANTOM = { range: 30, targets: 4, damage: 45 };
 export const HOLYNOVA = { radius: 9, heal: 40, damage: 30 };
 export const GUARDIAN = { radius: 14, shield: 60 };
 export const WRATH = { range: 30, targets: 6, heal: 40 };

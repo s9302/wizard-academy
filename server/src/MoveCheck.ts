@@ -42,6 +42,8 @@ export class MoveCheck {
   speedMul = 1;
   // Until then, any move is fine (a Druid in Dragon Form flies where it likes).
   freeUntil = 0;
+  // Until then, frozen solid (Frost Nova): no walking or climbing, only falling.
+  frozenUntil = 0;
 
   // Allow this many extra meters right now (a Knight's charge). It can go
   // over the usual cap; it's spent like any other distance.
@@ -63,6 +65,7 @@ export class MoveCheck {
     this.up = Math.max(this.up, Math.min(UP.cap, this.up + UP.rate * seconds)); // a grant can go over the cap
     this.down = Math.min(DOWN.cap, this.down + DOWN.rate * seconds);
     if (now < this.freeUntil) return true;
+    if (now < this.frozenUntil && (Math.hypot(to[0] - from[0], to[2] - from[2]) > 0.25 || to[1] - from[1] > 0.25)) return false;
 
     const horizontal = Math.hypot(to[0] - from[0], to[2] - from[2]);
     const dy = to[1] - from[1];

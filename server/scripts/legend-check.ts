@@ -143,6 +143,22 @@ for (const t of tests) {
   await b.walkTo([a.me.pos[0], a.me.pos[1], a.me.pos[2] - 5]);
 }
 
+// ---- Frost Nova really freezes: B can't walk away ----
+await a.become("wizard");
+await a.equip("wizard", "frostnova", "wall");
+await b.walkTo([a.me.pos[0], a.me.pos[1], a.me.pos[2] - 5]);
+const fMark = b.msgs.length;
+a.use(0);
+await sleep(300);
+const frozen = b.since(fMark).some((m) => m.t === "effect" && m.kind === "freeze" && m.id === b.me.id);
+let bMark = b.msgs.length;
+await b.walkTo([b.me.pos[0] + 3, b.me.pos[1], b.me.pos[2]]);
+check("Frost Nova: a frozen player can't walk away (pulled back)", b.since(bMark).some((m) => m.t === "teleport"), `frozen: ${frozen}, ${Math.hypot(a.me.pos[0] - b.me.pos[0], a.me.pos[2] - b.me.pos[2]).toFixed(1)} m apart`);
+await sleep(2600);
+bMark = b.msgs.length;
+await b.walkTo([b.me.pos[0] + 3, b.me.pos[1], b.me.pos[2]]);
+check("...and can move again after 2.5 s", !b.since(bMark).some((m) => m.t === "teleport"));
+
 // ---- Dragon Form: fire with every attack ----
 await a.become("druid");
 await a.equip("druid", "dragonform", "wolf");

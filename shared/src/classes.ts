@@ -71,7 +71,7 @@ export const CLASSES: Record<ClassId, ClassDef> = {
   },
   monk: {
     name: "Monk",
-    maxHealth: 90,
+    maxHealth: 110,
     speed: 1.55,
     defense: 0,
     main: "fists",
@@ -124,7 +124,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   holy: { name: "Holy Light", kind: "projectile", projectile: "holy" },
   thorns: { name: "Thorns", kind: "projectile", projectile: "thorn" },
   sickle: { name: "Sickle", kind: "melee", melee: { kind: "melee", damage: 19, reach: 2.4, arcDeg: 100, cooldownMs: 550 } },
-  fists: { name: "Fists", kind: "melee", melee: { kind: "melee", damage: 11, reach: 2.1, arcDeg: 90, cooldownMs: 260 } },
+  fists: { name: "Fists", kind: "melee", melee: { kind: "melee", damage: 18, reach: 2.1, arcDeg: 90, cooldownMs: 260 } },
   // The Monk's guard: while it's up, half of every hit is turned aside, from
   // any side, and you keep your speed; click to jab.
   guard: {

@@ -65,6 +65,7 @@ export type RoyaleHooks = {
   onKnock: (v: Vec3, seconds: number) => void; // thrown by a shockwave, tornado or chain
   onGlide: (seconds: number) => void;
   onSoar: (seconds: number) => void; // Dragon Form: fly for a while
+  onFreeze: (seconds: number) => void; // Frost Nova: can't move or jump
   onInvert: (ms: number) => void; // the world upside down
   onGiant: (ms: number) => void; // your own Giant Form (third-person body)
   onSpin: (ms: number) => void; // caught in a tornado: the view whirls
@@ -532,6 +533,7 @@ export class Royale {
         sound.play("glass", { at, rate: 0.7 });
         if (mine) {
           this.boost("frozen", ms);
+          this.hooks.onFreeze(ms / 1000);
           this.hud.callout("Frozen solid!");
         } else this.remotes.chill(id, ms);
         if (where) particles.emit({ at: where, count: 25, color: "#e6fbff", color2: "#8fe3ff", speed: 1.5, life: 0.8, size: 0.2 });
