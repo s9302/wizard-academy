@@ -63,10 +63,10 @@
 			# (privately: they're behind the PIN). index.html is revalidated so
 			# updates show up on reload.
 			@assets path /assets/*
-			@audio path /audio/*
-			@other not path /assets/* /audio/*
+			@audio path /audio/* /textures/*
+			@other not path /assets/* /audio/* /textures/*
 			header @assets Cache-Control "private, max-age=31536000, immutable"
-			# Music and sound effects: big and rarely changed, so a day.
+			# Music, sound effects and the texture atlas: big and rarely changed, so a day.
 			header @audio Cache-Control "private, max-age=86400"
 			# no-transform: stops Cloudflare injecting its analytics/bot scripts
 			header @other Cache-Control "no-cache, no-transform"

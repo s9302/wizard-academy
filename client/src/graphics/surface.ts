@@ -8,10 +8,13 @@
 // a flat-colored box reads as a stone wall or a wooden ramp.
 //
 // No image files: the patterns are math on those meter coordinates, so they
-// are the same size on every block and cost no downloads.
+// are the same size on every block and cost no downloads. The other texture
+// set (textures.ts) swaps in real tiling textures, picked per face (aTex).
 
 import * as THREE from "three";
 import type { Box } from "../../../shared/src/levels/types.ts";
+import type { TexFamily } from "./textureAtlas.ts";
+import { textureLayer, textureUniforms } from "./textures.ts";
 
 export const Pattern = { Plain: 0, Grass: 1, Brick: 2, Wood: 3, Sand: 4, Slab: 5, Roof: 6 } as const;
 type PatternId = (typeof Pattern)[keyof typeof Pattern];
@@ -62,15 +65,41 @@ function facePattern(box: Box, kind: Family, up: boolean, faceW: number, faceH: 
   }
 }
 
+// Which texture a face gets in the OpenGameArt set (null: none, the plain
+// color). Stone and roofs are walls on their sides; very light, unsaturated
+// blocks are marble and very dark ones metal.
+function textureFamily(box: Box, kind: Family, up: boolean, faceW: number, faceH: number): TexFamily | null {
+  const small = Math.min(...box.size) < 0.25 && Math.max(...box.size) < 3; // books, chairs, sticks
+  if (faceW * faceH < 0.3 || small) return null;
+  switch (kind) {
+    case "grass":
+      return up ? "grass" : "earth";
+    case "wood":
+      return "planks";
+    case "sand":
+      return "sand";
+    case "roof":
+      return up ? "roof" : "wall";
+    case "stone":
+      return up ? "floor" : "wall";
+  }
+  const hsl = { h: 0, s: 0, l: 0 };
+  new THREE.Color(box.color).getHSL(hsl, THREE.SRGBColorSpace);
+  if (hsl.s < 0.25 && hsl.l > 0.78) return "marble";
+  if (hsl.s < 0.3 && hsl.l < 0.3) return "metal";
+  return null;
+}
+
 // Adds aFace and aPattern to a BoxGeometry made for `box` (before it's moved
 // into place). BoxGeometry's faces come in the order +x, -x, +y, -y, +z, -z,
 // four corners each, with uv running 0..1 across every face.
-export function addSurfaceAttributes(geometry: THREE.BufferGeometry, box: Box): void {
+export function addSurfaceAttributes(geometry: THREE.BufferGeometry, box: Box, levelId: string): void {
   const [w, h, d] = box.size;
   const uv = geometry.getAttribute("uv");
   const count = uv.count;
   const face = new Float32Array(count * 4);
   const pattern = new Float32Array(count);
+  const tex = new Float32Array(count * 2);
   const kind = family(box.color);
   const dims: [number, number][] = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
   const perFace = count / 6;
@@ -79,15 +108,20 @@ export function addSurfaceAttributes(geometry: THREE.BufferGeometry, box: Box): 
     const [fw, fh] = dims[f];
     face.set([uv.getX(i) * fw, uv.getY(i) * fh, fw, fh], i * 4);
     pattern[i] = facePattern(box, kind, f === 2, fw, fh);
+    tex.set(textureLayer(textureFamily(box, kind, f === 2, fw, fh), levelId, box.color), i * 2);
   }
   geometry.setAttribute("aFace", new THREE.BufferAttribute(face, 4));
   geometry.setAttribute("aPattern", new THREE.BufferAttribute(pattern, 1));
+  geometry.setAttribute("aTex", new THREE.BufferAttribute(tex, 2));
 }
 
 const SHADER_FUNCTIONS = /* glsl */ `
 varying vec4 vFace;
 varying float vPattern;
 varying float vSurfY; // world height (grime near the ground, moss low on walls)
+varying vec2 vTex; // texture layer (-1: none) and meters per tile
+uniform float uTexOn;
+uniform sampler2DArray uTex;
 float surfHeight = 1.0;
 
 float sHash(vec2 p) {
@@ -245,6 +279,22 @@ vec3 surfaceShade() {
   return tint;
 }
 
+// The OpenGameArt set: the face's texture, leaning toward the block's own
+// color (so team colors and each map's palette still show) and as bright as
+// it, with the same edge bevel and ground grime as the patterns.
+vec3 textureShade(vec3 base) {
+  vec3 t = texture(uTex, vec3(vFace.xy / vTex.y, vTex.x)).rgb;
+  float m = max(base.r, max(base.g, base.b));
+  float lum = dot(base, vec3(0.2126, 0.7152, 0.0722));
+  vec3 c = t * mix(vec3(1.0), base / max(m, 0.001), 0.35) * clamp(0.55 + 1.6 * lum, 0.6, 1.25);
+  vec2 e = min(vFace.xy, vFace.zw - vFace.xy);
+  c *= mix(0.85, 1.0, smoothstep(0.0, 0.06, min(e.x, e.y)));
+  float low = 1.0 - smoothstep(0.0, 1.4, vSurfY);
+  c *= mix(vec3(1.0), vec3(0.9, 0.86, 0.8), low * 0.35);
+  surfHeight = dot(t, vec3(0.3333)) * 0.35;
+  return c;
+}
+
 // Bend the normal along the pattern (three.js's bump-map math).
 vec3 surfacePerturb(vec3 surfPos, vec3 surfNorm, float faceDirection) {
   vec2 dHdxy = vec2(dFdx(surfHeight), dFdy(surfHeight)) * 0.7;
@@ -258,23 +308,29 @@ vec3 surfacePerturb(vec3 surfPos, vec3 surfNorm, float faceDirection) {
 }
 `;
 
-// Teach a Lambert or Standard material to draw the patterns.
-export function withSurfaceDetail<T extends THREE.MeshLambertMaterial | THREE.MeshStandardMaterial>(material: T, bump: boolean): T {
+// Teach a Lambert or Standard material to draw the patterns (procedural:
+// false on low quality, where only the OpenGameArt textures are drawn).
+export function withSurfaceDetail<T extends THREE.MeshLambertMaterial | THREE.MeshStandardMaterial>(material: T, bump: boolean, procedural = true): T {
   material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTexOn = textureUniforms.uTexOn;
+    shader.uniforms.uTex = textureUniforms.uTex;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nattribute vec4 aFace;\nattribute float aPattern;\nvarying vec4 vFace;\nvarying float vPattern;\nvarying float vSurfY;",
+        "#include <common>\nattribute vec4 aFace;\nattribute float aPattern;\nattribute vec2 aTex;\nvarying vec4 vFace;\nvarying float vPattern;\nvarying float vSurfY;\nvarying vec2 vTex;",
       )
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFace = aFace;\nvPattern = aPattern;\nvSurfY = (modelMatrix * vec4(transformed, 1.0)).y;");
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFace = aFace;\nvPattern = aPattern;\nvTex = aTex;\nvSurfY = (modelMatrix * vec4(transformed, 1.0)).y;");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\n" + SHADER_FUNCTIONS)
-      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= surfaceShade();")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>\nif (uTexOn > 0.5 && vTex.x > -0.5) diffuseColor.rgb = textureShade(diffuseColor.rgb);${procedural ? "\nelse diffuseColor.rgb *= surfaceShade();" : ""}`,
+      )
       .replace(
         "#include <normal_fragment_maps>",
         bump ? "#include <normal_fragment_maps>\nnormal = surfacePerturb(-vViewPosition, normal, faceDirection);" : "#include <normal_fragment_maps>",
       );
   };
-  material.customProgramCacheKey = () => `surface2-${bump}`;
+  material.customProgramCacheKey = () => `surface3-${bump}-${procedural}`;
   return material;
 }

@@ -8,6 +8,7 @@ import { CHAPTERS, chaptersDone } from "../../shared/src/story.ts";
 import { type Loadout, UNLOCKS, unlocksFor } from "../../shared/src/unlocks.ts";
 import { Game } from "./Game.ts";
 import { QUALITIES, QUALITY_NAMES, quality, setQuality } from "./quality.ts";
+import { initTextures, setTextureSet, TEXTURE_SET_NAMES, textureSet } from "./graphics/textures.ts";
 import { Input } from "./Input.ts";
 import { formatTime } from "./ParkourHud.ts";
 import { sound } from "./audio/Sound.ts";
@@ -304,6 +305,25 @@ qualityButton.addEventListener("click", (e) => {
   setQuality(QUALITIES[(QUALITIES.indexOf(quality()) + 1) % QUALITIES.length]);
   showQuality(game ? " (from the next room)" : "");
 });
+
+// Texture set: the classic patterns or OpenGameArt textures. Switches at once
+// (the textures download the first time).
+const texturesButton = $<HTMLButtonElement>("textures-button");
+const showTextures = (note = "") => (texturesButton.textContent = `Textures: ${TEXTURE_SET_NAMES[textureSet()]}${note}`);
+showTextures();
+texturesButton.title = "Classic: the game's own drawn patterns. OpenGameArt: real tiling textures from OpenGameArt.org (CC0).";
+texturesButton.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const next = textureSet() === "oga" ? "classic" : "oga";
+  showTextures(next === "oga" ? " (loading...)" : "");
+  setTextureSet(next)
+    .then(() => showTextures())
+    .catch(() => {
+      setTextureSet("classic");
+      showTextures(" (couldn't load)");
+    });
+});
+initTextures();
 
 wardrobeButton.addEventListener("click", (e) => {
   e.stopPropagation();

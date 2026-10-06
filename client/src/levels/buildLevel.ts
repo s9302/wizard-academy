@@ -23,10 +23,10 @@ function hash(box: Box): number {
 // same color don't look flat. The box's color is baked into its vertex
 // colors, and the box is moved into place, so that every solid box in the
 // level can be merged into ONE mesh (see buildLevel).
-function shadedBox(box: Box, matrix: THREE.Matrix4, detail: boolean): THREE.BufferGeometry {
+function shadedBox(box: Box, matrix: THREE.Matrix4, levelId: string): THREE.BufferGeometry {
   const [w, h, d] = box.size;
   const geometry = new THREE.BoxGeometry(w, h, d);
-  if (detail) addSurfaceAttributes(geometry, box);
+  addSurfaceAttributes(geometry, box, levelId);
   const base = new THREE.Color(box.color).multiplyScalar(0.95 + hash(box) * 0.1);
   const pos = geometry.getAttribute("position");
   const colors = new Float32Array(pos.count * 3);
@@ -114,9 +114,9 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
   //
   // Glowing boxes (windows, crystals, lava) are a second merged mesh, drawn
   // unlit and extra bright. On High and Ultra, solid boxes get surface
-  // detail (bricks, planks, grass; see graphics/surface.ts).
+  // detail (bricks, planks, grass; see graphics/surface.ts); on every
+  // quality, the OpenGameArt texture set if it's chosen (graphics/textures.ts).
   const q = quality();
-  const detail = q !== "low";
   const solid: THREE.BufferGeometry[] = [];
   const glowing: THREE.BufferGeometry[] = [];
   for (const box of level.boxes) {
@@ -133,7 +133,7 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
       g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
       g.applyMatrix4(boxMatrix(box));
       glowing.push(g);
-    } else solid.push(shadedBox(box, boxMatrix(box), detail));
+    } else solid.push(shadedBox(box, boxMatrix(box), level.id));
   }
   if (solid.length) {
     const material =
@@ -141,7 +141,7 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
         ? withSurfaceDetail(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 }), true)
         : q === "high"
           ? withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), true)
-          : new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+          : withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), false, false); // the OpenGameArt textures only
     const mesh = new THREE.Mesh(mergeGeometries(solid), material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
