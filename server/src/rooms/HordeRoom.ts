@@ -6,8 +6,12 @@
 // wave every fifth (and dragons in the elite waves from wave 10). Between waves there's a short breather, and anyone who went down
 // comes back for the next one. When everyone is down at once, it's over:
 // your score is the waves you survived, and each wave cleared pays XP.
+// Anyone can pick the map (any arena, chase map or boss arena) for the next run.
 
 import { DECOY_ID_BASE } from "../../../shared/src/abilities.ts";
+import { ARENAS } from "../../../shared/src/levels/arenas.ts";
+import { CHASE_MAPS } from "../../../shared/src/levels/chaseMaps.ts";
+import { LEVELS } from "../../../shared/src/levels/index.ts";
 import type { Level } from "../../../shared/src/levels/types.ts";
 import type { MonsterKind } from "../../../shared/src/monsters.ts";
 import type { ClientMsg, Vec3 } from "../../../shared/src/protocol.ts";
@@ -26,6 +30,9 @@ const GROUP_MS = 1_200; // a group of the queue comes in this often
 const FAR = 16; // monsters come in at least this far from everyone
 
 type Wave = { kind: MonsterKind }[];
+
+// Every map you can fight the horde on.
+export const HORDE_MAPS = [...new Set([...ARENAS.map((a) => a.id), ...CHASE_MAPS, "ctf", "trial7", "trial8", "trial9"])].filter((id) => LEVELS[id]);
 
 // What wave n brings, for this many players. More of everything as it goes,
 // wolves from wave 2, golems from wave 4, and every fifth wave is an elite
@@ -63,11 +70,34 @@ export class HordeRoom extends RoyaleRoom {
   private nextWaveAt: number | null = null; // a breather until then
   private best = 0;
   private lastSent = "";
+  private nextMap: string;
 
   constructor(info: RoomInfo, level: Level) {
     super(info, level, null);
     this.stormOn = false;
     this.voting = false;
+    this.nextMap = level.id;
+  }
+
+  // ---- The map: anyone picks it, the next run is played there ----
+
+  private mapsMsg() {
+    return { t: "chaseMaps" as const, maps: HORDE_MAPS, current: this.level.id, next: this.nextMap };
+  }
+
+  private pickMap(player: Player, map: string): void {
+    if (player.conn.isBot || !HORDE_MAPS.includes(map) || map === this.nextMap) return;
+    this.nextMap = map;
+    const when = this.state === "playing" || this.state === "countdown" ? "The next run" : "This run";
+    this.broadcast({ t: "announce", text: `${player.conn.name} picked ${LEVELS[map].name}. ${when} is played there.` });
+    this.broadcast(this.mapsMsg());
+  }
+
+  protected override beforeCountdown(): void {
+    super.beforeCountdown();
+    const level = LEVELS[this.nextMap];
+    if (level && level !== this.level) this.setArena(level);
+    this.broadcast(this.mapsMsg());
   }
 
   // Everyone here is on the same side, against the horde.
@@ -229,6 +259,7 @@ export class HordeRoom extends RoyaleRoom {
 
   protected override onRoundMessage(player: Player, msg: ClientMsg): void {
     if (msg.t === "monsters") return; // the waves bring the monsters here
+    if (msg.t === "chaseMap") return this.pickMap(player, msg.map);
     super.onRoundMessage(player, msg);
   }
 
@@ -238,5 +269,6 @@ export class HordeRoom extends RoyaleRoom {
     if (this.state === "playing") this.inRound.add(player.conn.id);
     this.lastSent = "";
     this.sendHorde(true);
+    player.conn.send(this.mapsMsg());
   }
 }

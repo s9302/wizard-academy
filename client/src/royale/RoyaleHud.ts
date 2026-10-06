@@ -78,6 +78,8 @@ export class RoyaleHud {
   private votePanel: HTMLElement; // in the pause panel: buttons
   private voteCard: HTMLElement; // on screen: the tally
   private myVote: string | null = null;
+  private mapBox: HTMLElement; // Horde: pick the map
+  private onMap: (map: string) => void;
   private onVote: (arena: string) => void;
   private cls: ClassId = "wizard";
   private hand: Hand = "main";
@@ -116,6 +118,7 @@ export class RoyaleHud {
       onPickTeam: (team: 0 | 1 | null) => void;
       onBotSet: (id: number, change: { cls?: ClassId; team?: 0 | 1 }) => void;
       onReady: () => void;
+      onMap: (map: string) => void;
     },
     variant: "royale" | "boss" | "ctf" | "horde" = "royale", // a boss fight (other words; no monsters, no teams), capture the flag (always teams), or Horde (like a boss fight, in waves)
   ) {
@@ -124,6 +127,7 @@ export class RoyaleHud {
     this.horde = variant === "horde";
     this.ctf = variant === "ctf";
     this.onVote = actions.onVote;
+    this.onMap = actions.onMap;
     this.storm = storm;
 
     // Bot controls and the class picker live in the pause panel (press Esc),
@@ -154,6 +158,9 @@ export class RoyaleHud {
     this.votePanel.id = "arena-vote";
     this.votePanel.hidden = true;
     this.votePanel.onclick = (e) => e.stopPropagation();
+    this.mapBox = document.createElement("div");
+    this.mapBox.id = "horde-maps";
+    this.mapBox.hidden = true;
     this.monsterControls = new BotControls((action) => actions.onMonsters(action, this.monsterKind), "monster");
     // Which monster + lets in: a mix, or one kind (pick it first).
     this.monsterKinds = document.createElement("div");
@@ -193,7 +200,7 @@ export class RoyaleHud {
     this.modeBox.id = "mode-box";
     this.teamBox = document.createElement("div");
     this.teamBox.id = "team-box";
-    this.match.append(this.readyButton, this.modeBox, this.teamBox, this.votePanel, document.getElementById("monster-controls")!, this.monsterKinds);
+    this.match.append(this.readyButton, this.modeBox, this.teamBox, this.votePanel, this.mapBox, document.getElementById("monster-controls")!, this.monsterKinds);
     pausePanel.appendChild(this.match);
     if (this.boss) {
       document.getElementById("monster-controls")!.hidden = true;
@@ -420,6 +427,24 @@ export class RoyaleHud {
       line.className = id === this.myVote ? "mine" : "";
       line.textContent = `${size} \u00b7 ${label} \u2014 ${count}`;
       this.voteCard.appendChild(line);
+    }
+  }
+
+  // Horde's map picker: one button per map; the next run's is highlighted.
+  maps(list: string[], current: string, next: string): void {
+    this.mapBox.hidden = false;
+    this.mapBox.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "picker-title";
+    title.textContent = next === current ? "Map" : `Map (next run: ${LEVELS[next]?.name ?? next})`;
+    this.mapBox.appendChild(title);
+    for (const id of list) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = id === next ? "on" : "";
+      b.textContent = `${LEVELS[id]?.name ?? id}${id === current ? " (now)" : ""}`;
+      b.onclick = () => this.onMap(id);
+      this.mapBox.appendChild(b);
     }
   }
 

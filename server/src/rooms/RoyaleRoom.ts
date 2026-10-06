@@ -605,7 +605,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (level && level !== this.level) this.setArena(level);
   }
 
-  private setArena(level: Level): void {
+  protected setArena(level: Level): void {
     this.level = level;
     this.projectiles.clear();
     this.pickups.clear();

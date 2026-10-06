@@ -1,6 +1,6 @@
 // Capture the flag: Twin Keeps (72 x 72 m). Red's keep is at the north end,
 // Blue's at the south: each a raised platform (3 m) with the flag stand in
-// the middle, ramps down both front corners, parapets, a ladder at the back
+// the middle, ramps down both front corners, parapets, a ladder up the side
 // and a jump pad in front. Between them: a central bridge over a lava
 // channel (or cross on the stepping stones), broken walls and pillars for
 // cover, side lanes with crates, and a teleporter from each keep's back
@@ -37,9 +37,10 @@ function twinKeeps(): Level {
     k.slab(0, z - s * 5.2, 18, 0.4, K, K + 0.25, team === 0 ? RED : BLUE);
     k.wall(-7.5, z - s * 4.8, 3, 0.4, 1, STONE_DARK, K).wall(7.5, z - s * 4.8, 3, 0.4, 1, STONE_DARK, K);
     k.wall(0, z + s * 4.8, 18, 0.5, 3, STONE_DARK, K);
-    // Ramps down both front corners (toward the middle), a ladder at the back.
+    // Ramps down both front corners (toward the middle), a ladder up the west
+    // side (the back is walled off at the top).
     k.rampZ(z - s * (5 + K * 1.7), z - s * 5, -11, 3, 0, K, PLANK).rampZ(z - s * (5 + K * 1.7), z - s * 5, 11, 3, 0, K, PLANK);
-    k.ladder(-9, z + s * 5, K, s > 0 ? 0 : Math.PI);
+    k.ladder(-9, z + s * 1, K, -Math.PI / 2);
     // The flag stand, and towers at the keep's corners.
     k.block(0, z - s * 1, 1.6, 1.6, K + 0.3, team === 0 ? RED : BLUE);
     for (const x of [-8.5, 8.5]) k.block(x, z + s * 3.5, 2, 2, K + 3, STONE_LIGHT);

@@ -167,7 +167,7 @@ function moonlitGraveyard(): Level {
   // Mausoleums, 3 m, with a ladder each and a teleporter between their doors.
   for (const x of [-21, 21]) {
     k.block(x, -18, 7, 6, 3, STONE_LIGHT);
-    k.slab(x, -18, 7.6, 6.6, 3, 3.4, STONE_DARK);
+    k.slab(x, -18, 7.6, 6, 3, 3.4, STONE_DARK); // flush front and back: an overhang would stop you at the top of the ladder
     k.ladder(x, -21, 3, Math.PI);
   }
   k.teleporterPair([-21, 0, -14], [21, 0, -14], "#c58fff");

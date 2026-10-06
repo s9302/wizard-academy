@@ -111,7 +111,7 @@ function skyrunRooftops(): Level {
       const z = at(r);
       const h = H[r][c];
       k.block(x, z, 9, 9, h, (r + c) % 2 ? STONE : STONE_LIGHT);
-      k.slab(x, z, 9.4, 9.4, h, h + 0.15, ROOF_COLORS[(r * 5 + c) % ROOF_COLORS.length]); // the roof
+      k.slab(x, z, 9, 9, h, h + 0.15, ROOF_COLORS[(r * 5 + c) % ROOF_COLORS.length]); // the roof (flush with the walls: an overhang would stop you at the top of a ladder)
       // To each neighbor east and south: an easy step needs nothing; a 1 m
       // rise gets a crate on the lower roof; more gets a ladder across the gap.
       for (const [dr, dc] of [[0, 1], [1, 0]]) {

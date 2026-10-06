@@ -744,3 +744,9 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
 .boss-name { font-weight: 800; color: #ffd0a8; text-shadow: 0 2px 4px #000; margin-bottom: 4px; letter-spacing: 0.05em; }
 .boss-track { height: 14px; border-radius: 7px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.25); overflow: hidden; }
 .boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff3c0a, #ffb347); transition: width 0.2s; }
+
+/* Horde's map picker (Esc panel): two columns, many maps. */
+#horde-maps { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+#horde-maps .picker-title { grid-column: 1 / -1; }
+#horde-maps button { background: rgba(255, 255, 255, 0.06); color: var(--ink); font-weight: 400; font-size: 0.85em; padding: 6px 8px; }
+#horde-maps button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; font-weight: 700; }

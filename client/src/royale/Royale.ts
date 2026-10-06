@@ -147,6 +147,7 @@ export class Royale {
       onPickTeam: (team) => hooks.send({ t: "pickTeam", team }),
       onBotSet: (id, change) => hooks.send({ t: "botSet", id, ...change }),
       onReady: () => hooks.send({ t: "ready" }),
+      onMap: (map) => hooks.send({ t: "chaseMap", map }),
       onAbilities: (e, r) => {
         this.chosen = [e, r];
         this.applyLoadout();
@@ -328,6 +329,9 @@ export class Royale {
         return true;
       case "arenaVote":
         this.hud.vote(msg.options, msg.votes);
+        return true;
+      case "chaseMaps": // Horde's map picker
+        this.hud.maps(msg.maps, msg.current, msg.next);
         return true;
       case "lineup":
         this.hud.lineup(msg.players, msg.mode, msg.next, me);
