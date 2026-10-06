@@ -17,12 +17,13 @@ import {
   FROSTNOVA,
   GIANT,
   HOLYNOVA,
+  ROCK,
   SHOCKWAVE,
   WHIRLWIND,
   WINDSTEP_SPEED,
 } from "../../../shared/src/abilities.ts";
 import { type ClassId, type Hand, moveSpeed, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
-import { castDirections, MAX_SHIELD, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
+import { castDirections, MAX_SHIELD, POWERUPS, type PowerupKind, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, RoundState, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RemotePlayers } from "../RemotePlayers.ts";
@@ -68,6 +69,8 @@ export type RoyaleHooks = {
   onInvert: (ms: number) => void; // the world upside down
   onGiant: (ms: number) => void; // your own Giant Form (third-person body)
   onSpin: (ms: number) => void; // caught in a tornado: the view whirls
+  onRock: (on: boolean) => void; // your own Rock Disguise (third-person body)
+  onMultiJump: (seconds: number, jumps: number) => void; // Cloud Boots (a powerup)
   onDeath: () => void; // you're out: the view drops
   onRevive: () => void; // back in for a new round
   selfClone: () => THREE.Group; // an avatar of you (your Mirror Images)
@@ -353,6 +356,11 @@ export class Royale {
       case "pickups":
         this.pickups.set(msg.items);
         return true;
+      case "held":
+        if (msg.kind) sound.play("pickup", { volume: 0.7, rate: 1.3 });
+        this.heldPowerup = msg.kind;
+        this.hud.powerup(msg.kind);
+        return true;
       case "charges":
         if (msg.fireball > this.fireballs) sound.play("pickup", { volume: 0.7 });
         this.fireballs = msg.fireball;
@@ -493,16 +501,62 @@ export class Royale {
   }
 
   // How fast you move: your class and hand, times whatever's on you now.
-  private boosts = { windstep: 0, ascend: 0, frozen: 0 }; // until (performance.now)
+  private boosts = { windstep: 0, ascend: 0, frozen: 0, rock: 0, haste: 0 }; // until (performance.now)
   private applySpeed(): void {
     const now = performance.now();
     const b = this.boosts;
-    this.hooks.onSpeed(moveSpeed(this.cls, this.hand) * (now < b.windstep ? WINDSTEP_SPEED : 1) * (now < b.ascend ? ASCEND.speed : 1) * (now < b.frozen ? 0 : 1));
+    this.hooks.onSpeed(moveSpeed(this.cls, this.hand) * (now < b.windstep ? WINDSTEP_SPEED : 1) * (now < b.ascend ? ASCEND.speed : 1) * (now < b.frozen ? 0 : 1) * (now < b.rock ? ROCK.speed : 1) * (now < b.haste ? POWERUPS.haste.speed : 1));
   }
   private boost(kind: keyof Royale["boosts"], ms: number): void {
     this.boosts[kind] = performance.now() + ms;
     this.applySpeed();
     setTimeout(() => this.applySpeed(), ms + 20);
+  }
+
+  // The powerup in your pocket (the server's word for it); F uses it.
+  heldPowerup: PowerupKind | null = null;
+  usePowerup(): void {
+    if (!this.heldPowerup || !this.hud.canAct) return;
+    this.hooks.send({ t: "usePowerup" });
+  }
+
+  private powerupEffect(mine: boolean, id: number, kind: "haste" | "quadjump" | "fury", ms: number, where: Vec3 | null): void {
+    const color = { haste: "#ffe14a", quadjump: "#dff3ff", fury: "#ff3b3b" }[kind];
+    sound.fx(kind === "fury" ? "fortify" : "blink", { at: mine ? null : where, rate: kind === "haste" ? 1.5 : 1.1 });
+    if (where) particles.emit({ at: where, count: 35, color, color2: "#ffffff", speed: 3, up: 2, life: 0.7, size: 0.18 });
+    if (!mine) {
+      this.remotes.glow(id, color, ms);
+      return;
+    }
+    if (kind === "haste") this.boost("haste", ms);
+    if (kind === "quadjump") this.hooks.onMultiJump(ms / 1000, POWERUPS.quadjump.jumps);
+    this.hud.callout(kind === "haste" ? "Haste!" : kind === "quadjump" ? "Cloud Boots! Jump four times in a row" : "Fury! You hit harder");
+  }
+
+  // Rock Disguise: your own (until when), and who else is a rock right now.
+  private rockUntil = 0;
+  private rocks = new Map<number, number>(); // id -> until (performance.now)
+  private rockEffect(mine: boolean, id: number, ms: number, where: Vec3 | null): void {
+    sound.play(["mining0", "mining1"], { at: mine ? null : where, rate: 0.7 });
+    if (where) particles.emit({ at: [where[0], where[1] - 0.4, where[2]], count: 30, color: "#a8a3b5", color2: "#6b6577", speed: 2.5, up: 2, life: 0.6, size: 0.22 });
+    if (mine) {
+      this.rockUntil = ms > 0 ? performance.now() + ms : 0;
+      this.boosts.rock = this.rockUntil;
+      this.applySpeed();
+      this.viewmodel.setHidden(ms > 0 || performance.now() < this.dragonUntil);
+      this.hooks.onRock(ms > 0);
+      if (ms > 0) {
+        this.hud.callout("You're a rock! Attack or use E/R to turn back");
+        setTimeout(() => {
+          if (this.rockUntil && performance.now() >= this.rockUntil - 50) this.rockEffect(true, id, 0, null);
+        }, ms + 20);
+      }
+      return;
+    }
+    if (ms > 0) {
+      this.remotes.disguise(id, rockModel(), true);
+      this.rocks.set(id, performance.now() + ms);
+    } else if (this.rocks.delete(id)) this.remotes.disguise(id, null);
   }
 
   // Dragon Form: until when you're one, and who else is (their dragon bodies).
@@ -583,6 +637,14 @@ export class Royale {
           this.hud.callout("Transcendence!");
         } else this.remotes.glow(id, "#fff2a8", ms);
         if (where) particles.emit({ at: where, count: 60, color: "#fff6c8", color2: "#bff5ff", speed: 3, up: 3, life: 1, size: 0.2 });
+        return true;
+      case "rock":
+        this.rockEffect(mine, id, ms, where);
+        return true;
+      case "haste":
+      case "quadjump":
+      case "fury":
+        this.powerupEffect(mine, id, kind, ms, where);
         return true;
       case "dragon": {
         sound.fx("rumble", { at, rate: 1.3 });
@@ -773,6 +835,11 @@ export class Royale {
     this.monsters.update();
     // Other players in Dragon Form: beat their wings; change them back after.
     const nowMs = performance.now();
+    for (const [id, until] of this.rocks) {
+      if (nowMs < until) continue;
+      this.remotes.disguise(id, null);
+      this.rocks.delete(id);
+    }
     for (const [id, dragon] of this.dragons) {
       if (nowMs >= dragon.until) {
         this.remotes.disguise(id, null);
@@ -823,4 +890,23 @@ export class Royale {
     this.hud.dispose();
     this.hooks.onSpeed(1);
   }
+}
+
+// A Wizard in Rock Disguise: a grey boulder like the arenas' own, sitting on
+// the ground (an avatar's origin is 0.9 m above its feet).
+export function rockModel(): THREE.Group {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: "#8a8698", flatShading: true });
+  const boulder = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8, 0), mat);
+  boulder.scale.set(1.1, 0.8, 1);
+  boulder.rotation.set(0.3, 0.7, 0.1);
+  boulder.position.y = -0.9 + 0.5;
+  const pebble = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), mat);
+  pebble.position.set(0.75, -0.9 + 0.15, 0.3);
+  for (const m of [boulder, pebble]) {
+    m.castShadow = true;
+    m.receiveShadow = true;
+    group.add(m);
+  }
+  return group;
 }

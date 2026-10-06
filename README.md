@@ -93,7 +93,9 @@ back can trip the limit too: restart the test server between batches.
 
 - Open `http://game:8080` on a tailnet device, enter a name, click into the
   page to capture the mouse. **WASD** move, **Shift** run, **Space** jump,
-  **Esc** releases the mouse.
+  **C** (held) crouch, **Esc** releases the mouse. Crouching makes you 1.2 m
+  tall instead of 1.8 (spells aimed at a standing head fly over you) and
+  halves your walking speed; you stand back up when there's room.
 - Open a second browser window (or have someone else on the tailnet join) to
   see another wizard move.
 - No second person handy? Run test bots that log in with the PIN and walk in
@@ -315,6 +317,13 @@ countdown, then play until one wizard is left.
   tops, inside the arches and the wall ring). Walk into one to take it:
   Fire Tome, Healing Draught (+40 health) or Ward (+50 shield). You only pick
   up what you can use; a taken pickup comes back after 25 s.
+- **Powerups** are pickups you carry instead of using at once: you hold one
+  at a time (walking over another leaves it there), it shows in the HUD's
+  **F** slot, and **F** uses it, once. **Haste Charm** (run 60% faster for
+  8 s), **Cloud Boots** (jump four times before landing, for 15 s),
+  **Shadow Cloak** (invisible for 6 s, or until you attack) and **Fury Rune**
+  (everything you do hits 50% harder for 8 s, monsters too). Bots leave them
+  for people. Admins with empty pockets: F still toggles flying.
 - **The storm.** The safe circle starts covering the whole arena, then
   shrinks in four stages to nothing. Each stage waits (the next circle shows
   as a white ring on the ground), then closes in. Outside it you take 5, 8, 12,
@@ -439,7 +448,7 @@ text in `shared/src/abilityInfo.ts`.
 
 | Class | Mastery abilities |
 |---|---|
-| **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Wall of Flame** (12 m line, 7 s, 24/s), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
+| **Wizard** | **Tornado** (rolls 30 m; catches enemies and monsters for 25, carries and spins them around the funnel for 1.6 s, then flings them), **Rock Disguise** (up to 20 s as a boulder: enemies see a rock with no name or health bar, bots and monsters ignore you; half speed; attacking, using an ability or getting hit turns you back), **Pit to Hell** (3.6 m, 5 s: drags in, slows, 36/s), **Inversion** (30 m curse: your screen upside down for 10 s), **Shockwave** (9 m blast: 18 damage; enemies, bots and monsters thrown back) |
 | **Knight** | **Null Zone** (7 m, 7 s: no ranged attacks at all inside, arrows included, and no magic at all reaches anyone inside: no Wizard, Rogue, Cleric or Druid ability can hurt, heal, curse, pull or throw them, even from outside; walls and pillars can't be raised in it; a Tornado that reaches it breaks up; a Pit to Hell or Black Hole can be opened over it but doesn't touch anyone inside), **Giant Form** (8 s: double size, melee 1.6x and 1.5x reach, 35% less damage taken), **Chain Pull** (hook the first enemy in 20 m to you, 12 damage; they're dragged along the ground, through any lava or void in the way) |
 | **Druid** | **Call Golem** (a stone golem fights for you), **Imp Swarm** (three fire imps that throw fire), **Barkskin** (half damage taken and healing 6/s) |
 | **Monk** | **Wind Step** (50% faster for 4 s), **Palm Strike** (a cone up close: 26 and a big shove), **Evasion** (untouchable for a moment) |

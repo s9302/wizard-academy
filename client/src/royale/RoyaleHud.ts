@@ -8,7 +8,7 @@ import { abilityAllowed } from "../../../shared/src/unlocks.ts";
 import { abilityInfo, weaponInfo } from "../../../shared/src/abilityInfo.ts";
 import { attachTooltip, hideTooltip } from "../ui/Tooltip.ts";
 import { CLASS_IDS, CLASSES, type ClassId, type Hand, SWAP_MS, WEAPONS, weaponOf } from "../../../shared/src/classes.ts";
-import { MAX_HEALTH, SPELLS } from "../../../shared/src/combat.ts";
+import { MAX_HEALTH, PICKUPS, type PowerupKind, SPELLS } from "../../../shared/src/combat.ts";
 import { LEVELS } from "../../../shared/src/levels/index.ts";
 import { type MonsterKind, MONSTER_KINDS, MONSTERS } from "../../../shared/src/monsters.ts";
 import type { HordeMsg, LineupEntry, RoundState, RoyaleMode } from "../../../shared/src/protocol.ts";
@@ -47,6 +47,7 @@ export class RoyaleHud {
   private classEl: HTMLElement;
   private slots: Record<Hand, Slot>;
   private fireSlot: HTMLElement;
+  private powerSlot!: Slot;
   private abilitySlots: Slot[] = [];
   private stealthEl: HTMLElement;
   private calloutEl: HTMLElement;
@@ -256,14 +257,18 @@ export class RoyaleHud {
     const abilities = group("abilities");
     this.abilitySlots = [slot(abilities, "E"), slot(abilities, "R")];
     for (const a of this.abilitySlots) a.el.classList.add("ability");
-    const fire = slot(group("extra"), "RMB");
+    const extra = group("extra");
+    const fire = slot(extra, "RMB");
     this.fireSlot = fire.el;
     this.fireSlot.classList.add("fire");
     fire.icon.innerHTML = ICONS.fireball;
     fire.name.textContent = SPELLS.fireball.name;
     this.fireCount = el("div", "", this.fireSlot, "slot-count");
+    this.powerSlot = slot(extra, "F");
+    this.powerSlot.el.classList.add("power");
     this.health(MAX_HEALTH, MAX_HEALTH, 0);
     this.charges(0);
+    this.powerup(null);
   }
 
   // Esc panel: pick a class (sent to the server, which confirms with "equip").
@@ -657,6 +662,18 @@ export class RoyaleHud {
     this.shieldFill.style.width = `${(100 * shield) / max}%`;
     this.shieldFill.hidden = shield <= 0;
     this.hpText.textContent = shield > 0 ? `${hp} + ${shield} ward` : `${hp}`;
+  }
+
+  // The powerup you're carrying (one at a time; F uses it).
+  powerup(kind: PowerupKind | null): void {
+    const s = this.powerSlot;
+    s.el.classList.toggle("empty", !kind);
+    s.el.style.borderColor = kind ? PICKUPS[kind].color : "";
+    s.icon.innerHTML = kind ? (ICONS[kind] ?? "") : "";
+    s.icon.style.color = kind ? PICKUPS[kind].color : "";
+    s.name.textContent = kind ? PICKUPS[kind].name : "Powerup";
+    s.el.title = kind ? `${PICKUPS[kind].name}: ${PICKUPS[kind].description}` : "Walk into a powerup to carry it; F uses it.";
+    if (kind) this.callout(`${PICKUPS[kind].name}: press F`);
   }
 
   charges(n: number): void {

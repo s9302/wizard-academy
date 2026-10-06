@@ -130,6 +130,11 @@ export class Input {
     return this.down("KeyC");
   }
 
+  // Crouch while C is held (the same key dives when flying).
+  get crouch(): boolean {
+    return this.down("KeyC");
+  }
+
   // Battle royale: which hand to switch to, once per press.
   consumeHand(): "main" | "backup" | "toggle" | null {
     const queued = this.handQueued;

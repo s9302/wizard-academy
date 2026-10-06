@@ -21,7 +21,7 @@ export type AbilityId =
   | "fortify"
   // Level 11+
   | "tornado"
-  | "flames"
+  | "rock"
   | "hellpit"
   | "invert"
   | "shockwave"
@@ -86,7 +86,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
   fortify: { name: "Fortify", cooldownMs: 13_000, durationMs: 6_000, description: "Heal 25 and take only 30% damage for 6 s. Nothing can slow or shove you." },
   // Wizard, level 11+
   tornado: { name: "Tornado", cooldownMs: 16_000, durationMs: 4_000, description: "A tornado rolls where you aim. Whoever it touches takes 25 and is thrown into the air." },
-  flames: { name: "Wall of Flame", cooldownMs: 15_000, durationMs: 7_000, description: "A 12 m line of fire where you aim, for 7 s. Burns anyone in it (24 a second)." },
+  rock: { name: "Rock Disguise", cooldownMs: 18_000, durationMs: 20_000, description: "Turn into a boulder for up to 20 s. Enemies see only a rock (no name, no health bar), and bots and monsters ignore you. You crawl at half speed; attacking, using an ability or getting hit turns you back." },
   hellpit: { name: "Pit to Hell", cooldownMs: 20_000, durationMs: 5_000, description: "The ground opens where you aim, for 5 s: it drags you in, slows you, and burns (36 a second)." },
   invert: { name: "Inversion", cooldownMs: 14_000, durationMs: 10_000, description: "Curse whoever you aim at (30 m): their world turns upside down for 10 s." },
   shockwave: { name: "Shockwave", cooldownMs: 12_000, description: "Blast everyone within 9 m away from you (18 damage, and a long way back)." },
@@ -141,7 +141,7 @@ export const ABILITIES: Record<AbilityId, AbilityDef> = {
 
 // What each class can choose from (the first two are the defaults).
 export const CLASS_ABILITY_POOL: Record<ClassId, AbilityId[]> = {
-  wizard: ["wall", "pillar", "tornado", "flames", "hellpit", "invert", "shockwave", "meteor", "frostnova", "blackhole"],
+  wizard: ["wall", "pillar", "tornado", "rock", "hellpit", "invert", "shockwave", "meteor", "frostnova", "blackhole"],
   rogue: ["blink", "stealth", "decoys", "glide", "smoke", "knives", "assassinate", "phantom"],
   knight: ["charge", "fortify", "nullzone", "giant", "chain", "whirlwind", "warcry", "nullaura"],
   cleric: ["heal", "smite", "sanctuary", "aegis", "judgment", "holynova", "guardian", "wrath"],
@@ -194,7 +194,7 @@ export const FORTIFY_HEAL = 25;
 
 // Level 11+ numbers.
 export const TORNADO = { speed: 7, radius: 3.5, damage: 25, lift: 14, range: 30 };
-export const FLAMES = { length: 12, width: 1.6, dps: 24 };
+export const ROCK = { speed: 0.5 }; // Rock Disguise: how fast a boulder crawls
 export const HELLPIT = { radius: 3.6, dps: 36, pull: 3, slow: 0.4 };
 export const INVERT_RANGE = 30;
 export const SHOCKWAVE = { radius: 9, damage: 18, push: 22, pushTime: 0.4, lift: 7 };
@@ -241,9 +241,8 @@ export const CYCLONE = { radius: 5, damage: 35, push: 18, lift: 11 };
 export const ASCEND = { taken: 0.5, damage: 2, speed: 1.6 };
 
 // A lasting area an ability leaves on the ground (drawn by the client,
-// enforced by the server). Lines (flames) have a yaw and a length; circles a
-// radius; a tornado moves along d at TORNADO.speed from p, starting at `time`.
-export type FieldKind = "tornado" | "flames" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary" | "entangle" | "meteor" | "blackhole";
+// enforced by the server). Circles have a radius; a tornado moves along d at TORNADO.speed from p, starting at `time`.
+export type FieldKind = "tornado" | "hellpit" | "nullzone" | "smoke" | "smite" | "sanctuary" | "entangle" | "meteor" | "blackhole";
 // follow: a player it moves with (Null Aura: p is kept at their feet).
 export type FieldInfo = { id: number; kind: FieldKind; owner: number; p: Vec3; r: number; yaw?: number; len?: number; d?: Vec3; time: number; ms: number; follow?: number };
 
@@ -260,15 +259,6 @@ export function inField(f: FieldInfo, p: Vec3, now: number): boolean {
   // up and down slopes, steps and rubble (it works on any ground).
   const reach = f.kind === "hellpit" || f.kind === "blackhole" ? 5 : f.kind === "tornado" ? 5 : f.kind === "smoke" ? 4 : 2.2;
   if (Math.abs(p[1] - c[1]) > reach) return false;
-  if (f.kind === "flames") {
-    // Along the line (yaw), within half its length; across it, within r.
-    const yaw = f.yaw ?? 0;
-    const ax = Math.cos(yaw);
-    const az = -Math.sin(yaw);
-    const dx = p[0] - c[0];
-    const dz = p[2] - c[2];
-    return Math.abs(dx * ax + dz * az) <= (f.len ?? 0) / 2 && Math.abs(-dx * az + dz * ax) <= f.r;
-  }
   return Math.hypot(p[0] - c[0], p[2] - c[2]) <= f.r;
 }
 

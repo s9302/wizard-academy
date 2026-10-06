@@ -125,13 +125,28 @@ export const CAST_ORIGIN_SLACK = 1.5;
 
 // ---- Pickups ----
 
-export type PickupKind = "tome" | "potion" | "ward";
+// Tomes, draughts and wards work the moment you walk into them. Powerups
+// (held: true) go in your pocket instead: you carry one at a time, and F
+// uses it, once.
+export type PowerupKind = "haste" | "quadjump" | "cloak" | "fury";
+export type PickupKind = "tome" | "potion" | "ward" | PowerupKind;
 
-export const PICKUPS: Record<PickupKind, { name: string; color: string; weight: number }> = {
-  // Weights: healing is rare (about 3 in 10 pickups), so health matters.
-  tome: { name: "Fire Tome", color: "#ff7a2e", weight: 7 }, // +3 fireball charges
+export const PICKUPS: Record<PickupKind, { name: string; color: string; weight: number; held?: true; description?: string }> = {
+  // Weights: healing is rare (about 1 in 7 pickups), so health matters.
+  tome: { name: "Fire Tome", color: "#ff7a2e", weight: 4 }, // +3 fireball charges
   potion: { name: "Healing Draught", color: "#ff5a8a", weight: 1.5 }, // +40 health
   ward: { name: "Ward", color: "#5ac8ff", weight: 1.5 }, // +50 shield (absorbs damage first)
+  haste: { name: "Haste Charm", color: "#ffe14a", weight: 1, held: true, description: "Run 60% faster for 8 s." },
+  quadjump: { name: "Cloud Boots", color: "#dff3ff", weight: 1, held: true, description: "Jump four times before you land, for 15 s." },
+  cloak: { name: "Shadow Cloak", color: "#9a6cff", weight: 0.8, held: true, description: "Invisible for 6 s, or until you attack." },
+  fury: { name: "Fury Rune", color: "#ff3b3b", weight: 0.8, held: true, description: "Everything you do hits 50% harder for 8 s." },
+};
+export const isPowerup = (kind: PickupKind): kind is PowerupKind => !!PICKUPS[kind].held;
+export const POWERUPS = {
+  haste: { ms: 8_000, speed: 1.6 },
+  quadjump: { ms: 15_000, jumps: 4 }, // jumps in a row, the first from the ground
+  cloak: { ms: 6_000 },
+  fury: { ms: 8_000, damage: 1.5 },
 };
 export const TOME_CHARGES = 3;
 export const MAX_FIREBALL_CHARGES = 6;

@@ -66,7 +66,12 @@ export const ICONS: Record<string, string> = {
   judgment: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>'),
   // Level 11+ abilities
   tornado: svg('<path d="M3 4h18M5 8h14M7.5 12h10M10 16h6M12 20h2"/>'),
-  flames: svg('<path d="M3 20h18"/><path d="M6 20c-1.5-2-1-4 .5-5.5.3 1.2 1 1.8 1.6 2 0-2 .8-3.6 2.4-4.5-.3 2.4 1.5 3.5 1.5 5.5 0 1.2-.6 2-1.5 2.5M14 20c-1-1.6-.6-3.2.6-4.4.2 1 .8 1.4 1.3 1.6 0-1.6.6-2.9 1.9-3.6-.2 1.9 1.2 2.8 1.2 4.4 0 1-.5 1.6-1.2 2"/>'),
+  rock: svg('<path d="M3 19l2.5-7 4-4.5 5 1 4 4 2.5 6.5z"/><path d="M9.5 7.5l1.5 5 3.5-3.5M11 12.5L8 19"/>'),
+  // Powerups.
+  haste: svg('<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'),
+  quadjump: svg('<path d="M7 18h9a3 3 0 000-6 4 4 0 00-7.6-1.4A3 3 0 007 18z"/><path d="M12 10V3M9 6l3-3 3 3"/>'),
+  cloak: svg('<path d="M12 3c-3 0-5 2.5-5 6v3l-3 9h16l-3-9V9c0-3.5-2-6-5-6z"/><path d="M9.5 11.5h5"/>'),
+  fury: svg('<path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z"/>'),
   hellpit: svg('<ellipse cx="12" cy="15" rx="9" ry="4" fill="currentColor" fill-opacity="0.35"/><path d="M8 13c.5-2 1.5-3 1-5M12 12c.6-2.5 2-3.5 1.2-6.5M16 13c.4-1.6 1.2-2.4.8-4"/>'),
   invert: svg('<path d="M12 3v18"/><path d="M8 7l4-4 4 4M8 17l4 4 4-4"/><path d="M4 12a8 8 0 0 0 16 0" stroke-dasharray="2 2.5"/>'),
   shockwave: svg('<circle cx="12" cy="12" r="2.5" fill="currentColor" fill-opacity="0.4"/><path d="M6.5 6.5a7.8 7.8 0 0 0 0 11M17.5 6.5a7.8 7.8 0 0 1 0 11M3.5 3.5a12 12 0 0 0 0 17M20.5 3.5a12 12 0 0 1 0 17"/>'),

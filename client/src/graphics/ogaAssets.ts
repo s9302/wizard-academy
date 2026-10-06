@@ -1,6 +1,6 @@
 // The OpenGameArt look's models and images (beside the texture atlas, see
 // textures.ts): Kenney's Nature Kit trees and pines (bushes are its round
-// trees sunk into the ground), PolygonDan's medieval street lamps, Kenney's
+// trees sunk into the ground), Kenney's Graveyard Kit lamp posts, Kenney's
 // sky panoramas, a moon and a sun flare, Shoehorn's gothic window tracery and
 // a mullioned window frame. All CC0; credits in public/oga/CREDITS.md.
 //
@@ -10,7 +10,6 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 
 const BASE = "/oga/";
 const TREES = ["tree_default", "tree_oak", "tree_detailed", "tree_fat", "tree_tall", "tree_plateau", "tree_simple", "tree_blocks"];
@@ -71,6 +70,40 @@ function toModel(scene: THREE.Object3D, material?: (m: THREE.Mesh) => THREE.Mate
   return { root: scene, parts };
 }
 
+// Kenney's lamp posts share one palette image: the post is its green stripe
+// (x 320-383, y 256-383) and the lantern glass its yellow one (x 384-447).
+// Repaint the post as dark iron, and make only the glass glow.
+const POST = { x: 320, y: 256, w: 64, h: 128 };
+const GLASS = { x: 384, y: 256, w: 64, h: 128 };
+function lampMaterial(original: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  const image = original.map!.image as CanvasImageSource & { width: number; height: number };
+  const paint = (draw: (g: CanvasRenderingContext2D) => void): THREE.CanvasTexture => {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    draw(canvas.getContext("2d")!);
+    const t = new THREE.CanvasTexture(canvas);
+    t.flipY = false; // glTF's UVs
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const map = paint((g) => {
+    g.drawImage(image, 0, 0);
+    const iron = g.createLinearGradient(0, POST.y, 0, POST.y + POST.h);
+    iron.addColorStop(0, "#4a4458");
+    iron.addColorStop(1, "#1f1c27");
+    g.fillStyle = iron;
+    g.fillRect(POST.x, POST.y, POST.w, POST.h);
+  });
+  const emissiveMap = paint((g) => {
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, image.width, image.height);
+    g.fillStyle = "#ffd08a";
+    g.fillRect(GLASS.x, GLASS.y, GLASS.w, GLASS.h);
+  });
+  return new THREE.MeshStandardMaterial({ map, emissiveMap, emissive: "#ffffff", emissiveIntensity: 2.2, roughness: 0.55, metalness: 0 });
+}
+
 function loadTexture(url: string, srgb = true): Promise<THREE.Texture> {
   return new THREE.TextureLoader().loadAsync(url).then((t) => {
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -90,12 +123,16 @@ export function loadOgaAssets(): Promise<OgaAssets> {
       return mat;
     };
     const glb = (name: string) => gltf.loadAsync(`${BASE}models/${name}.glb`).then((g) => toModel(g.scene, matte));
-    const [trees, pines, bushes, lampObj, lampTex, day, morning, night, sun, moon, tracery, frame] = await Promise.all([
+    const lamp = (name: string) =>
+      gltf.loadAsync(`${BASE}models/${name}.glb`).then((g) => {
+        let mat: THREE.MeshStandardMaterial | null = null;
+        return toModel(g.scene, (m) => (mat ??= lampMaterial(m.material as THREE.MeshStandardMaterial)), true);
+      });
+    const [trees, pines, bushes, lamps, day, morning, night, sun, moon, tracery, frame] = await Promise.all([
       Promise.all(TREES.map(glb)),
       Promise.all(PINES.map(glb)),
       Promise.all(BUSHES.map(glb)),
-      new OBJLoader().loadAsync(`${BASE}models/street_lamp3.obj`),
-      loadTexture(`${BASE}models/streetlampAll.jpg`),
+      Promise.all(["lightpost-single", "lightpost-double"].map(lamp)),
       loadTexture(`${BASE}sky/day.jpg`),
       loadTexture(`${BASE}sky/morning.jpg`),
       loadTexture(`${BASE}sky/night.jpg`),
@@ -109,15 +146,6 @@ export function loadOgaAssets(): Promise<OgaAssets> {
       t.magFilter = THREE.NearestFilter; // crisp pixel-art lead lines
       t.anisotropy = 4;
     }
-    // The lamp file holds four lamps side by side: one model each.
-    const lampMaterial = new THREE.MeshStandardMaterial({ map: lampTex, roughness: 0.6, metalness: 0.25 });
-    const lamps = lampObj.children
-      .filter((o): o is THREE.Mesh => (o as THREE.Mesh).isMesh)
-      .map((mesh) => {
-        const g = new THREE.Group();
-        g.add(mesh.clone());
-        return toModel(g, () => lampMaterial, true);
-      });
     assets = { trees, pines, bushes, lamps, sky: { day, morning, night }, sun, moon, tracery, frame };
     return assets;
   })().catch((e) => {

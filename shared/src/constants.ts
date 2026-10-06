@@ -17,6 +17,11 @@ export const TERMINAL_FALL_SPEED = 40;
 export const PLAYER_RADIUS = 0.35;
 export const PLAYER_HALF_HEIGHT = 0.55;
 export const EYE_HEIGHT = 0.7; // camera height above the capsule center
+// Crouching (hold C) takes this much off the top: 1.2 m tall instead of 1.8,
+// at half walking speed. Positions sent over the network stay where the
+// standing capsule's center would be (0.9 m above the feet) either way.
+export const CROUCH_DROP = 0.6;
+export const CROUCH_SPEED = 0.5;
 
 // Falling below this height means you fell off the level; the client asks the
 // server to respawn it.

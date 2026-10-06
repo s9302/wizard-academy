@@ -4,7 +4,7 @@
 // straight line, so all we need is "where does this line segment first touch
 // something?".
 
-import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../constants.ts";
+import { CROUCH_DROP, PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../constants.ts";
 import type { Vec3 } from "../protocol.ts";
 import type { Box } from "./types.ts";
 
@@ -63,9 +63,10 @@ export function lineOfSight(a: Vec3, b: Vec3, boxes: Box[]): boolean {
 // Does the segment from -> to pass within `radius` of a player standing at
 // p (capsule center)? Returns the fraction along the segment of the closest
 // approach if so, else null. The capsule is its core line (top to bottom
-// sphere centers) grown by PLAYER_RADIUS.
-export function segmentHitsPlayer(from: Vec3, to: Vec3, p: Vec3, radius: number): number | null {
-  const top: Vec3 = [p[0], p[1] + PLAYER_HALF_HEIGHT, p[2]];
+// sphere centers) grown by PLAYER_RADIUS. A crouching player is CROUCH_DROP
+// shorter, from the top (p stays where the standing center would be).
+export function segmentHitsPlayer(from: Vec3, to: Vec3, p: Vec3, radius: number, crouch = false): number | null {
+  const top: Vec3 = [p[0], p[1] + PLAYER_HALF_HEIGHT - (crouch ? CROUCH_DROP : 0), p[2]];
   const bottom: Vec3 = [p[0], p[1] - PLAYER_HALF_HEIGHT, p[2]];
   const [s, dist] = closestBetweenSegments(from, to, bottom, top);
   return dist <= radius + PLAYER_RADIUS ? s : null;

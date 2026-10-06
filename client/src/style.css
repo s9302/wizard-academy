@@ -332,6 +332,8 @@ button.link { background: none; border: none; color: var(--ink); opacity: 0.7; t
 }
 .spell-slot.fire { border-color: #ff7a2e; }
 .spell-slot.empty { opacity: 0.45; }
+.spell-slot.power { border-color: #8a8698; }
+.power .slot-icon { filter: drop-shadow(0 0 5px currentColor); }
 .slot-key {
   position: absolute;
   top: 2px;

@@ -3,7 +3,7 @@
 
 import { type AbilityId, CLASS_ABILITY_POOL } from "../../shared/src/abilities.ts";
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
-import type { ClientMsg, Vec3 } from "../../shared/src/protocol.ts";
+import type { ClientMsg, MoveMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { CLASS_IDS, type ClassId } from "../../shared/src/classes.ts";
 import { MONSTER_KINDS, type MonsterKind } from "../../shared/src/monsters.ts";
 import { allUnlocks, type Hat, HATS, type PrimarySpell, PRIMARY_SPELLS, type Robe, ROBES } from "../../shared/src/unlocks.ts";
@@ -47,7 +47,10 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       // Clients wrap yaw into -PI..PI before sending.
       if (!isVec3(msg.p) || !isFiniteNumber(msg.ry) || Math.abs(msg.ry) > 4) return null;
       if (!Number.isSafeInteger(msg.tp) || (msg.tp as number) < 0) return null;
-      return { t: "move", p: [msg.p[0], msg.p[1], msg.p[2]], ry: msg.ry, tp: msg.tp as number };
+      if (msg.c !== undefined && msg.c !== true) return null;
+      const move: MoveMsg = { t: "move", p: [msg.p[0], msg.p[1], msg.p[2]], ry: msg.ry, tp: msg.tp as number };
+      if (msg.c) move.c = true;
+      return move;
     }
     case "respawn":
       return { t: "respawn" };
@@ -71,6 +74,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "ready":
       return { t: "ready" };
+    case "usePowerup":
+      return { t: "usePowerup" };
     case "unstuck":
       return { t: "unstuck" };
     case "chaseSetting":

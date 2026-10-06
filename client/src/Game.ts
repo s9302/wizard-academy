@@ -8,11 +8,11 @@
 
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
-import { EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS, TAG_RANGE } from "../../shared/src/constants.ts";
+import { CROUCH_DROP, EYE_HEIGHT, GRAVITY, NET_INTERVAL_MS, TAG_RANGE } from "../../shared/src/constants.ts";
 import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { Box, Level } from "../../shared/src/levels/types.ts";
 import { levelInfo } from "../../shared/src/progression.ts";
-import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
+import type { MoveMsg, ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { HUB_ROOM, type RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
 import type { Input } from "./Input.ts";
@@ -37,12 +37,12 @@ import { Net } from "./Net.ts";
 import { ParkourHud } from "./ParkourHud.ts";
 import { PlayerController } from "./PlayerController.ts";
 import { RemotePlayers } from "./RemotePlayers.ts";
-import { Royale } from "./royale/Royale.ts";
+import { Royale, rockModel } from "./royale/Royale.ts";
 import { BOSSES } from "../../shared/src/bosses.ts";
 import { BossView } from "./bosses/BossView.ts";
 import { CtfView } from "./ctf/CtfView.ts";
 import { ServerClock } from "./ServerClock.ts";
-import { animateAvatar, createAvatar, dieAvatar, disposeAvatar, reviveAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
+import { animateAvatar, createAvatar, dieAvatar, disguiseAvatar, disposeAvatar, reviveAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
 
 const DEATH_VIEW_MS = 1800; // how long your own fall takes before spectating
 import { lookOf } from "../../shared/src/unlocks.ts";
@@ -58,16 +58,16 @@ const SHADOW_RANGE = 40;
 const SUN_DISTANCE = 45; // the shadow-casting light sits this far toward the sun
 
 // The controls line at the bottom left, per mode.
-const MOVE_HELP = "WASD move \u00b7 Shift (or W W) run \u00b7 Space jump";
+const MOVE_HELP = "WASD move \u00b7 Shift (or W W) run \u00b7 Space jump \u00b7 C crouch";
 const HELP: Record<string, string> = {
   // (V third person is added to every mode in applyPerks)
   hub: "E use",
   parkour: "R restart run",
   tag: "Click tag \u00b7 R respawn",
   infection: "Click curse \u00b7 R respawn",
-  royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
-  boss: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball",
-  ctf: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 grab the enemy flag",
+  royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball \u00b7 F powerup",
+  boss: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball \u00b7 F powerup",
+  ctf: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 F powerup \u00b7 grab the enemy flag",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
 const STEP_EVERY = 2.1; // meters walked per footstep sound
@@ -110,6 +110,7 @@ export class Game {
   private selfAvatar: THREE.Group | null = null;
   private invertUntil = 0; // Inversion: the camera rolled upside down until then
   private giantUntil = 0; // your own Giant Form
+  private rockOn = false; // your own Rock Disguise
   private spinUntil = 0; // caught in a tornado: the view turns on its own
   private deathAt = -Infinity; // knocked out: the view drops and tilts, then you spectate
   private selfLast = new THREE.Vector3();
@@ -231,6 +232,11 @@ export class Game {
         onInvert: (ms) => (this.invertUntil = performance.now() + ms),
         onGiant: (ms) => (this.giantUntil = performance.now() + ms),
         onSpin: (ms) => (this.spinUntil = performance.now() + ms),
+        onMultiJump: (seconds, jumps) => this.player.multiJump(seconds, jumps),
+        onRock: (on) => {
+          this.rockOn = on;
+          if (this.selfAvatar) disguiseAvatar(this.selfAvatar, on ? rockModel() : null);
+        },
         onDeath: () => {
           this.deathAt = performance.now();
           if (this.selfAvatar) dieAvatar(this.selfAvatar);
@@ -459,7 +465,7 @@ export class Game {
         break;
       case "moved":
         this.clock.note(msg.time);
-        this.remotes.push(msg.id, msg.p, msg.ry, msg.time);
+        this.remotes.push(msg.id, msg.p, msg.ry, msg.time, !!msg.c);
         break;
       case "leave":
         this.remotes.remove(msg.id);
@@ -799,6 +805,7 @@ export class Game {
     this.thirdPerson = on;
     if (on && !this.selfAvatar) {
       this.selfAvatar = createAvatar(this.myId, this.name, lookOf(this.profile.loadout), this.profile.isAdmin, { nameTag: false });
+      if (this.rockOn) disguiseAvatar(this.selfAvatar, rockModel());
       this.scene.add(this.selfAvatar);
     }
     if (this.selfAvatar) this.selfAvatar.visible = on;
@@ -817,7 +824,7 @@ export class Game {
     this.selfLast.copy(pos);
     const speed = dt > 0 && moved / dt < 30 ? moved / dt : 0;
     this.selfSpeed += (speed - this.selfSpeed) * Math.min(1, dt * 10);
-    animateAvatar(a, performance.now(), this.selfSpeed);
+    animateAvatar(a, performance.now(), this.selfSpeed, this.player.crouched ? 1 : 0);
     const scale = performance.now() < this.giantUntil ? GIANT.scale : 1;
     a.scale.setScalar(a.scale.x + (scale - a.scale.x) * 0.15);
     a.position.y += (a.scale.x - 1) * 0.9;
@@ -835,12 +842,17 @@ export class Game {
     this.camera.position.addScaledVector(dir, dist);
   }
 
+  // Your eyes above your position (lower while crouching, eased).
+  private eyeHeight(): number {
+    return EYE_HEIGHT - this.player.crouchBlend * CROUCH_DROP;
+  }
+
   // Where spells and attacks come from (your eyes) and go (where the
   // crosshair points: in third person, toward what the camera's ray hits).
   private aim(): { origin: THREE.Vector3; dir: THREE.Vector3 } {
     const camDir = this.camera.getWorldDirection(new THREE.Vector3());
     const p = this.player.interpolate(this.accumulator / FIXED_DT);
-    const origin = new THREE.Vector3(p.x, p.y + EYE_HEIGHT, p.z);
+    const origin = new THREE.Vector3(p.x, p.y + this.eyeHeight(), p.z);
     if (!this.thirdPerson) return { origin, dir: camDir };
     const handle = this.player.colliderHandle;
     const hit = this.world.castRay(new RAPIER.Ray(this.camera.position, camDir), 120, true, undefined, undefined, undefined, undefined, (c) => c.handle !== handle);
@@ -909,8 +921,11 @@ export class Game {
         this.royale.ability(e ? 0 : 1, origin, dir);
       }
     }
-    // Admins: F toggles flying (Space up, C down, passes through walls).
-    if (this.input.consumeFly() && this.profile.isAdmin) {
+    // F uses the powerup you're carrying. Admins with empty pockets: F
+    // toggles flying (Space up, C down, passes through walls).
+    const f = this.input.consumeFly();
+    if (f && this.royale?.heldPowerup) this.royale.usePowerup();
+    else if (f && this.profile.isAdmin) {
       this.player.flying = !this.player.flying;
       this.addFeed(this.player.flying ? "Flying (F to land)" : "Flying off");
     }
@@ -950,7 +965,7 @@ export class Game {
 
     // Camera follows the interpolated player position.
     const pos = this.player.interpolate(this.accumulator / FIXED_DT);
-    this.camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
+    this.camera.position.set(pos.x, pos.y + this.eyeHeight(), pos.z);
     if (performance.now() < this.spinUntil) this.input.yaw += 9 * dt;
     this.camera.rotation.set(this.input.pitch, this.input.yaw, performance.now() < this.invertUntil ? Math.PI : 0);
     if (performance.now() < this.giantUntil) this.camera.position.y += 1.1; // see over things
@@ -977,7 +992,9 @@ export class Game {
       this.sendTimer %= NET_INTERVAL_MS;
       const p = this.player.position;
       const position: Vec3 = [round(p.x), round(p.y), round(p.z)];
-      this.net.send({ t: "move", p: position, ry: round(wrapAngle(this.input.yaw)), tp: this.teleportCount });
+      const move: MoveMsg = { t: "move", p: position, ry: round(wrapAngle(this.input.yaw)), tp: this.teleportCount };
+      if (this.player.crouched) move.c = true;
+      this.net.send(move);
     }
 
     this.remotes.update();

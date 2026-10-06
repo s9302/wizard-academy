@@ -2,7 +2,7 @@
 // fixed-rate "tick" for timers and game rules. Each mode (parkour, tag, battle
 // royale...) will be a subclass that overrides the hooks below.
 
-import type { ClientMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
+import type { ClientMsg, MovedMsg, MoveMsg, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import { MAX_PLAYERS_PER_ROOM, NET_INTERVAL_MS } from "../../../shared/src/constants.ts";
 import { inPit, type Level, onPad, PAD_RADIUS, type Pit, TELEPORT_RADIUS } from "../../../shared/src/levels/types.ts";
 import { GRAVITY } from "../../../shared/src/constants.ts";
@@ -21,6 +21,7 @@ export type Player = {
   conn: Peer; // a real player's connection, or a bot
   p: Vec3; // last accepted position
   ry: number;
+  crouch?: boolean; // crouching: 0.6 m shorter (p is still the standing center)
   tp: number; // how many times the server has teleported this player
   moveCheck: MoveCheck;
 };
@@ -207,6 +208,7 @@ export abstract class Room {
     const now = Date.now();
     player.p = msg.p;
     player.ry = msg.ry;
+    player.crouch = !!msg.c;
     this.relayMove(player, now);
     this.onPlayerMoved(player, from, msg.p, now);
     if (player.conn.room === this && this.players.get(player.conn.id) === player && player.tp === msg.tp) this.checkFeatures(player, now);
@@ -244,7 +246,9 @@ export abstract class Room {
   // Tell everyone else where this player is now. (The battle royale skips
   // this while someone has vanished, so nobody's game even knows.)
   protected relayMove(player: Player, now: number): void {
-    this.broadcast({ t: "moved", id: player.conn.id, p: player.p, ry: player.ry, time: now }, player.conn.id);
+    const moved: MovedMsg = { t: "moved", id: player.conn.id, p: player.p, ry: player.ry, time: now };
+    if (player.crouch) moved.c = true;
+    this.broadcast(moved, player.conn.id);
   }
 
   protected broadcast(msg: ServerMsg, exceptId?: number): void {

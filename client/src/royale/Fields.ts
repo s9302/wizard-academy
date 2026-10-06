@@ -42,14 +42,6 @@ export class Fields {
         sound.fx("rumble", { at: info.p });
         break;
       }
-      case "flames": {
-        const glow = new THREE.Mesh(new THREE.BoxGeometry(info.len ?? 10, 0.15, info.r * 2), glowMat("#ff6a1a", 2.5));
-        glow.position.y = 0.08;
-        glow.rotation.y = info.yaw ?? 0;
-        root.add(glow);
-        sound.fx("fireball", { at: info.p });
-        break;
-      }
       case "hellpit": {
         const rim = new THREE.Mesh(new THREE.RingGeometry(info.r - 0.4, info.r, 40), glowMat("#ff3a1a", 3));
         const hole = new THREE.Mesh(new THREE.CircleGeometry(info.r - 0.4, 40), new THREE.MeshBasicMaterial({ color: "#120404" }));
@@ -232,15 +224,6 @@ export class Fields {
         root.position.set(...fieldCenter(info, now));
         v.spin.forEach((m, i) => (m.rotation.y += dt * (6 + i * 2)));
         if (Math.random() < 0.7) particles.emit({ at: [root.position.x, root.position.y + 0.3, root.position.z], count: 2, color: "#b8b0a0", speed: 3, up: 3, spread: info.r, life: 0.7, size: 0.3 });
-      } else if (info.kind === "flames") {
-        // Flames along the line.
-        const len = info.len ?? 10;
-        const ax = Math.cos(info.yaw ?? 0);
-        const az = -Math.sin(info.yaw ?? 0);
-        for (let i = 0; i < 4; i++) {
-          const t = (Math.random() - 0.5) * len;
-          particles.emit({ at: [info.p[0] + ax * t, info.p[1] + 0.2, info.p[2] + az * t], count: 1, color: "#ffb347", color2: "#ff3a1a", speed: 0.6, up: 4, spread: info.r * 0.6, life: 0.6, size: 0.45, gravity: -2 });
-        }
       } else if (info.kind === "hellpit") {
         v.spin[0].rotation.z += dt * 2;
         if (Math.random() < 0.8) particles.emit({ at: [info.p[0], info.p[1] + 0.2, info.p[2]], count: 2, color: "#ff4a1a", color2: "#3a0000", speed: 0.5, up: 3, spread: info.r * 0.8, life: 0.9, size: 0.3, gravity: -1 });

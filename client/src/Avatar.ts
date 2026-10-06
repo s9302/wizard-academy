@@ -686,6 +686,7 @@ type AvatarParts = {
   aura: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   baseColor: THREE.Color;
   walk: number; // walk cycle phase, radians
+  crouch: number; // 0 standing .. 1 crouched, eased
   last: number; // performance.now() of the last animation frame
 };
 
@@ -967,6 +968,7 @@ export function createAvatar(id: number, name: string, look: Look, admin = false
     baseColor: new THREE.Color(),
     status: "runner",
     walk: 0,
+    crouch: 0,
     last: performance.now(),
   };
   group.userData.parts = parts;
@@ -1067,9 +1069,10 @@ export function setAvatarWeapon(group: THREE.Group, weapon: WeaponId | null): vo
   hand.add(model);
 }
 
-// Show a different body (Dragon Form): hides the player's own and puts
-// `model` in its place; null brings them back.
-export function disguiseAvatar(group: THREE.Group, model: THREE.Object3D | null): void {
+// Show a different body (Dragon Form, Rock Disguise): hides the player's own
+// and puts `model` in its place; null brings them back. hideTags: hide the
+// name, health bar and team ring too (a rock shouldn't have a name).
+export function disguiseAvatar(group: THREE.Group, model: THREE.Object3D | null, hideTags = false): void {
   const parts = group.userData.parts as AvatarParts;
   const old = group.userData.disguise as THREE.Object3D | undefined;
   if (old) {
@@ -1080,6 +1083,18 @@ export function disguiseAvatar(group: THREE.Group, model: THREE.Object3D | null)
   parts.rig.body.visible = !model;
   parts.hat.visible = !model;
   if (model) group.add(model);
+  const hide = !!model && hideTags;
+  const wasHidden = !!group.userData.hideTags;
+  group.userData.hideTags = hide;
+  if (hide === wasHidden) return;
+  for (const child of group.children) {
+    if (child instanceof THREE.Sprite || child.name === "team-ring") {
+      if (hide) {
+        child.userData.shownBefore = child.visible;
+        child.visible = false;
+      } else child.visible = child.userData.shownBefore ?? true;
+    }
+  }
 }
 
 // ---- Dying ----
@@ -1132,7 +1147,8 @@ export function swingAvatar(group: THREE.Group): void {
 }
 
 // Called every frame. speed: how fast it's moving over the ground (m/s).
-export function animateAvatar(group: THREE.Group, now: number, speed = 0): void {
+// crouch: 1 while crouching (the pose eases in and out).
+export function animateAvatar(group: THREE.Group, now: number, speed = 0, crouch = 0): void {
   const parts = group.userData.parts as AvatarParts | undefined;
   if (!parts) return;
   const dt = Math.min(0.1, Math.max(0, (now - parts.last) / 1000));
@@ -1148,6 +1164,19 @@ export function animateAvatar(group: THREE.Group, now: number, speed = 0): void 
   rig.legL.knee.rotation.x = -Math.max(0, -s) * amp * 1.3;
   rig.legR.knee.rotation.x = -Math.max(0, s) * amp * 1.3;
   rig.body.position.y = Math.abs(Math.cos(parts.walk)) * 0.035 * amp * 2;
+  // Crouching: thighs forward, shins back, the body lower and leaning in.
+  // (Thigh 1.3 and shin -0.9 from vertical: the legs are ~0.48 m shorter.)
+  parts.crouch += (crouch - parts.crouch) * Math.min(1, dt * 14);
+  const c = parts.crouch;
+  if (c > 0.001) {
+    const lean = 0.25 * c;
+    rig.body.rotation.x = -lean;
+    rig.body.position.y = rig.body.position.y * (1 - c) - 0.48 * c;
+    for (const [leg, k] of [[rig.legL, s], [rig.legR, -s]] as const) {
+      leg.hip.rotation.x = leg.hip.rotation.x * (1 - c) + (1.3 + lean + k * amp * 0.25) * c;
+      leg.knee.rotation.x = leg.knee.rotation.x * (1 - c) - 2.2 * c;
+    }
+  } else rig.body.rotation.x = 0;
   // Idle: a slow breath.
   const breathe = Math.sin(now / 900) * 0.02;
   rig.head.rotation.x = breathe;
@@ -1287,7 +1316,8 @@ export function setAvatarHealth(group: THREE.Group, hp: number, shield: number):
     ctx.fillRect(3, BAR_H - 7, (BAR_W - 6) * shield, 4);
   }
   texture.needsUpdate = true;
-  bar.visible = true;
+  if (group.userData.hideTags) bar.userData.shownBefore = true;
+  else bar.visible = true;
 }
 
 export function hideAvatarHealth(group: THREE.Group): void {

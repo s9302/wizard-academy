@@ -32,7 +32,7 @@ import type { ServerClock } from "./ServerClock.ts";
 const INTERP_DELAY_MS = 120;
 const BUFFER_KEEP_MS = 1000;
 
-type Snapshot = { time: number; p: Vec3; ry: number };
+type Snapshot = { time: number; p: Vec3; ry: number; c?: boolean }; // c: crouching
 
 type Remote = {
   name: string;
@@ -142,10 +142,10 @@ export class RemotePlayers {
     remote.scaleUntil = performance.now() + ms;
   }
 
-  // Another body for a while (Dragon Form), or their own back (null).
-  disguise(id: number, model: THREE.Object3D | null): void {
+  // Another body for a while (Dragon Form, Rock Disguise), or their own back (null).
+  disguise(id: number, model: THREE.Object3D | null, hideTags = false): void {
     const remote = this.remotes.get(id);
-    if (remote) disguiseAvatar(remote.avatar, model);
+    if (remote) disguiseAvatar(remote.avatar, model, hideTags);
   }
 
   // Hide players who are out of the round (they're spectating).
@@ -231,10 +231,10 @@ export class RemotePlayers {
     for (const id of [...this.remotes.keys()]) this.remove(id);
   }
 
-  push(id: number, p: Vec3, ry: number, serverTime: number): void {
+  push(id: number, p: Vec3, ry: number, serverTime: number, crouch = false): void {
     const remote = this.remotes.get(id);
     if (!remote) return;
-    remote.snapshots.push({ time: serverTime, p, ry });
+    remote.snapshots.push({ time: serverTime, p, ry, c: crouch });
     const cutoff = serverTime - BUFFER_KEEP_MS;
     while (remote.snapshots.length > 2 && remote.snapshots[0].time < cutoff) {
       remote.snapshots.shift();
@@ -284,7 +284,7 @@ export class RemotePlayers {
       // Teleports (respawns) aren't walking.
       const speed = moved / dt < 30 ? moved / dt : 0;
       remote.speed += (speed - remote.speed) * Math.min(1, dt * 10);
-      animateAvatar(remote.avatar, now, remote.speed);
+      animateAvatar(remote.avatar, now, remote.speed, (t < 0.5 ? from : to).c ? 1 : 0);
     }
     this.lastUpdate = frameStart;
   }

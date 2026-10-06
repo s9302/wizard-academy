@@ -1,6 +1,9 @@
 // Battle royale pickups, floating and spinning where the server put them:
 // a Fire Tome (orange book), a Healing Draught (pink crystal), a Ward (blue
-// gem). Walking into one is all it takes; the server decides if you got it.
+// gem), and the powerups you carry until F: a Haste Charm (lightning bolt),
+// Cloud Boots (a cloud with wings), a Shadow Cloak (a hood) and a Fury Rune
+// (a red star in a ring). Walking into one is all it takes; the server
+// decides if you got it.
 
 import * as THREE from "three";
 import { type PickupKind, PICKUPS } from "../../../shared/src/combat.ts";
@@ -20,6 +23,39 @@ function makeItem(kind: PickupKind): THREE.Group {
     const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), mat);
     crystal.scale.y = 1.4;
     group.add(crystal);
+  } else if (kind === "haste") {
+    // A zigzag lightning bolt.
+    const bolt = new THREE.Shape();
+    for (const [i, [x, y]] of [[0.1, 0.45], [-0.18, 0.02], [0.02, 0.02], [-0.1, -0.45], [0.2, 0.06], [0, 0.06], [0.1, 0.45]].entries()) {
+      if (i === 0) bolt.moveTo(x, y);
+      else bolt.lineTo(x, y);
+    }
+    group.add(new THREE.Mesh(new THREE.ExtrudeGeometry(bolt, { depth: 0.1, bevelEnabled: false }).translate(0, 0, -0.05), mat));
+  } else if (kind === "quadjump") {
+    // A little cloud with a wing on each side.
+    for (const [x, y, r] of [[0, 0.05, 0.22], [-0.2, -0.02, 0.16], [0.2, -0.02, 0.16], [0.08, 0.15, 0.15]]) {
+      const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), mat);
+      puff.position.set(x, y, 0);
+      group.add(puff);
+    }
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.42, 4), mat);
+      wing.position.set(side * 0.42, 0.12, 0);
+      wing.rotation.z = side * -1.1;
+      group.add(wing);
+    }
+  } else if (kind === "cloak") {
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 6, 1, true), mat);
+    (hood.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+    group.add(hood);
+    const face = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: "#0b0612" }));
+    face.position.set(0, -0.08, 0.14);
+    group.add(face);
+  } else if (kind === "fury") {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.05, 6, 20), mat);
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.22), mat);
+    star.scale.set(1, 1.3, 0.5);
+    group.add(ring, star);
   } else {
     group.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.33, 0), mat));
   }

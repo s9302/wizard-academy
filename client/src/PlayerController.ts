@@ -9,6 +9,9 @@
 // - "Coyote time": you can still jump for a moment after walking off a ledge.
 //   "Jump buffering": pressing jump just before landing still counts. Both
 //   make platforming feel fair instead of frame-perfect.
+// - Crouching shrinks the capsule from the top: the collider gets shorter
+//   and slides down inside the body, so the feet (and the body's position,
+//   which is what we send) stay put. Standing back up waits for headroom.
 // - Perks (unlocked by leveling): a second jump in mid-air, and a short dash.
 //   The server's movement check already allows short bursts (it's built for
 //   lag spikes), so a dash fits inside it.
@@ -17,6 +20,8 @@ import { CLIMB_SPEED, type JumpPad, type Ladder, onLadder, onPad, PAD_RADIUS } f
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import {
+  CROUCH_DROP,
+  CROUCH_SPEED,
   GRAVITY,
   JUMP_SPEED,
   PLAYER_HALF_HEIGHT,
@@ -53,7 +58,8 @@ export class PlayerController {
   perks: Perks = { doubleJump: false, dash: false };
   flying = false; // admins only: no gravity, no walls
   speedMul = 1; // battle royale class (and the Knight's raised shield)
-  private airJumpUsed = false;
+  private airJumpsUsed = 0;
+  private quadLeft = 0; // seconds of Cloud Boots (a powerup) remaining
   private dashLeft = 0; // seconds of dash (or charge) remaining
   private burstSpeed = DASH_SPEED;
   private glideLeft = 0;
@@ -70,6 +76,9 @@ export class PlayerController {
   // Ladders and jump pads in this level (Phase 16).
   ladders: Ladder[] = [];
   jumpPads: JumpPad[] = [];
+  crouched = false;
+  crouchBlend = 0; // 0 standing .. 1 crouched, eased (the camera and body use it)
+  private standingShape = new RAPIER.Capsule(PLAYER_HALF_HEIGHT, PLAYER_RADIUS - 0.03);
   private slowLeft = 0; // seconds of Frost Shard slow remaining
   private slowFactor = 1;
   private previous = new THREE.Vector3();
@@ -164,6 +173,13 @@ export class PlayerController {
     return this.glideLeft > 0;
   }
 
+  // Cloud Boots: for `seconds`, jump this many times in a row before landing.
+  private quadJumps = 1;
+  multiJump(seconds: number, jumps: number): void {
+    this.quadLeft = seconds;
+    this.quadJumps = jumps;
+  }
+
   // Landed on someone's head: bounce off them.
   bounce(): void {
     this.velocityY = JUMP_SPEED * 1.1;
@@ -173,6 +189,19 @@ export class PlayerController {
   slow(seconds: number, factor: number): void {
     this.slowLeft = seconds;
     this.slowFactor = factor;
+  }
+
+  // Crouch, or stand back up if there's room above (else stay down).
+  private setCrouch(want: boolean): void {
+    if (want === this.crouched) return;
+    if (!want) {
+      const t = this.body.translation();
+      const blocked = this.world.intersectionWithShape({ x: t.x, y: t.y + 0.04, z: t.z }, { x: 0, y: 0, z: 0, w: 1 }, this.standingShape, undefined, undefined, this.collider);
+      if (blocked) return;
+    }
+    this.crouched = want;
+    this.collider.setHalfHeight(want ? PLAYER_HALF_HEIGHT - CROUCH_DROP / 2 : PLAYER_HALF_HEIGHT);
+    this.collider.setTranslationWrtParent({ x: 0, y: want ? -CROUCH_DROP / 2 : 0, z: 0 });
   }
 
   // Admin flight: move freely in the look direction's plane, Space up, C down.
@@ -200,11 +229,14 @@ export class PlayerController {
     this.glideLeft = Math.max(0, this.glideLeft - dt);
     this.soarLeft = Math.max(0, this.soarLeft - dt);
     this.frozenLeft = Math.max(0, this.frozenLeft - dt);
+    this.quadLeft = Math.max(0, this.quadLeft - dt);
     const frozen = this.frozenLeft > 0;
+    this.setCrouch(input.crouch && this.soarLeft === 0);
+    this.crouchBlend += ((this.crouched ? 1 : 0) - this.crouchBlend) * Math.min(1, dt * 14);
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
 
     // Horizontal movement relative to where the camera faces.
-    const speed = (input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1) * (this.glideLeft > 0 ? this.glideSpeed : 1) * (this.soarLeft > 0 ? this.soarSpeed : 1);
+    const speed = (this.crouched ? WALK_SPEED * CROUCH_SPEED : input.running ? RUN_SPEED : WALK_SPEED) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1) * (this.glideLeft > 0 ? this.glideSpeed : 1) * (this.soarLeft > 0 ? this.soarSpeed : 1);
     const sin = Math.sin(input.yaw);
     const cos = Math.cos(input.yaw);
     let dx = frozen ? 0 : -sin * input.forward + cos * input.strafe;
@@ -219,17 +251,18 @@ export class PlayerController {
     // Jumping, with coyote time and jump buffering.
     this.timeSinceJumpPressed = input.consumeJump() && !frozen ? 0 : this.timeSinceJumpPressed + dt;
     this.timeSinceGrounded = this.grounded ? 0 : this.timeSinceGrounded + dt;
-    if (this.grounded) this.airJumpUsed = false;
+    if (this.grounded) this.airJumpsUsed = 0;
+    const airJumps = this.quadLeft > 0 ? this.quadJumps - 1 : this.perks.doubleJump ? 1 : 0;
     if (this.timeSinceJumpPressed <= JUMP_BUFFER_TIME && this.timeSinceGrounded <= COYOTE_TIME) {
       this.velocityY = JUMP_SPEED;
       this.events.jumped = true;
       this.timeSinceJumpPressed = Infinity;
       this.timeSinceGrounded = Infinity;
-    } else if (this.perks.doubleJump && this.timeSinceJumpPressed === 0 && !this.grounded && !this.airJumpUsed) {
-      // Double jump: once per time in the air.
+    } else if (this.timeSinceJumpPressed === 0 && !this.grounded && this.airJumpsUsed < airJumps) {
+      // Double jump: once per time in the air (Cloud Boots: three times).
       this.velocityY = DOUBLE_JUMP_SPEED;
       this.events.jumped = true;
-      this.airJumpUsed = true;
+      this.airJumpsUsed += 1;
       this.timeSinceJumpPressed = Infinity;
     }
 

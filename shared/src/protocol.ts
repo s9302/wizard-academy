@@ -2,7 +2,7 @@
 // Client and server import these types so both sides agree on the shape.
 
 import type { ClassId, Hand, WeaponId } from "./classes.ts";
-import type { PickupKind, SpellId } from "./combat.ts";
+import type { PickupKind, PowerupKind, SpellId } from "./combat.ts";
 import type { Box } from "./levels/types.ts";
 import type { Hat, Look, PrimarySpell, Robe } from "./unlocks.ts";
 import type { Appearance } from "./appearance.ts";
@@ -22,7 +22,8 @@ export type HelloMsg = { t: "hello"; room: string; from?: string };
 // p = capsule center position, ry = yaw (facing direction) in radians.
 // tp = the number of the last server teleport the client has applied. The
 // server ignores moves sent before the client saw its latest teleport.
-export type MoveMsg = { t: "move"; p: Vec3; ry: number; tp: number };
+// c = crouching (p stays the standing capsule's center, 0.9 m above the feet).
+export type MoveMsg = { t: "move"; p: Vec3; ry: number; tp: number; c?: true };
 // "I fell off the level, put me somewhere safe."
 export type RespawnMsg = { t: "respawn" };
 
@@ -74,7 +75,10 @@ export type VoteMsg = { t: "vote"; arena: string };
 // kind: which monster to let in (the arena's Esc panel), or a mix.
 export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove"; kind?: MonsterKind | "mixed" };
 
-export type ClientMsg = HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg | ChaseSettingMsg | GrappleMsg;
+// Battle royale: use the powerup you're carrying (F).
+export type UsePowerupMsg = { t: "usePowerup" };
+
+export type ClientMsg = UsePowerupMsg | HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg | ChaseSettingMsg | GrappleMsg;
 
 // ---- Server -> Client ----
 
@@ -87,7 +91,7 @@ export type JoinMsg = { t: "join"; player: PlayerInfo; time: number };
 export type LeaveMsg = { t: "leave"; id: number };
 // Another player's position, relayed by the server. "time" is the server clock
 // (ms) when the server received it, which clients use for interpolation.
-export type MovedMsg = { t: "moved"; id: number; p: Vec3; ry: number; time: number };
+export type MovedMsg = { t: "moved"; id: number; p: Vec3; ry: number; time: number; c?: true };
 // The server moves your player: a respawn, or a snap back after a rejected move.
 export type TeleportMsg = { t: "teleport"; p: Vec3; tp: number; yaw?: number };
 export type ErrorMsg = { t: "error"; message: string };
@@ -142,6 +146,8 @@ export type PickupInfo = { id: number; kind: PickupKind; p: Vec3 };
 export type PickupsMsg = { t: "pickups"; items: PickupInfo[] };
 // Someone was hit by Frost Shard: slowed for ms (the player slows themselves).
 export type SlowedMsg = { t: "slowed"; id: number; ms: number };
+// To one player: the powerup you're carrying (null: none).
+export type HeldMsg = { t: "held"; kind: PowerupKind | null };
 // To one player: your fireball charges.
 export type ChargesMsg = { t: "charges"; fireball: number };
 
@@ -155,7 +161,7 @@ export type ArenaVoteMsg = { t: "arenaVote"; options: string[]; votes: Record<st
 export type ConjureMsg = { t: "conjure"; id: number; box: Box; ms: number };
 export type UnconjureMsg = { t: "unconjure"; id: number };
 // Someone vanished, fortified, charged or shadow-stepped (ms 0: it ended).
-export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment" | "spin" | "windstep" | "burn" | "freeze" | "whirlwind" | "frostnova" | "holynova" | "cyclone" | "fists" | "dragon" | "ascend" | "rally";
+export type EffectKind = "stealth" | "fortify" | "charge" | "blink" | "invert" | "giant" | "glide" | "shockwave" | "chain" | "heal" | "aegis" | "judgment" | "spin" | "windstep" | "burn" | "freeze" | "whirlwind" | "frostnova" | "holynova" | "cyclone" | "fists" | "dragon" | "ascend" | "rally" | "rock" | "haste" | "quadjump" | "fury";
 // id: who it's on (for chain: who was pulled; from = the Knight's position).
 export type EffectMsg = { t: "effect"; id: number; kind: EffectKind; ms: number; from?: Vec3; to?: Vec3 };
 // Level 11+ abilities: areas on the ground, being thrown, and Rogue copies.
@@ -253,6 +259,7 @@ export type ServerMsg =
   | ZoneMsg
   | PickupsMsg
   | ChargesMsg
+  | HeldMsg
   | SlowedMsg
   | LookMsg
   | LoadoutSavedMsg

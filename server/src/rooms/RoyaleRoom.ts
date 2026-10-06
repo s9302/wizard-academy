@@ -23,7 +23,6 @@ import {
   DECOYS,
   type FieldInfo,
   type FieldKind,
-  FLAMES,
   GIANT,
   GLIDE,
   HELLPIT,
@@ -98,6 +97,9 @@ import {
   STORM_START_RADIUS,
   stormCircle,
   TOME_CHARGES,
+  isPowerup,
+  POWERUPS,
+  type PowerupKind,
   WARD_SHIELD,
 } from "../../../shared/src/combat.ts";
 import { EYE_HEIGHT, GRAVITY, PLAYER_RADIUS, RUN_SPEED } from "../../../shared/src/constants.ts";
@@ -146,6 +148,9 @@ type Fighter = {
   slowedUntil: number; // Frost Shard (bots read this; players slow themselves)
   abilityReady: [number, number]; // E and R: server time each is ready
   stealthUntil: number; // Vanish
+  rockUntil: number; // Rock Disguise (Wizard)
+  held: PowerupKind | null; // the powerup in your pocket (F uses it)
+  furyUntil: number; // Fury Rune: hitting harder
   fortifyUntil: number; // Fortify
   chargeUntil: number; // Charge: moving fast, the first enemy touched is hit
   chargeHits: Set<number>; // who this charge already plowed through
@@ -190,6 +195,8 @@ const FORCE_TEAMS = process.env.ROYALE_TEAMS === "1";
 const TEAM_NAMES = ["Red", "Blue"];
 // Testing only: ROYALE_PICKUPS=all fills every pickup spot at the start.
 const START_FRACTION = process.env.ROYALE_PICKUPS === "all" ? 1 : PICKUP_START_FRACTION;
+// Testing only: ROYALE_PICKUP_KINDS=haste,fury spawns only those kinds.
+const PICKUP_KINDS = (process.env.ROYALE_PICKUP_KINDS?.split(",").filter((k) => k in PICKUPS) ?? []) as PickupKind[];
 // Testing only: ROYALE_STORM=off for exact damage checks.
 const NO_STORM = process.env.ROYALE_STORM === "off";
 
@@ -254,7 +261,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       // Rogue copies too: monsters fall for them like everyone else.
       prey: () => [
         ...[...this.players.values()]
-          .filter((p) => !p.conn.isAdmin && this.canBeHit(p.conn.id) && !this.isStealthed(p.conn.id))
+          .filter((p) => !p.conn.isAdmin && this.canBeHit(p.conn.id) && !this.unseen(p.conn.id))
           .map((p) => ({ id: p.conn.id, p: p.p })),
         ...[...this.decoys.values()].map((d) => ({ id: d.id, p: d.p })),
       ],
@@ -699,6 +706,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       slowedUntil: 0,
       abilityReady: [0, 0],
       stealthUntil: 0,
+      rockUntil: 0,
+      held: null,
+      furyUntil: 0,
       fortifyUntil: 0,
       chargeUntil: 0,
       chargeHits: new Set(),
@@ -714,6 +724,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       chargeKnocks: true,
     };
     const id = player.conn.id;
+    if (this.fighters.get(id)?.held && !player.conn.isBot) player.conn.send({ t: "held", kind: null }); // a new life, empty pockets
     this.fighters.set(id, f);
     const bot = this.bots.get(id);
     if (bot) {
@@ -784,6 +795,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     for (const player of this.players.values()) {
       const f = this.fighters.get(player.conn.id);
       if (f && f.stealthUntil && now >= f.stealthUntil) this.breakStealth(player);
+      if (f && f.rockUntil && now >= f.rockUntil) this.breakRock(player);
     }
     if (this.state !== "playing") return;
     this.stepStorm(now);
@@ -807,6 +819,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     else if (msg.t === "pickTeam") this.pickTeam(player, msg.team);
     else if (msg.t === "botSet") this.setBot(player, msg);
     else if (msg.t === "ability") this.ability(player, msg.slot, msg.d);
+    else if (msg.t === "usePowerup") this.usePowerup(player);
     else if (msg.t === "abilities") this.setAbilities(player, msg.cls, msg.e, msg.r);
     else if (msg.t === "monsters" && !player.conn.isBot) {
       const before = this.monsters.count;
@@ -855,6 +868,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const f = this.fighters.get(player.conn.id);
     if (!this.canAct(player, f) || now < f.handReadyAt) return;
     this.breakStealth(player);
+    this.breakRock(player);
     // Dragon Form: every attack is a blast of fire.
     if (now < f.dragonUntil) {
       if (now < f.nextCast.primary || this.inNullZone(player.p, now)) return;
@@ -935,6 +949,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   // A monster took a hit; finishing one off heals you a little.
   private hitMonster(id: number, amount: number, by: Player | null): void {
+    if (by && Date.now() < (this.fighters.get(by.conn.id)?.furyUntil ?? 0)) amount = Math.round(amount * POWERUPS.fury.damage);
     const decoy = this.decoys.get(id);
     if (decoy) {
       if (by?.conn.id !== decoy.owner) this.breakDecoy(id); // your own copies ignore you
@@ -980,6 +995,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (!this.canAct(player, f)) return;
     if (this.inNullZone(player.p, now)) return; // no magic in a Null Zone
     this.breakStealth(player);
+    this.breakRock(player);
     const def = SPELLS[msg.spell];
     if (def.slot === "primary") {
       // Only a Wizard holding their spell, and only spells they've unlocked.
@@ -1034,7 +1050,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const casterPlayer = this.players.get(byMonster ? (owner ?? -1) : spell.caster) ?? null;
       for (const target of this.players.values()) {
         if (target.conn.id === spell.caster || target.conn.id === owner || !this.canBeHit(target.conn.id) || this.allies(casterPlayer, target) || (byMonster && target.conn.isAdmin)) continue;
-        const t = segmentHitsPlayer(spell.p, to, target.p, def.radius);
+        const t = segmentHitsPlayer(spell.p, to, target.p, def.radius, target.crouch);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
           hitPlayer = target;
@@ -1132,6 +1148,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (!f || !this.alive.has(id) || raw <= 0 || target.conn.isAdmin) return false; // admins can't be hurt
     if (attacker && attacker !== target && this.allies(attacker, target)) return false; // on the same side
     if (Date.now() < f.evadeUntil) return false; // Evasion: nothing touches you
+    if (attacker && attacker !== target && Date.now() < (this.fighters.get(attacker.conn.id)?.furyUntil ?? 0)) raw *= POWERUPS.fury.damage;
     let amount = raw * (1 - CLASSES[f.cls].defense) * (Date.now() < f.fortifyUntil ? FORTIFY_FACTOR : 1) * (Date.now() < f.giantUntil ? GIANT.taken : 1) * (Date.now() < f.judgedUntil ? JUDGMENT.factor : 1) * (Date.now() < f.barkUntil ? BARKSKIN.taken : 1) * (Date.now() < f.dragonUntil ? DRAGON.taken : 1) * (Date.now() < f.ascendUntil ? ASCEND.taken : 1) * (Date.now() < f.rallyUntil ? WARCRY.taken : 1);
     const held = WEAPONS[weaponOf(f.cls, f.hand)];
     const blocked =
@@ -1142,6 +1159,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     f.shield -= absorbed;
     f.hp = Math.max(0, f.hp - (amount - absorbed));
     this.broadcast({ t: "health", id, hp: f.hp, max: f.maxHp, shield: f.shield });
+    if (attacker || source) this.breakRock(target); // a rock that says "ouch" isn't a rock (the storm doesn't give you away)
     if (f.hp > 0) return blocked;
 
     this.alive.delete(id);
@@ -1222,7 +1240,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private spawnPickup(spot: number): void {
     const p = this.level.pickupSpots?.[spot];
     if (!p) return;
-    const kinds = Object.keys(PICKUPS) as PickupKind[];
+    const kinds = PICKUP_KINDS.length ? PICKUP_KINDS : (Object.keys(PICKUPS) as PickupKind[]);
     let roll = Math.random() * kinds.reduce((sum, k) => sum + PICKUPS[k].weight, 0);
     const kind = kinds.find((k) => (roll -= PICKUPS[k].weight) < 0) ?? "tome";
     const id = nextPickupId++;
@@ -1251,7 +1269,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.pickups.delete(item.id);
         this.respawnAt.set(item.spot, now + PICKUP_RESPAWN_MS * SCALE);
         this.broadcastPickups();
-        player.conn.send({ t: "announce", text: `You picked up a ${PICKUPS[item.kind].name}.` });
+        const name = PICKUPS[item.kind].name;
+        player.conn.send({ t: "announce", text: isPowerup(item.kind) ? `You picked up a ${name}. Press F to use it.` : `You picked up a ${name}.` });
       }
       return;
     }
@@ -1289,6 +1308,20 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     super.relayMove(player, Date.now()); // here they are
   }
 
+  // Rock Disguise ends (time's up, or they attacked or were hit).
+  private breakRock(player: Player): void {
+    const f = this.fighters.get(player.conn.id);
+    if (!f || !f.rockUntil) return;
+    f.rockUntil = 0;
+    this.broadcast({ t: "effect", id: player.conn.id, kind: "rock", ms: 0 });
+  }
+
+  // Bots, monsters and auto-aimed abilities pass over the vanished and over
+  // a Wizard who looks like a rock.
+  private unseen(id: number, now = Date.now()): boolean {
+    return this.isStealthed(id, now) || (this.fighters.get(id)?.rockUntil ?? 0) > now;
+  }
+
   // E (slot 0) or R (slot 1): whatever this player's class has there.
   ability(player: Player, slot: 0 | 1, d: Vec3): void {
     const now = Date.now();
@@ -1307,6 +1340,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     }
     f.abilityReady[slot] = now + ABILITIES[id].cooldownMs * COOLDOWN_SLACK;
     if (id !== "stealth" && id !== "blink" && id !== "smoke" && id !== "decoys") this.breakStealth(player);
+    if (id !== "rock") this.breakRock(player);
   }
 
   // Returns why it didn't work, or null.
@@ -1409,12 +1443,11 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.addField({ kind: "tornado", owner: pid, p: start, r: TORNADO.radius, d: [flat[0], 0, flat[1]] }, Math.min(ms, (TORNADO.range / TORNADO.speed) * 1000), now);
         return null;
       }
-      case "flames": {
-        const spot = this.aimedFloor(player, d);
-        if (!spot) return "Nothing to burn there.";
-        this.addField({ kind: "flames", owner: pid, p: spot, r: FLAMES.width / 2, yaw: Math.atan2(-d[0], -d[2]), len: FLAMES.length }, ms, now);
+      case "rock":
+        // A boulder: others draw a rock; bots and monsters pass it by.
+        f.rockUntil = now + ms;
+        this.broadcast({ t: "effect", id: pid, kind: "rock", ms });
         return null;
-      }
       case "hellpit": {
         // Anywhere: where your aim meets the ground, or (aiming at the sky or
         // over an edge) the ground at the end of your aim.
@@ -1648,7 +1681,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         const from = eye(player.p);
         const targets: { p: Vec3; ry: number; hit: () => void }[] = [];
         for (const t of this.players.values()) {
-          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || this.isStealthed(t.conn.id) || this.shielded(t.p, now)) continue;
+          if (t === player || !this.canBeHit(t.conn.id) || t.conn.isAdmin || this.allies(player, t) || this.unseen(t.conn.id) || this.shielded(t.p, now)) continue;
           if (dist3(t.p, player.p) > PHANTOM.range || !lineOfSight(from, eye(t.p), this.allBoxes())) continue;
           targets.push({ p: t.p, ry: t.ry, hit: () => this.state === "playing" && this.damage(t, PHANTOM.damage, player, player.p) });
         }
@@ -1845,7 +1878,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     for (const target of this.players.values()) {
       if (target === player || !this.canBeHit(target.conn.id) || target.conn.isAdmin) continue;
       if (this.allies(player, target)) continue;
-      const t = segmentHitsPlayer(from, end, target.p, 0.7);
+      const t = segmentHitsPlayer(from, end, target.p, 0.7, target.crouch);
       if (t !== null && t < bestT) {
         bestT = t;
         best = target;
@@ -1862,7 +1895,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     let bestT = segmentHitsLevel(from, end, this.allBoxes(), 0.05) ?? 1;
     for (const target of this.players.values()) {
       if (!this.allies(player, target) || !this.alive.has(target.conn.id)) continue;
-      const t = segmentHitsPlayer(from, end, target.p, 0.9);
+      const t = segmentHitsPlayer(from, end, target.p, 0.9, target.crouch);
       if (t !== null && t < bestT) {
         bestT = t;
         best = target;
@@ -1968,16 +2001,16 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         }
         continue;
       }
-      const hurts = field.kind === "flames" || field.kind === "hellpit" || field.kind === "entangle" || field.kind === "blackhole";
+      const hurts = field.kind === "hellpit" || field.kind === "entangle" || field.kind === "blackhole";
       if (field.kind === "tornado") {
         this.stepTornado(field, owner, now);
       } else if (hurts && now >= field.nextTick) {
         field.nextTick = now + FIELD_TICK_MS;
-        const dps = field.kind === "flames" ? FLAMES.dps : field.kind === "entangle" ? ENTANGLE.dps : field.kind === "blackhole" ? BLACKHOLE.dps : HELLPIT.dps;
+        const dps = field.kind === "entangle" ? ENTANGLE.dps : field.kind === "blackhole" ? BLACKHOLE.dps : HELLPIT.dps;
         const amount = Math.round((dps * FIELD_TICK_MS) / 1000);
         for (const target of this.players.values()) {
           if (target.conn.id === field.owner || !this.alive.has(target.conn.id) || !inField(field, target.p, now) || this.shielded(target.p, now)) continue;
-          if (this.state === "playing") this.damage(target, amount, owner, field.p, field.kind === "flames" ? "burned up" : "was dragged into the pit");
+          if (this.state === "playing") this.damage(target, amount, owner, field.p, "was dragged into the pit");
           if (field.kind === "entangle" && !this.allies(owner, target) && !this.unstoppable(target, now)) {
             const f = this.fighters.get(target.conn.id);
             if (f) f.slowedUntil = now + 500;
@@ -2244,6 +2277,13 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const id = player.conn.id;
     const f = this.fighters.get(id);
     if (!f) return false;
+    if (isPowerup(kind)) {
+      // One in your pocket at a time (bots leave them for the humans).
+      if (f.held || player.conn.isBot) return false;
+      f.held = kind;
+      player.conn.send({ t: "held", kind });
+      return true;
+    }
     if (kind === "tome") {
       if (f.fireball >= MAX_FIREBALL_CHARGES) return false;
       f.fireball = Math.min(MAX_FIREBALL_CHARGES, f.fireball + TOME_CHARGES);
@@ -2259,6 +2299,36 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     }
     this.broadcast({ t: "health", id, hp: f.hp, max: f.maxHp, shield: f.shield });
     return true;
+  }
+
+  // F: use the powerup you're carrying. Each works once.
+  private usePowerup(player: Player): void {
+    const now = Date.now();
+    const f = this.fighters.get(player.conn.id);
+    if (!this.canAct(player, f) || !f.held) return;
+    const kind = f.held;
+    const id = player.conn.id;
+    f.held = null;
+    player.conn.send({ t: "held", kind: null });
+    const ms = POWERUPS[kind].ms;
+    switch (kind) {
+      case "haste":
+        // The player speeds themselves up; let the extra distance through.
+        player.moveCheck.grant(RUN_SPEED * CLASSES[f.cls].speed * (POWERUPS.haste.speed - 1) * (ms / 1000) + 3);
+        break;
+      case "quadjump":
+        // Four jumps' worth of climb at once (a jump rises ~1.2 m).
+        player.moveCheck.grantUp(POWERUPS.quadjump.jumps * 1.3 + 1);
+        break;
+      case "cloak":
+        f.stealthUntil = now + ms;
+        this.broadcast({ t: "effect", id, kind: "stealth", ms });
+        return;
+      case "fury":
+        f.furyUntil = now + ms;
+        break;
+    }
+    this.broadcast({ t: "effect", id, kind, ms });
   }
 
   // ---- Arena features (Phase 16) ----
@@ -2360,7 +2430,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // Who a bot fights: other fighters, and monsters that come close.
   protected botEnemies(me: Player, now: number): Player[] {
     return [
-      ...[...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id) && !this.isStealthed(p.conn.id, now) && !this.allies(me, p)),
+      ...[...this.players.values()].filter((p) => p !== me && this.canBeHit(p.conn.id) && !this.unseen(p.conn.id, now) && !this.allies(me, p)),
       ...this.bodies()
         .filter((m) => Math.hypot(m.p[0] - me.p[0], m.p[2] - me.p[2]) < 14)
         .map((m) => bodyAsEnemy(m)),

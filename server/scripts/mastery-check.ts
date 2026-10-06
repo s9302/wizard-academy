@@ -103,13 +103,18 @@ const a = await enter(await signIn(base, pin, adminUser, adminPassword));
 
 // ---- Alone (waiting for players): every ability does something ----
 await a.become("wizard");
-check("an admin (level 11+) can equip the new abilities", (await a.equip("wizard", "tornado", "flames"))?.t === "abilitySet");
+check("an admin (level 11+) can equip the new abilities", (await a.equip("wizard", "tornado", "rock"))?.t === "abilitySet");
 let mark = a.msgs.length;
 a.use(0);
 a.use(1);
 await sleep(400);
 const f1 = kinds(a.since(mark), "field").map((m) => (m.t === "field" ? m.field.kind : ""));
-check("Tornado and Wall of Flame appear", f1.includes("tornado") && f1.includes("flames"), f1.join(", "));
+check("Tornado appears", f1.includes("tornado"), f1.join(", "));
+check("Rock Disguise turns you into a rock", a.since(mark).some((m) => m.t === "effect" && m.kind === "rock" && m.ms > 0 && m.id === a.me.id));
+mark = a.msgs.length;
+a.send({ t: "attack", o: [a.me.pos[0], a.me.pos[1] + EYE_HEIGHT, a.me.pos[2]], d: [0, 0, -1], seq: 900 });
+await sleep(300);
+check("...and attacking turns you back", a.since(mark).some((m) => m.t === "effect" && m.kind === "rock" && m.ms === 0));
 
 await a.become("wizard");
 await a.equip("wizard", "hellpit", "invert");
@@ -171,7 +176,7 @@ await a.equip("wizard", "invert", "shockwave");
 // ---- A level 1 player can't have them ----
 const b = await enter(await signIn(base, pin, "test_mastery_b"));
 await sleep(500);
-const got = await b.equip("wizard", "tornado", "flames");
+const got = await b.equip("wizard", "tornado", "rock");
 check("a level 1 player can't equip them", got?.t !== "abilitySet" || got.e !== "tornado", JSON.stringify(got));
 
 // ---- In a round: they hit people ----
