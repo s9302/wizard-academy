@@ -8,3 +8,4 @@ dist/
 # Cloudflare tunnel credentials must never be committed (Phase 2)
 *.json.cred
 cloudflared/
+.DS_Store
