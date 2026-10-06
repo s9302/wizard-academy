@@ -92,9 +92,9 @@ export class ArenaKit {
 
   // A tree: trunk and two blocks of leaves (solid: you can hide behind it).
   tree(x: number, z: number, scale = 1, floor = 0): this {
-    this.boxes.push({ pos: [x, floor + 1.2 * scale, z], size: [0.6 * scale, 2.4 * scale, 0.6 * scale], color: "#6b4a30" });
-    this.boxes.push({ pos: [x, floor + 3.1 * scale, z], size: [2.8 * scale, 1.8 * scale, 2.8 * scale], color: "#3f8a4a" });
-    this.boxes.push({ pos: [x, floor + 4.4 * scale, z], size: [1.7 * scale, 1.1 * scale, 1.7 * scale], color: "#4f9a55" });
+    this.boxes.push({ pos: [x, floor + 1.2 * scale, z], size: [0.6 * scale, 2.4 * scale, 0.6 * scale], color: "#6b4a30", part: "trunk" });
+    this.boxes.push({ pos: [x, floor + 3.1 * scale, z], size: [2.8 * scale, 1.8 * scale, 2.8 * scale], color: "#3f8a4a", part: "leaves" });
+    this.boxes.push({ pos: [x, floor + 4.4 * scale, z], size: [1.7 * scale, 1.1 * scale, 1.7 * scale], color: "#4f9a55", part: "leaves" });
     return this;
   }
 

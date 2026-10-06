@@ -63,8 +63,8 @@
 			# (privately: they're behind the PIN). index.html is revalidated so
 			# updates show up on reload.
 			@assets path /assets/*
-			@audio path /audio/* /textures/*
-			@other not path /assets/* /audio/* /textures/*
+			@audio path /audio/* /textures/* /oga/*
+			@other not path /assets/* /audio/* /textures/* /oga/*
 			header @assets Cache-Control "private, max-age=31536000, immutable"
 			# Music, sound effects and the texture atlas: big and rarely changed, so a day.
 			header @audio Cache-Control "private, max-age=86400"

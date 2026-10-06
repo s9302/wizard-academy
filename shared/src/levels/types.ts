@@ -22,6 +22,9 @@ export type Box = {
   glow?: number;
   // Solid but not drawn: a prop (a tree, say) stands where it is.
   invisible?: boolean;
+  // Part of a block tree (ArenaKit.tree): the OpenGameArt look swaps the
+  // blocks for a tree model standing on the trunk.
+  part?: "trunk" | "leaves";
 };
 
 // Decoration the client draws; the server never looks at it. Anything solid

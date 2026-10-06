@@ -8,6 +8,7 @@
 // by a small shader from the direction you're looking.
 
 import * as THREE from "three";
+import { swapLook } from "./graphics/textures.ts";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 export type SkyStyle = "day" | "dusk" | "golden" | "night";
@@ -162,7 +163,38 @@ export class Sky {
 
     if (clouds) this.makeClouds(parent, p.cloud);
     if (clouds && p.stars) this.makeStars(parent, p.sunElevation < 20 ? 0.45 : 1);
+
+    // The OpenGameArt look: Kenney's sky panorama (with its own clouds), and
+    // a sun flare, or the moon at night, where the light comes from.
+    swapLook(this.dome, [this.dome, ...this.clouds], (a) => {
+      const kind = style === "night" ? "night" : style === "day" ? "day" : "morning";
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(DOME_RADIUS, 48, 24),
+        new THREE.MeshBasicMaterial({ map: a.sky[kind], side: THREE.BackSide, depthWrite: false, fog: false }),
+      );
+      sphere.renderOrder = -2;
+      sphere.frustumCulled = false;
+      const night = style === "night";
+      const orb = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: night ? a.moon : a.sun,
+          blending: night ? THREE.NormalBlending : THREE.AdditiveBlending,
+          color: night ? "#ffffff" : p.sun,
+          depthWrite: false,
+          fog: false,
+          toneMapped: false,
+        }),
+      );
+      orb.scale.setScalar(DOME_RADIUS * (night ? 0.13 : 0.3));
+      orb.renderOrder = -1;
+      orb.frustumCulled = false;
+      parent.add(sphere, orb);
+      this.oga = { sphere, orb };
+      return [sphere, orb];
+    });
   }
+
+  private oga: { sphere: THREE.Mesh; orb: THREE.Sprite } | null = null;
 
   // Each cloud is a handful of squashed, flat-shaded blobs merged into one mesh.
   private makeClouds(parent: THREE.Object3D, color: string): void {
@@ -217,6 +249,10 @@ export class Sky {
   update(camera: THREE.Camera, dt: number): void {
     this.dome.position.copy(camera.position);
     this.stars?.position.copy(camera.position);
+    if (this.oga) {
+      this.oga.sphere.position.copy(camera.position);
+      this.oga.orb.position.copy(camera.position).addScaledVector(this.sunDirection, DOME_RADIUS * 0.85);
+    }
     for (const cloud of this.clouds) {
       cloud.position.x += CLOUD_DRIFT * dt;
       if (cloud.position.x > CLOUD_RANGE) cloud.position.x -= CLOUD_RANGE * 2;

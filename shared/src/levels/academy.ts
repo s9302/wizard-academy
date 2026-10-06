@@ -93,7 +93,18 @@ for (let x = -AW + 1; x <= AW - 1; x += 2) boxes.push({ pos: [x, 14.4, FRONT - 0
 // The great doors stand open (swung back inside), and the steps up to them.
 for (const s of [-1, 1]) boxes.push({ pos: [s * 3.2, 4, FRONT - 2.2], size: [0.3, 8, 3], color: WOOD });
 boxes.push({ pos: [0, 8.6, FRONT + 0.2], size: [7, 1.2, 0.4], color: STONE });
-for (let i = 0; i < 3; i++) boxes.push({ pos: [0, 0.15 + i * 0.3, FRONT + 2.4 - i * 0.8], size: [10 - i * 1.5, 0.3, 0.8], color: STONE });
+// Solid steps, each running back to the facade (no gaps under or behind
+// them), a threshold through the doorway, and two steps down inside.
+for (let i = 0; i < 3; i++) {
+  const top = 0.3 * (i + 1);
+  const depth = 2.8 - i * 0.8;
+  boxes.push({ pos: [0, top / 2, FRONT + depth / 2], size: [10 - i * 1.5, top, depth], color: STONE });
+}
+boxes.push({ pos: [0, 0.45, FRONT - 0.3], size: [6, 0.9, 0.6], color: STONE });
+for (let i = 0; i < 2; i++) {
+  const top = 0.6 - i * 0.3;
+  boxes.push({ pos: [0, top / 2, FRONT - 0.6 - 0.4 - i * 0.8], size: [6, top, 0.8], color: STONE });
+}
 // Lit windows below, stained glass above, and a rose window over the door.
 for (const x of [-26, -21, -16, -11, -6, 6, 11, 16, 21, 26]) {
   boxes.push({ pos: [x, 4, FRONT + 0.1], size: [1.8, 2.8, 0.2], color: WINDOW, glow: 2.2 });
@@ -132,8 +143,10 @@ props.push({ kind: "cone", pos: [0, 23.5, MID], size: [6, 12], color: ROOF });
 
 // ---- The Hall of Trials (inside the doors; always open) ----
 
-boxes.push({ pos: [0, 0.02, HALL_Z], size: [INNER * 2, 0.04, FRONT - MID - 1.2], color: STONE }); // floor
-boxes.push({ pos: [0, 0.05, HALL_Z], size: [2.6, 0.04, FRONT - MID - 1.4], color: CARPET });
+// The floor runs right up to the facade and the inner wall (through both
+// doorways), so no lawn shows at the thresholds.
+boxes.push({ pos: [0, 0.02, HALL_Z], size: [INNER * 2, 0.04, FRONT - MID], color: STONE }); // floor
+boxes.push({ pos: [0, 0.05, HALL_Z], size: [2.6, 0.04, FRONT - MID], color: CARPET });
 for (const x of [-7, 7]) for (const z of [HALL_Z + 6, HALL_Z - 6]) boxes.push({ pos: [x, 7, z], size: [0.8, 14, 0.8], color: STONE });
 // The inner wall, with the Sanctum's doors in the middle (Chapter III).
 for (const s of [-1, 1]) boxes.push({ pos: [s * (3 + (INNER - 3) / 2), 7, MID], size: [INNER - 3, 14, 0.6], color: WALL });
@@ -157,8 +170,8 @@ props.push({ kind: "crystal", pos: [18, 5.4, MID + 2.5], color: GOLD, scale: 0.6
 
 // ---- The Headmaster's Sanctum (behind the inner doors, Chapter III) ----
 
-boxes.push({ pos: [0, 0.02, SANC_Z], size: [INNER * 2, 0.04, MID - BACK - 1.2], color: STONE });
-boxes.push({ pos: [0, 0.05, SANC_Z], size: [2.6, 0.04, MID - BACK - 1.4], color: CARPET });
+boxes.push({ pos: [0, 0.02, (MID + BACK + 0.6) / 2], size: [INNER * 2, 0.04, MID - BACK - 0.6], color: STONE });
+boxes.push({ pos: [0, 0.05, (MID + BACK + 0.6) / 2], size: [2.6, 0.04, MID - BACK - 0.6], color: CARPET });
 for (const x of [-7, 7]) for (const z of [SANC_Z + 6, SANC_Z - 6]) boxes.push({ pos: [x, 7, z], size: [0.8, 14, 0.8], color: STONE });
 // Bookshelves along the back wall, between the three portals (further down).
 for (const cx of [-6.75, 6.75]) {

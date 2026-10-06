@@ -11,6 +11,10 @@ import { requirementText, UNLOCKS } from "../../../shared/src/unlocks.ts";
 import { Sign } from "./Sign.ts";
 import { addSurfaceAttributes, withSurfaceDetail } from "../graphics/surface.ts";
 import { quality } from "../quality.ts";
+import { pick, place } from "../graphics/ogaAssets.ts";
+import { swapLook } from "../graphics/textures.ts";
+
+const WINDOW = "#f2d98a"; // the academy's lit windows (shared/src/levels/academy.ts)
 
 // A stable pseudo-random number for a box (so colors don't change between visits).
 function hash(box: Box): number {
@@ -119,6 +123,9 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
   const q = quality();
   const solid: THREE.BufferGeometry[] = [];
   const glowing: THREE.BufferGeometry[] = [];
+  const treeParts: THREE.BufferGeometry[] = []; // block trees: swapped for models in the OpenGameArt look
+  const trunks: Box[] = [];
+  const windows: Box[] = []; // lit windows: the OpenGameArt look puts a window frame over them
   for (const box of level.boxes) {
     if (box.gate && unlocked.has(box.gate)) continue; // opened: not there at all
     addCollider(world, box);
@@ -133,20 +140,68 @@ export function buildLevel(scene: THREE.Object3D, world: RAPIER.World, level: Le
       g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
       g.applyMatrix4(boxMatrix(box));
       glowing.push(g);
+      if (box.color.toLowerCase() === WINDOW && !box.rot) windows.push(box);
+    } else if (box.part) {
+      treeParts.push(shadedBox(box, boxMatrix(box), level.id));
+      if (box.part === "trunk") trunks.push(box);
     } else solid.push(shadedBox(box, boxMatrix(box), level.id));
   }
+  const material = () =>
+    q === "ultra"
+      ? withSurfaceDetail(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 }), true)
+      : q === "high"
+        ? withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), true)
+        : withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), false, false); // the OpenGameArt textures only
   if (solid.length) {
-    const material =
-      q === "ultra"
-        ? withSurfaceDetail(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88, metalness: 0 }), true)
-        : q === "high"
-          ? withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), true)
-          : withSurfaceDetail(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), false, false); // the OpenGameArt textures only
-    const mesh = new THREE.Mesh(mergeGeometries(solid), material);
+    const mesh = new THREE.Mesh(mergeGeometries(solid), material());
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
     for (const g of solid) g.dispose();
+  }
+  if (treeParts.length) {
+    const blocks = new THREE.Mesh(mergeGeometries(treeParts), material());
+    blocks.castShadow = blocks.receiveShadow = true;
+    scene.add(blocks);
+    for (const g of treeParts) g.dispose();
+    // A Nature Kit tree standing on each trunk, as tall as the block tree.
+    swapLook(blocks, [blocks], (a) => [
+      place(
+        scene,
+        trunks.map((t) => {
+          const s = t.size[1] / 2.4;
+          const [x, y, z] = t.pos;
+          return { model: pick(a.trees, x, z), matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y - t.size[1] / 2, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), x * 1.7 + z), new THREE.Vector3(5 * s, 5 * s, 5 * s)) };
+        }),
+      ),
+    ]);
+  }
+  if (windows.length) {
+    // A mullioned window frame over each lit window, on both faces.
+    const marker = new THREE.Group();
+    scene.add(marker);
+    swapLook(marker, [], (a) => {
+      const group = new THREE.Group();
+      const m = new THREE.MeshLambertMaterial({ map: a.frame, color: "#4a3a2e", alphaTest: 0.5, side: THREE.DoubleSide });
+      for (const b of windows) {
+        const [w, h, d] = b.size;
+        const thin = d <= w && d <= h ? 2 : w <= h ? 0 : -1; // which axis is the window's thickness
+        if (thin < 0) continue;
+        const pw = thin === 2 ? w : d;
+        for (const side of [-1, 1]) {
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(pw, h), m);
+          mesh.position.set(...b.pos);
+          if (thin === 2) mesh.position.z += side * (d / 2 + 0.01);
+          else {
+            mesh.position.x += side * (w / 2 + 0.01);
+            mesh.rotation.y = Math.PI / 2;
+          }
+          group.add(mesh);
+        }
+      }
+      scene.add(group);
+      return [group];
+    });
   }
   if (glowing.length) {
     const mesh = new THREE.Mesh(mergeGeometries(glowing), new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));

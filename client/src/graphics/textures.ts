@@ -3,11 +3,16 @@
 // credits in public/textures/CREDITS.md). The choice is remembered in this
 // browser and switches at once: every level material reads the same uniforms.
 //
+// Props and the sky have OpenGameArt versions too (ogaAssets.ts): whoever
+// draws something registers both looks with swapLook(), and the toggle shows
+// one or the other.
+//
 // The textures come as one atlas image (a grid of square tiles, listed in
 // textureAtlas.ts), loaded the first time they're wanted and copied into a
 // texture array, so a block face just names its layer.
 
 import * as THREE from "three";
+import { loadOgaAssets, ogaAssets, type OgaAssets } from "./ogaAssets.ts";
 import { ATLAS, type TexFamily } from "./textureAtlas.ts";
 
 export type TextureSet = "classic" | "oga";
@@ -76,8 +81,39 @@ export async function setTextureSet(set: TextureSet): Promise<void> {
   } catch {
     // not remembered, but used for this visit
   }
-  if (set === "oga") await loadAtlas();
+  if (set === "oga") await Promise.all([loadAtlas(), loadOgaAssets()]);
   textureUniforms.uTexOn.value = current === "oga" ? 1 : 0;
+  applySwaps();
+}
+
+// ---- Two looks for props and the sky ----
+
+// classic: shown with the Classic set. build: makes the OpenGameArt version
+// (adding it to the scene itself), the first time it's shown.
+type Swap = { classic: THREE.Object3D[]; oga: THREE.Object3D[] | null; build: (a: OgaAssets) => THREE.Object3D[]; anchor: THREE.Object3D };
+const swaps = new Set<Swap>();
+const ogaOn = () => textureUniforms.uTexOn.value > 0.5;
+
+function applySwap(s: Swap): void {
+  const on = ogaOn();
+  const a = ogaAssets();
+  if (on && !s.oga && a) s.oga = s.build(a);
+  for (const o of s.classic) o.visible = !on;
+  for (const o of s.oga ?? []) o.visible = on;
+}
+function applySwaps(): void {
+  for (const s of swaps) {
+    if (!s.anchor.parent) swaps.delete(s); // its level is gone
+    else applySwap(s);
+  }
+}
+
+// Register an object (or several) with its OpenGameArt replacement. anchor:
+// an object that stays in the scene as long as these do (the level's group).
+export function swapLook(anchor: THREE.Object3D, classic: THREE.Object3D[], build: (a: OgaAssets) => THREE.Object3D[]): void {
+  const s: Swap = { classic, oga: null, build, anchor };
+  swaps.add(s);
+  applySwap(s);
 }
 
 // At startup: load the atlas if this browser chose it last time.

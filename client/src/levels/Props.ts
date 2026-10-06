@@ -13,7 +13,9 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Level, Prop } from "../../../shared/src/levels/types.ts";
+import { type OgaAssets, pick, place } from "../graphics/ogaAssets.ts";
 import { particles } from "../graphics/Particles.ts";
+import { swapLook } from "../graphics/textures.ts";
 import { quality } from "../quality.ts";
 
 const MAX_PROP_LIGHTS = 8; // Ultra only, on top of the level's own lights
@@ -154,6 +156,72 @@ function stainedGlassTexture(round: boolean): THREE.CanvasTexture {
   return t;
 }
 
+// ---- The OpenGameArt look (see graphics/ogaAssets.ts) ----
+
+// Stained glass: Shoehorn's gothic lead tracery over glowing jewel-toned
+// glass, clipped round for a rose window.
+const ogaGlass = new Map<string, THREE.CanvasTexture>();
+function ogaWindowTexture(a: OgaAssets, round: boolean, index: number): THREE.CanvasTexture {
+  const key = `${round}:${index}`;
+  const cached = ogaGlass.get(key);
+  if (cached) return cached;
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d")!;
+  const grad = g.createLinearGradient(0, 0, 256, 256);
+  const tones = [["#3a2a9a", "#7a4ad8", "#d86aa8"], ["#1f4a9a", "#5a3cff", "#ffb84a"], ["#5a1f7a", "#c84a8a", "#ffd25a"]][index % 3];
+  tones.forEach((t, i) => grad.addColorStop(i / (tones.length - 1), t));
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+  // Panes of slightly different tints, so the glass isn't one smooth wash.
+  let r = 77 + index;
+  const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 60; i++) {
+    g.fillStyle = `hsla(${200 + rnd() * 140}, 80%, ${45 + rnd() * 25}%, 0.25)`;
+    g.fillRect(rnd() * 256, rnd() * 256, 20 + rnd() * 50, 20 + rnd() * 50);
+  }
+  g.drawImage(a.tracery[index % a.tracery.length].image as CanvasImageSource, 0, 0, 256, 256);
+  if (round) {
+    g.globalCompositeOperation = "destination-in";
+    g.beginPath();
+    g.arc(128, 128, 126, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  ogaGlass.set(key, t);
+  return t;
+}
+
+// The models for this level's trees, pines, bushes, lamps and windows.
+function buildOgaProps(
+  parent: THREE.Object3D,
+  swapped: { trees: number[][]; pines: number[][]; bushes: number[][]; lamps: number[][]; windows: { p: number[]; w: number; h: number; yaw: number }[] },
+  a: OgaAssets,
+  bright: boolean,
+): THREE.Group {
+  const group = new THREE.Group();
+  parent.add(group);
+  const spin = (x: number, z: number) => Math.abs(Math.sin(x * 3.7 + z * 1.3)) * Math.PI * 2;
+  const placements: { model: (typeof a.trees)[number]; matrix: THREE.Matrix4 }[] = [];
+  for (const [x, y, z, s] of swapped.trees) placements.push({ model: pick(a.trees, x, z), matrix: at(x, y, z, spin(x, z), 5 * s) });
+  for (const [x, y, z, s] of swapped.pines) placements.push({ model: pick(a.pines, x, z), matrix: at(x, y, z, spin(x, z), 6 * s) });
+  // Bushes: a round tree's crown, its trunk sunk into the ground.
+  for (const [x, y, z, s] of swapped.bushes) placements.push({ model: pick(a.bushes, x, z), matrix: at(x, y - 0.8 * s, z, spin(x, z), 2.3 * s) });
+  for (const [x, y, z] of swapped.lamps) placements.push({ model: pick(a.lamps, x, z), matrix: at(x, y, z, spin(x, z), 3.6) });
+  place(group, placements);
+  swapped.windows.forEach((win, i) => {
+    const round = Math.abs(win.w - win.h) < 0.01;
+    const m = new THREE.MeshBasicMaterial({ map: ogaWindowTexture(a, round, i), transparent: round, toneMapped: false });
+    if (bright) m.color.setScalar(1.8);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(win.w, win.h), m);
+    mesh.position.set(win.p[0], win.p[1], win.p[2]);
+    mesh.rotation.y = win.yaw;
+    group.add(mesh);
+  });
+  return group;
+}
+
 // ---- Animated materials ----
 
 const time = { value: 0 };
@@ -231,6 +299,12 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
   const q = quality();
   const standard = q === "ultra";
   const batch = new Batch();
+  // Trees, bushes, lamps and stained glass have an OpenGameArt look too: their
+  // classic shapes go in their own group, swapped with the models.
+  const classic = new THREE.Group();
+  parent.add(classic);
+  const swapBatch = new Batch();
+  const swapped = { trees: [] as number[][], pines: [] as number[][], bushes: [] as number[][], lamps: [] as number[][], windows: [] as { p: number[]; w: number; h: number; yaw: number }[] };
   const animated: Animated[] = [];
   const flames: { pos: THREE.Vector3; light: THREE.PointLight | null; base: number }[] = [];
   const fountains: THREE.Vector3[] = [];
@@ -268,28 +342,31 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
     const yaw = p.yaw ?? 0;
     switch (p.kind) {
       case "tree": {
-        batch.add("#6b4a30", new THREE.CylinderGeometry(0.18, 0.3, 2.6, 7), at(x, y + 1.3 * s, z, 0, s));
+        swapped.trees.push([x, y, z, s]);
+        swapBatch.add("#6b4a30", new THREE.CylinderGeometry(0.18, 0.3, 2.6, 7), at(x, y + 1.3 * s, z, 0, s));
         const leaves = p.color ?? "#3f8a4a";
         for (let i = 0; i < 4; i++) {
           const r = (1.3 + rand() * 0.6) * s;
           const g = new THREE.IcosahedronGeometry(r, 0);
           const a = rand() * Math.PI * 2;
           const off = i === 0 ? 0 : 0.9 * s;
-          batch.add(vary(leaves), g, at(x + Math.cos(a) * off, y + (3 + rand() * 1.2) * s, z + Math.sin(a) * off, rand() * 3, 1, 0.85));
+          swapBatch.add(vary(leaves), g, at(x + Math.cos(a) * off, y + (3 + rand() * 1.2) * s, z + Math.sin(a) * off, rand() * 3, 1, 0.85));
         }
         break;
       }
       case "pine": {
-        batch.add("#5a3e28", new THREE.CylinderGeometry(0.15, 0.22, 1.6, 6), at(x, y + 0.8 * s, z, 0, s));
+        swapped.pines.push([x, y, z, s]);
+        swapBatch.add("#5a3e28", new THREE.CylinderGeometry(0.15, 0.22, 1.6, 6), at(x, y + 0.8 * s, z, 0, s));
         const c = p.color ?? "#2f6a46";
         for (let i = 0; i < 3; i++) {
-          batch.add(vary(c, 0.05), new THREE.ConeGeometry((1.7 - i * 0.45) * s, (2.0 - i * 0.3) * s, 7), at(x, y + (1.9 + i * 1.15) * s, z, rand() * 3));
+          swapBatch.add(vary(c, 0.05), new THREE.ConeGeometry((1.7 - i * 0.45) * s, (2.0 - i * 0.3) * s, 7), at(x, y + (1.9 + i * 1.15) * s, z, rand() * 3));
         }
         break;
       }
       case "bush":
+        swapped.bushes.push([x, y, z, s]);
         for (let i = 0; i < 3; i++) {
-          batch.add(vary(p.color ?? "#4f8a45"), new THREE.IcosahedronGeometry((0.55 + rand() * 0.3) * s, 0), at(x + (rand() - 0.5) * s, y + 0.45 * s, z + (rand() - 0.5) * s, rand() * 3, 1, 0.8));
+          swapBatch.add(vary(p.color ?? "#4f8a45"), new THREE.IcosahedronGeometry((0.55 + rand() * 0.3) * s, 0), at(x + (rand() - 0.5) * s, y + 0.45 * s, z + (rand() - 0.5) * s, rand() * 3, 1, 0.8));
         }
         break;
       case "rock":
@@ -321,12 +398,13 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
         break;
       }
       case "lamp": {
-        batch.add("#2c2838", new THREE.CylinderGeometry(0.07, 0.1, 2.8, 6), at(x, y + 1.4, z));
-        batch.add("#2c2838", new THREE.BoxGeometry(0.42, 0.06, 0.42), at(x, y + 2.83, z));
-        batch.add("#2c2838", new THREE.ConeGeometry(0.32, 0.3, 4), at(x, y + 3.33, z, Math.PI / 4));
+        swapped.lamps.push([x, y, z]);
+        swapBatch.add("#2c2838", new THREE.CylinderGeometry(0.07, 0.1, 2.8, 6), at(x, y + 1.4, z));
+        swapBatch.add("#2c2838", new THREE.BoxGeometry(0.42, 0.06, 0.42), at(x, y + 2.83, z));
+        swapBatch.add("#2c2838", new THREE.ConeGeometry(0.32, 0.3, 4), at(x, y + 3.33, z, Math.PI / 4));
         const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.3), glow("#ffd98a", 2.5));
         lantern.position.set(x, y + 3.02, z);
-        parent.add(lantern);
+        classic.add(lantern);
         if (p.light) addLight(new THREE.Vector3(x, y + 3, z), "#ffd08a", 8, 12);
         break;
       }
@@ -380,7 +458,8 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
         mesh.position.set(x, y, z);
         mesh.rotation.y = yaw;
-        parent.add(mesh);
+        classic.add(mesh);
+        swapped.windows.push({ p: [x, y, z], w, h, yaw });
         break;
       }
       default:
@@ -388,6 +467,8 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
     }
   }
   batch.build(parent, standard);
+  swapBatch.build(classic, standard);
+  swapLook(classic, [classic], (a) => [buildOgaProps(parent, swapped, a, q === "ultra")]);
 
   let emitClock = 0;
   return {
