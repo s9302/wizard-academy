@@ -31,6 +31,7 @@ export class Input {
       if (e.code === "KeyE" && !e.repeat && this.locked) this.interactQueued = true;
       if (e.code === "KeyF" && !e.repeat && this.locked) this.flyQueued = true;
       if (e.code === "KeyV" && !e.repeat && this.locked) this.viewQueued = true;
+      if (e.code === "KeyB" && !e.repeat && this.locked) this.broomQueued = true;
       // Double-tap W (or Up): run until you let go of it.
       if ((e.code === "KeyW" || e.code === "ArrowUp") && !e.repeat) {
         const now = performance.now();
@@ -147,6 +148,14 @@ export class Input {
   consumeView(): boolean {
     const queued = this.viewQueued;
     this.viewQueued = false;
+    return queued;
+  }
+
+  // Returns true once per B press (get on or off a broom).
+  broomQueued = false;
+  consumeBroom(): boolean {
+    const queued = this.broomQueued;
+    this.broomQueued = false;
     return queued;
   }
 

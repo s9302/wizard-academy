@@ -1,6 +1,7 @@
 // Every WebSocket message is a small JSON object with a "t" (type) field.
 // Client and server import these types so both sides agree on the shape.
 
+import type { HouseId } from "./houses.ts";
 import type { ClassId, Hand, WeaponId } from "./classes.ts";
 import type { PickupKind, PowerupKind, SpellId } from "./combat.ts";
 import type { Box } from "./levels/types.ts";
@@ -23,7 +24,7 @@ export type HelloMsg = { t: "hello"; room: string; from?: string };
 // tp = the number of the last server teleport the client has applied. The
 // server ignores moves sent before the client saw its latest teleport.
 // c = crouching (p stays the standing capsule's center, 0.9 m above the feet).
-export type MoveMsg = { t: "move"; p: Vec3; ry: number; tp: number; c?: true };
+export type MoveMsg = { t: "move"; p: Vec3; ry: number; tp: number; c?: true; b?: true }; // c: crouching, b: on a broom
 // "I fell off the level, put me somewhere safe."
 export type RespawnMsg = { t: "respawn" };
 
@@ -43,7 +44,7 @@ export type CastMsg = { t: "cast"; spell: SpellId; o: Vec3; d: Vec3; seq: number
 
 // Change what you use and wear (the Spellbook and Wardrobe in the hub). The
 // server checks each choice is unlocked, saves it, and shows others your look.
-export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: Robe } & Appearance;
+export type LoadoutMsg = { t: "loadout"; primary: PrimarySpell; hat: Hat; robe: Robe; house?: HouseId } & Appearance;
 
 // Battle royale classes: use the weapon in your hand (a swing, or a bow
 // shot from o along d), switch hands, or pick a class.
@@ -91,7 +92,7 @@ export type JoinMsg = { t: "join"; player: PlayerInfo; time: number };
 export type LeaveMsg = { t: "leave"; id: number };
 // Another player's position, relayed by the server. "time" is the server clock
 // (ms) when the server received it, which clients use for interpolation.
-export type MovedMsg = { t: "moved"; id: number; p: Vec3; ry: number; time: number; c?: true };
+export type MovedMsg = { t: "moved"; id: number; p: Vec3; ry: number; time: number; c?: true; b?: true };
 // The server moves your player: a respawn, or a snap back after a rejected move.
 export type TeleportMsg = { t: "teleport"; p: Vec3; tp: number; yaw?: number };
 export type ErrorMsg = { t: "error"; message: string };

@@ -17,7 +17,8 @@ import { type OgaAssets, pick, place } from "../graphics/ogaAssets.ts";
 import { particles } from "../graphics/Particles.ts";
 import { swapLook } from "../graphics/textures.ts";
 import { addBoard, resetBoards, tickBoards } from "../hub/hallOfFame.ts";
-import { paintingTexture } from "./paintings.ts";
+import { HOUSES } from "../../../shared/src/houses.ts";
+import { drawEmblem, paintingTexture } from "./paintings.ts";
 import { quality } from "../quality.ts";
 
 const MAX_PROP_LIGHTS = 8; // Ultra only, on top of the level's own lights
@@ -66,17 +67,8 @@ function vary(color: string, amount = 0.08): string {
 
 // ---- Canvas textures (banners, stained glass) ----
 
-function bannerTexture(color: string): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = 128;
-  c.height = 256;
-  const g = c.getContext("2d")!;
-  g.fillStyle = color;
-  g.fillRect(0, 0, 128, 256);
-  g.strokeStyle = "#e8c547";
-  g.lineWidth = 8;
-  g.strokeRect(10, 6, 108, 236);
-  // A wizard's hat and a star.
+// The academy's own banner device: a wizard's hat under a star.
+function hatAndStar(g: CanvasRenderingContext2D): void {
   g.fillStyle = "#e8c547";
   g.beginPath();
   g.moveTo(64, 70);
@@ -92,6 +84,23 @@ function bannerTexture(color: string): THREE.CanvasTexture {
     g.lineTo(64 + Math.cos(a) * r, 40 + Math.sin(a) * r);
   }
   g.fill();
+}
+
+function bannerTexture(color: string, emblem?: string): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 256;
+  const g = c.getContext("2d")!;
+  g.fillStyle = color;
+  g.fillRect(0, 0, 128, 256);
+  g.strokeStyle = "#e8c547";
+  g.lineWidth = 8;
+  g.strokeRect(10, 6, 108, 236);
+  if (emblem) {
+    // A house banner: its emblem instead of the academy's hat and star.
+    const house = Object.values(HOUSES).find((h) => h.emblem === emblem);
+    drawEmblem(g, emblem, 64, 96, 96, house?.trim ?? "#e8c547");
+  } else hatAndStar(g);
   // A swallowtail cut at the bottom (transparent).
   g.globalCompositeOperation = "destination-out";
   g.beginPath();
@@ -228,8 +237,8 @@ function buildOgaProps(
 
 const time = { value: 0 };
 
-function bannerMaterial(color: string): THREE.MeshLambertMaterial {
-  const m = new THREE.MeshLambertMaterial({ map: bannerTexture(color), side: THREE.DoubleSide, alphaTest: 0.5 });
+function bannerMaterial(color: string, emblem?: string): THREE.MeshLambertMaterial {
+  const m = new THREE.MeshLambertMaterial({ map: bannerTexture(color, emblem), side: THREE.DoubleSide, alphaTest: 0.5 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.time = time;
     shader.vertexShader = shader.vertexShader
@@ -428,7 +437,7 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
         const [w, h] = p.size ?? [1.6, 4];
         const g = new THREE.PlaneGeometry(w, h, 6, 14);
         g.translate(0, -h / 2, 0);
-        const mesh = new THREE.Mesh(g, bannerMaterial(p.color ?? "#4a2a9e"));
+        const mesh = new THREE.Mesh(g, bannerMaterial(p.color ?? "#4a2a9e", p.name));
         mesh.position.set(x, y, z);
         mesh.rotation.y = yaw;
         mesh.castShadow = true;

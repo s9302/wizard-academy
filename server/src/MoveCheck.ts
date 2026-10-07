@@ -8,7 +8,7 @@
 // Each move spends from it. Legit movement never runs the budget dry; a
 // teleport or speed hack does.
 
-import { RUN_SPEED, TERMINAL_FALL_SPEED } from "../../shared/src/constants.ts";
+import { BROOM_BOOST, BROOM_CLIMB, BROOM_SPEED, RUN_SPEED, TERMINAL_FALL_SPEED } from "../../shared/src/constants.ts";
 import type { Vec3 } from "../../shared/src/protocol.ts";
 
 const TOLERANCE = 1.3;
@@ -19,6 +19,9 @@ const HORIZONTAL = { rate: RUN_SPEED * TOLERANCE, cap: RUN_SPEED * TOLERANCE };
 // adds at most JUMP_SPEED^2 / (2g) = ~1.2 m on top of that.
 const UP = { rate: 6, cap: 2.5 };
 const DOWN = { rate: TERMINAL_FALL_SPEED * TOLERANCE, cap: 15 };
+// On a broom (only where a room allows one): faster, and climbing is flying.
+const BROOM_TOP = Math.hypot(BROOM_SPEED * BROOM_BOOST, BROOM_CLIMB) * TOLERANCE;
+const BROOM = { rate: BROOM_TOP, cap: BROOM_TOP };
 
 export class MoveCheck {
   private horizontal = HORIZONTAL.cap;
@@ -40,6 +43,19 @@ export class MoveCheck {
 
   // How much faster than normal this player may run (a fast class: the Monk).
   speedMul = 1;
+  // Riding a broom (the room said yes): the broom's speeds apply. Getting
+  // off drops whatever the broom had saved up back to walking amounts.
+  private riding = false;
+  get broom(): boolean {
+    return this.riding;
+  }
+  set broom(on: boolean) {
+    if (this.riding && !on) {
+      this.horizontal = Math.min(this.horizontal, HORIZONTAL.cap * Math.max(1, this.speedMul));
+      this.up = Math.min(this.up, UP.cap);
+    }
+    this.riding = on;
+  }
   // Until then, any move is fine (a Druid in Dragon Form flies where it likes).
   freeUntil = 0;
   // Until then, frozen solid (Frost Nova): no walking or climbing, only falling.
@@ -61,8 +77,10 @@ export class MoveCheck {
     const seconds = Math.max(0, (now - this.last) / 1000);
     this.last = now;
     const mul = Math.max(1, this.speedMul);
-    this.horizontal = Math.max(this.horizontal, Math.min(HORIZONTAL.cap * mul, this.horizontal + HORIZONTAL.rate * mul * seconds));
-    this.up = Math.max(this.up, Math.min(UP.cap, this.up + UP.rate * seconds)); // a grant can go over the cap
+    const h = this.broom ? BROOM : HORIZONTAL;
+    const u = this.broom ? BROOM : UP;
+    this.horizontal = Math.max(this.horizontal, Math.min(h.cap * mul, this.horizontal + h.rate * mul * seconds));
+    this.up = Math.max(this.up, Math.min(u.cap, this.up + u.rate * seconds)); // a grant can go over the cap
     this.down = Math.min(DOWN.cap, this.down + DOWN.rate * seconds);
     if (now < this.freeUntil) return true;
     if (now < this.frozenUntil && (Math.hypot(to[0] - from[0], to[2] - from[2]) > 0.25 || to[1] - from[1] > 0.25)) return false;

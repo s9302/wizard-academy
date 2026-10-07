@@ -24,6 +24,8 @@ import {
   FEATURE_NAMES,
 } from "../../../shared/src/appearance.ts";
 import { getHallOfFame, TRIALS } from "./hallOfFame.ts";
+import { HOUSES, type HouseId } from "../../../shared/src/houses.ts";
+import { drawEmblem } from "../levels/paintings.ts";
 import { WardrobePreview } from "./WardrobePreview.ts";
 import { formatTime } from "../ParkourHud.ts";
 import { levelInfo } from "../../../shared/src/progression.ts";
@@ -162,6 +164,7 @@ export class HubPanel {
     else if (s.kind === "wardrobe") this.wardrobe();
     else if (s.kind === "chronicle") this.chronicle();
     else if (s.kind === "leaderboard") this.champions();
+    else if (s.kind === "house" && s.house) this.houseRoll(s.house);
     else this.tablet(s.tablet ?? "");
   }
 
@@ -316,6 +319,39 @@ export class HubPanel {
       const rewards = unlocksForChapter(c.id).map((u) => u.name).join(", ");
       el("p", section, `${done.includes(c.id) ? "Unlocked" : "Unlocks"}: ${rewards}`, "panel-hint");
     }
+  }
+
+  // A house's roll, in its common room: join it (or switch to it).
+  private houseRoll(id: HouseId): void {
+    const b = this.body;
+    const h = HOUSES[id];
+    const mine = this.current.house;
+    const crest = el("canvas", b, "", "house-crest");
+    crest.width = crest.height = 120;
+    const g = crest.getContext("2d")!;
+    g.fillStyle = h.color;
+    g.beginPath();
+    g.moveTo(14, 8);
+    g.lineTo(106, 8);
+    g.lineTo(106, 60);
+    g.quadraticCurveTo(106, 96, 60, 112);
+    g.quadraticCurveTo(14, 96, 14, 60);
+    g.closePath();
+    g.fill();
+    g.lineWidth = 5;
+    g.strokeStyle = h.trim;
+    g.stroke();
+    drawEmblem(g, h.emblem, 60, 54, 64, h.trim);
+    el("h2", b, h.name).style.color = h.color;
+    el("p", b, `“${h.motto}”`, "panel-hint");
+    if (mine === id) {
+      el("p", b, `You're in ${h.name}. Its crest is on your robe, and this common room is yours.`);
+      return;
+    }
+    el("p", b, mine ? `You're in ${HOUSES[mine].name} now. You can switch, but your old house will miss you.` : "Sign the roll to join. Your house crest goes on your robe for everyone to see.");
+    const join = el("button", b, mine ? `Switch to ${h.name}` : `Join ${h.name}`);
+    join.type = "button";
+    join.onclick = () => this.save({ ...this.current, house: id });
   }
 
   // The Hall of Champions' lectern: the full leaderboards.

@@ -1,6 +1,7 @@
 // Turns raw WebSocket text into a typed message, or null if it is malformed.
 // Nothing from a client is trusted until it has passed through here.
 
+import { isHouse } from "../../shared/src/houses.ts";
 import { type AbilityId, CLASS_ABILITY_POOL } from "../../shared/src/abilities.ts";
 import { SPELL_IDS, type SpellId } from "../../shared/src/combat.ts";
 import type { ClientMsg, MoveMsg, Vec3 } from "../../shared/src/protocol.ts";
@@ -48,8 +49,10 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (!isVec3(msg.p) || !isFiniteNumber(msg.ry) || Math.abs(msg.ry) > 4) return null;
       if (!Number.isSafeInteger(msg.tp) || (msg.tp as number) < 0) return null;
       if (msg.c !== undefined && msg.c !== true) return null;
+      if (msg.b !== undefined && msg.b !== true) return null;
       const move: MoveMsg = { t: "move", p: [msg.p[0], msg.p[1], msg.p[2]], ry: msg.ry, tp: msg.tp as number };
       if (msg.c) move.c = true;
+      if (msg.b) move.b = true;
       return move;
     }
     case "respawn":
@@ -143,7 +146,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (!HATS.includes(msg.hat as Hat) || !ROBES.includes(msg.robe as Robe)) return null;
       // Appearance: unknown values fall back to defaults (older clients send none).
       const look = sanitizeAppearance(msg, allUnlocks());
-      return { t: "loadout", primary: msg.primary as PrimarySpell, hat: msg.hat as Hat, robe: msg.robe as Robe, ...look };
+      if (msg.house !== undefined && !isHouse(msg.house)) return null;
+      return { t: "loadout", primary: msg.primary as PrimarySpell, hat: msg.hat as Hat, robe: msg.robe as Robe, ...look, ...(isHouse(msg.house) ? { house: msg.house } : {}) };
     }
     case "monsters":
       if (msg.action !== "add" && msg.action !== "remove") return null;

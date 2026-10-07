@@ -20,6 +20,9 @@ import { CLIMB_SPEED, type JumpPad, type Ladder, onLadder, onPad, PAD_RADIUS } f
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import {
+  BROOM_BOOST,
+  BROOM_CLIMB,
+  BROOM_SPEED,
   CROUCH_DROP,
   CROUCH_SPEED,
   GRAVITY,
@@ -57,6 +60,8 @@ export class PlayerController {
   private killY: number;
   perks: Perks = { doubleJump: false, dash: false };
   flying = false; // admins only: no gravity, no walls
+  broom = false; // on a broom (the academy, ditchquid): no gravity, walls still count
+  private broomVel = new THREE.Vector3();
   speedMul = 1; // battle royale class (and the Knight's raised shield)
   private airJumpsUsed = 0;
   private quadLeft = 0; // seconds of Cloud Boots (a powerup) remaining
@@ -221,10 +226,53 @@ export class PlayerController {
     this.world.step();
   }
 
+  // On a broom: forward follows your aim (look up to climb), Space and C go
+  // straight up and down, and the broom eases into speed and drifts to a stop.
+  private ride(dt: number, input: Input): void {
+    input.consumeJump();
+    this.velocityY = 0;
+    this.slowLeft = Math.max(0, this.slowLeft - dt);
+    this.setCrouch(false);
+    const speed = BROOM_SPEED * (input.running ? BROOM_BOOST : 1) * this.speedMul * (this.slowLeft > 0 ? this.slowFactor : 1);
+    const cp = Math.cos(input.pitch);
+    const sp = Math.sin(input.pitch);
+    const sin = Math.sin(input.yaw);
+    const cos = Math.cos(input.yaw);
+    const want = new THREE.Vector3(
+      (-sin * cp * input.forward + cos * input.strafe) * speed,
+      sp * input.forward * speed + ((input.ascend ? 1 : 0) - (input.descend ? 1 : 0)) * BROOM_CLIMB,
+      (-cos * cp * input.forward - sin * input.strafe) * speed,
+    );
+    const top = Math.hypot(speed, BROOM_CLIMB);
+    if (want.length() > top) want.setLength(top);
+    this.broomVel.lerp(want, Math.min(1, dt * 3.5));
+    const desired = { x: this.broomVel.x * dt, y: this.broomVel.y * dt, z: this.broomVel.z * dt };
+    this.controller.computeColliderMovement(this.collider, desired);
+    const moved = this.controller.computedMovement();
+    this.grounded = this.controller.computedGrounded();
+    // Bumping into something takes the speed off that way.
+    if (Math.abs(moved.x) < Math.abs(desired.x) * 0.5) this.broomVel.x = 0;
+    if (Math.abs(moved.y) < Math.abs(desired.y) * 0.5) this.broomVel.y = 0;
+    if (Math.abs(moved.z) < Math.abs(desired.z) * 0.5) this.broomVel.z = 0;
+    const t = this.body.translation();
+    this.current.set(t.x + moved.x, t.y + moved.y, t.z + moved.z);
+    this.body.setNextKinematicTranslation(this.current);
+    this.world.step();
+  }
+
+  // Get on or off. Getting off in the air, you fall.
+  setBroom(on: boolean): void {
+    if (on === this.broom) return;
+    this.broom = on;
+    this.broomVel.set(0, 0, 0);
+    this.velocityY = 0;
+  }
+
   // Advance one fixed physics step of length dt seconds.
   step(dt: number, input: Input): void {
     this.previous.copy(this.current);
     if (this.flying) return this.fly(dt, input);
+    if (this.broom) return this.ride(dt, input);
     this.slowLeft = Math.max(0, this.slowLeft - dt);
     this.glideLeft = Math.max(0, this.glideLeft - dt);
     this.soarLeft = Math.max(0, this.soarLeft - dt);

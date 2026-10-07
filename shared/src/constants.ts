@@ -35,3 +35,9 @@ export const MAX_PLAYERS_PER_ROOM = 16;
 // Tag and infection. Distances are between capsule centers; two players
 // touching are 2 * PLAYER_RADIUS = 0.7 m apart.
 export const TAG_RANGE = 2.2;
+
+// Brooms (the academy, and ditchquid): fly where you look, Space climbs,
+// C dives, Shift for speed. Walls still stop you.
+export const BROOM_SPEED = 11; // m/s
+export const BROOM_BOOST = 1.6; // with Shift
+export const BROOM_CLIMB = 7; // m/s straight up or down

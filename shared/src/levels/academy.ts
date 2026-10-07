@@ -12,6 +12,7 @@
 
 import { FALL_RESPAWN_Y } from "../constants.ts";
 import type { Vec3 } from "../protocol.ts";
+import { houseTowers } from "./academyHouses.ts";
 import { UPPER, upperFloor } from "./academyUpper.ts";
 import { type Box, type Label, type Level, type PointLightDef, type Portal, PORTAL_HEIGHT, PORTAL_STEP, PORTAL_WIDTH, portalPoint, type Prop, type Station } from "./types.ts";
 
@@ -119,19 +120,7 @@ for (const [x, color] of [[-3.9, "#4a2a9e"], [3.9, "#4a2a9e"], [-8.5, "#1f4f8f"]
   props.push({ kind: "banner", pos: [x, 13.4, FRONT + 0.25], yaw: 0, size: [1.5, 4.6], color });
 }
 for (const x of [-3.7, 3.7]) props.push({ kind: "sconce", pos: [x, 4.6, FRONT + 0.55], yaw: 0, light: true });
-// Corner towers with stepped spires.
-for (const x of [-AW - 3, AW + 3]) {
-  boxes.push({ pos: [x, 10, FRONT - 4], size: [7, 20, 7], color: STONE_DARK });
-  boxes.push({ pos: [x, 15, FRONT - 0.45], size: [1.6, 2.6, 0.2], color: WINDOW, glow: 2.2 });
-  boxes.push({ pos: [x, 6, FRONT - 0.45], size: [1.4, 2.2, 0.2], color: WINDOW, glow: 2.2 });
-  // A ring of battlements, then a tall pointed roof.
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    boxes.push({ pos: [x + Math.cos(a) * 3.3, 20.4, FRONT - 4 + Math.sin(a) * 3.3], size: [1, 0.8, 1], color: STONE_DARK, rot: [0, -a, 0] });
-  }
-  props.push({ kind: "cone", pos: [x, 20, FRONT - 4], size: [4.4, 10], color: ROOF });
-  props.push({ kind: "banner", pos: [x, 18.5, FRONT - 0.4], yaw: 0, size: [1.4, 3.6], color: "#4a2a9e" });
-}
+// The corner towers are the four houses' (academyHouses.ts, further down).
 // Slim turrets rising from the facade, and a great spire over the middle.
 for (const x of [-11, 11, -22, 22]) {
   boxes.push({ pos: [x, 17.2, FRONT - 1.6], size: [2.6, 5.2, 2.6], color: STONE_DARK });
@@ -311,6 +300,12 @@ const lights: PointLightDef[] = [
   lights.push(...upper.lights);
 }
 
+// ---- The house towers on the four corners (academyHouses.ts) ----
+
+const houses = houseTowers(boxes, props);
+stations.push(...houses.stations);
+labels.push(...houses.labels);
+
 // ---- Central plaza ----
 
 boxes.push({ pos: [0, 0.15, 0], size: [14, 0.3, 14], color: FLAGSTONE });
@@ -438,7 +433,7 @@ for (const [x, z, s] of [
   tree(x, z, s);
 }
 // Pines along the walls.
-for (const [x, z] of [[-35, -22], [-35, -8], [35, -22], [35, 14], [-35, 14], [-8, 35], [8, 35], [-34.5, -44], [34.5, -46], [-34.5, -60], [34.5, -62], [-34.5, -75], [34.5, -76]]) {
+for (const [x, z] of [[-35.5, -15], [-35, -8], [35.5, -15], [35, 14], [-35, 14], [-8, 35], [8, 35], [-34.5, -44], [34.5, -46], [-34.5, -60], [34.5, -62]]) {
   tree(x, z, 0.9 + ((x * 7 + z * 3) % 5 + 5) / 25, "pine");
 }
 // Bushes, rocks and flower beds.
@@ -489,4 +484,5 @@ export const academy: Level = {
   stations,
   labels,
   lights,
+  teleporters: houses.teleporters,
 };

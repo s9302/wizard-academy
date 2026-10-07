@@ -6,6 +6,7 @@
 // Shared so the client can show what's unlocked and the server can check it
 // (an equipped spell or hat must really be unlocked).
 
+import { type HouseId, isHouse } from "./houses.ts";
 import { type Appearance, DEFAULT_APPEARANCE, sanitizeAppearance } from "./appearance.ts";
 import { ABILITIES, type AbilityId, abilityLevel, CLASS_ABILITIES, CLASS_ABILITY_POOL } from "./abilities.ts";
 import { CLASS_IDS, CLASSES, type ClassId } from "./classes.ts";
@@ -114,7 +115,7 @@ export function unlocksForChapter(chapter: ChapterId): Unlock[] {
 // cls: battle royale class (all three are available to everyone). The rest
 // of the look (skin, hair, face, outfit) is in appearance.ts.
 // abil: each class's chosen E and R abilities (missing: CLASS_ABILITIES).
-export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId; abil?: Partial<Record<ClassId, [AbilityId, AbilityId]>> } & Appearance;
+export type Loadout = { primary: PrimarySpell; hat: Hat; robe: Robe; cls: ClassId; abil?: Partial<Record<ClassId, [AbilityId, AbilityId]>>; house?: HouseId } & Appearance;
 export const DEFAULT_LOADOUT: Loadout = { primary: "bolt", hat: "classic", robe: "auto", cls: "wizard", ...DEFAULT_APPEARANCE };
 
 export const PRIMARY_SPELLS: PrimarySpell[] = ["bolt", "frost", "spark"];
@@ -171,6 +172,7 @@ export function sanitizeLoadout(raw: unknown, unlocked: Set<string>): Loadout {
     cls: typeof r.cls === "string" && (CLASS_IDS as string[]).includes(r.cls) ? (r.cls as ClassId) : DEFAULT_LOADOUT.cls,
     ...sanitizeAbilities(r.abil, unlocked),
     ...sanitizeAppearance(r, unlocked),
+    ...(isHouse(r.house) ? { house: r.house } : {}),
   };
 }
 
@@ -198,7 +200,7 @@ function sanitizeAbilities(raw: unknown, unlocked: Set<string>): Pick<Loadout, "
 }
 
 // What other players see of you.
-export type Look = { hat: Hat; robe: Robe } & Appearance;
+export type Look = { hat: Hat; robe: Robe; house?: HouseId } & Appearance;
 
 // What a bot wears for its class (players dress themselves): Knights in
 // armor, Wizards in robes, Rogues in leathers, and so on.
@@ -213,5 +215,5 @@ export const CLASS_LOOK: Record<ClassId, Pick<Look, "outfit" | "hat" | "robe">> 
 export const DEFAULT_LOOK: Look = { hat: "classic", robe: "auto", ...DEFAULT_APPEARANCE };
 
 export function lookOf(l: Loadout): Look {
-  return { hat: l.hat, robe: l.robe, skin: l.skin, hair: l.hair, hairColor: l.hairColor, face: l.face, features: l.features, acc: l.acc, outfit: l.outfit };
+  return { hat: l.hat, robe: l.robe, skin: l.skin, hair: l.hair, hairColor: l.hairColor, face: l.face, features: l.features, acc: l.acc, outfit: l.outfit, ...(l.house ? { house: l.house } : {}) };
 }

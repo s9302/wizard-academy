@@ -13,6 +13,7 @@
 // with the phase advanced by how far the avatar actually moved, so feet
 // keep pace with the ground at any speed.
 
+import { HOUSES } from "../../shared/src/houses.ts";
 import * as THREE from "three";
 import { PLAYER_HALF_HEIGHT, PLAYER_RADIUS } from "../../shared/src/constants.ts";
 import type { WeaponId } from "../../shared/src/classes.ts";
@@ -1021,6 +1022,13 @@ export function setAvatarLook(group: THREE.Group, id: number, rawLook: Look): vo
   }
   addHair(rig.head, look.hair, hairColor);
   addOutfit(rig.body, rig, look.outfit, clothes);
+  // A house crest on the left of the chest.
+  if (look.house && HOUSES[look.house]) {
+    const h = HOUSES[look.house];
+    const crest = mesh(new THREE.BoxGeometry(0.09, 0.11, 0.02), flat(h.color), 0.08, 0.32, -0.158);
+    crest.add(mesh(new THREE.BoxGeometry(0.05, 0.06, 0.012), flat(h.trim), 0, 0.005, -0.012));
+    rig.body.add(crest);
+  }
 
   // The hat sits on the head (its parts are placed relative to the capsule).
   parts.hat = new THREE.Group();
@@ -1148,6 +1156,29 @@ export function swingAvatar(group: THREE.Group): void {
 
 // Called every frame. speed: how fast it's moving over the ground (m/s).
 // crouch: 1 while crouching (the pose eases in and out).
+// A broom under someone (made the first time they get on one).
+export function setAvatarBroom(group: THREE.Group, on: boolean): void {
+  let broom = group.userData.broom as THREE.Group | undefined;
+  if (!on && !broom) return;
+  if (!broom) {
+    broom = new THREE.Group();
+    const wood = new THREE.MeshLambertMaterial({ color: "#7a5236" });
+    const straw = new THREE.MeshLambertMaterial({ color: "#d9b45a" });
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 2, 6).rotateX(Math.PI / 2), wood);
+    stick.position.z = -0.1;
+    const bristles = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.75, 8).rotateX(-Math.PI / 2), straw);
+    bristles.position.z = 1.1;
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.08, 8).rotateX(Math.PI / 2), wood);
+    band.position.z = 0.78;
+    for (const m of [stick, bristles, band]) m.castShadow = true;
+    broom.add(stick, bristles, band);
+    broom.position.y = -0.22; // under the seat (the avatar's origin is its middle)
+    group.add(broom);
+    group.userData.broom = broom;
+  }
+  broom.visible = on;
+}
+
 export function animateAvatar(group: THREE.Group, now: number, speed = 0, crouch = 0): void {
   const parts = group.userData.parts as AvatarParts | undefined;
   if (!parts) return;
@@ -1177,6 +1208,21 @@ export function animateAvatar(group: THREE.Group, now: number, speed = 0, crouch
       leg.knee.rotation.x = leg.knee.rotation.x * (1 - c) - 2.2 * c;
     }
   } else rig.body.rotation.x = 0;
+  // On a broom: sitting astride it, knees bent, leaning into the flight.
+  const broom = group.userData.broom as THREE.Group | undefined;
+  if (broom?.visible) {
+    rig.body.rotation.x = -0.2;
+    rig.body.position.y = 0;
+    for (const [leg, side] of [[rig.legL, -1], [rig.legR, 1]] as const) {
+      leg.hip.rotation.x = 1.25;
+      leg.hip.rotation.z = side * 0.25;
+      leg.knee.rotation.x = -1.6;
+    }
+    broom.rotation.z = Math.sin(now / 400) * 0.04;
+  } else {
+    rig.legL.hip.rotation.z = 0;
+    rig.legR.hip.rotation.z = 0;
+  }
   // Idle: a slow breath.
   const breathe = Math.sin(now / 900) * 0.02;
   rig.head.rotation.x = breathe;

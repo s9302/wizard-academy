@@ -12,6 +12,7 @@ import type { Look } from "../../shared/src/unlocks.ts";
 import type { WeaponId } from "../../shared/src/classes.ts";
 import {
   animateAvatar,
+  setAvatarBroom,
   type AvatarStatus,
   chillAvatar,
   glowAvatar,
@@ -32,7 +33,7 @@ import type { ServerClock } from "./ServerClock.ts";
 const INTERP_DELAY_MS = 120;
 const BUFFER_KEEP_MS = 1000;
 
-type Snapshot = { time: number; p: Vec3; ry: number; c?: boolean }; // c: crouching
+type Snapshot = { time: number; p: Vec3; ry: number; c?: boolean; b?: boolean }; // c: crouching, b: on a broom
 
 type Remote = {
   name: string;
@@ -232,10 +233,10 @@ export class RemotePlayers {
     for (const id of [...this.remotes.keys()]) this.remove(id);
   }
 
-  push(id: number, p: Vec3, ry: number, serverTime: number, crouch = false): void {
+  push(id: number, p: Vec3, ry: number, serverTime: number, crouch = false, broom = false): void {
     const remote = this.remotes.get(id);
     if (!remote) return;
-    remote.snapshots.push({ time: serverTime, p, ry, c: crouch });
+    remote.snapshots.push({ time: serverTime, p, ry, c: crouch, b: broom });
     const cutoff = serverTime - BUFFER_KEEP_MS;
     while (remote.snapshots.length > 2 && remote.snapshots[0].time < cutoff) {
       remote.snapshots.shift();
@@ -285,7 +286,9 @@ export class RemotePlayers {
       // Teleports (respawns) aren't walking.
       const speed = moved / dt < 30 ? moved / dt : 0;
       remote.speed += (speed - remote.speed) * Math.min(1, dt * 10);
-      animateAvatar(remote.avatar, now, remote.speed, (t < 0.5 ? from : to).c ? 1 : 0);
+      const snap = t < 0.5 ? from : to;
+      setAvatarBroom(remote.avatar, !!snap.b);
+      animateAvatar(remote.avatar, now, snap.b ? 0 : remote.speed, snap.c ? 1 : 0);
     }
     this.lastUpdate = frameStart;
   }

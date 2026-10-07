@@ -4,8 +4,145 @@
 // same painting looks the same for everyone.
 
 import * as THREE from "three";
+import { HOUSES } from "../../../shared/src/houses.ts";
+
+const HOUSE_BY_NAME = Object.fromEntries(Object.values(HOUSES).map((h) => [h.name, h]));
 
 const cache = new Map<string, THREE.CanvasTexture>();
+
+// A house emblem in one color, centered on (cx, cy), about `size` across.
+export function drawEmblem(g: CanvasRenderingContext2D, emblem: string, cx: number, cy: number, size: number, color: string): void {
+  const s = size / 100;
+  g.save();
+  g.translate(cx, cy);
+  g.scale(s, s);
+  g.fillStyle = g.strokeStyle = color;
+  g.lineCap = g.lineJoin = "round";
+  switch (emblem) {
+    case "lion": {
+      // A mane of points round a face, ears, a muzzle.
+      g.beginPath();
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2;
+        const r = i % 2 ? 34 : 48;
+        g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      g.fill();
+      g.globalCompositeOperation = "destination-out";
+      g.beginPath();
+      g.arc(0, 2, 24, 0, Math.PI * 2);
+      g.fill();
+      g.globalCompositeOperation = "source-over";
+      g.beginPath();
+      g.arc(-9, -4, 3.5, 0, Math.PI * 2);
+      g.arc(9, -4, 3.5, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.moveTo(-6, 8);
+      g.lineTo(6, 8);
+      g.lineTo(0, 15);
+      g.fill();
+      g.lineWidth = 3;
+      g.beginPath();
+      g.moveTo(0, 15);
+      g.lineTo(0, 19);
+      g.moveTo(-8, 21);
+      g.quadraticCurveTo(0, 26, 8, 21);
+      g.stroke();
+      break;
+    }
+    case "snake": {
+      // An S of a body with a head and a forked tongue.
+      g.lineWidth = 13;
+      g.beginPath();
+      g.moveTo(-30, 42);
+      g.bezierCurveTo(30, 42, 32, 10, 0, 4);
+      g.bezierCurveTo(-32, -2, -30, -34, 14, -36);
+      g.stroke();
+      g.beginPath();
+      g.ellipse(22, -37, 13, 9, 0, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(34, -37);
+      g.lineTo(44, -37);
+      g.lineTo(48, -42);
+      g.moveTo(44, -37);
+      g.lineTo(48, -32);
+      g.stroke();
+      g.globalCompositeOperation = "destination-out";
+      g.beginPath();
+      g.arc(25, -40, 2.5, 0, Math.PI * 2);
+      g.fill();
+      g.globalCompositeOperation = "source-over";
+      break;
+    }
+    case "eagle": {
+      // Spread wings, a body, a hooked head.
+      g.beginPath();
+      g.moveTo(0, -10);
+      g.lineTo(-48, -32);
+      g.lineTo(-42, -18);
+      g.lineTo(-50, -14);
+      g.lineTo(-40, -4);
+      g.lineTo(-46, 2);
+      g.lineTo(-10, 8);
+      g.lineTo(-8, 30);
+      g.lineTo(-16, 44);
+      g.lineTo(0, 36);
+      g.lineTo(16, 44);
+      g.lineTo(8, 30);
+      g.lineTo(10, 8);
+      g.lineTo(46, 2);
+      g.lineTo(40, -4);
+      g.lineTo(50, -14);
+      g.lineTo(42, -18);
+      g.lineTo(48, -32);
+      g.closePath();
+      g.fill();
+      g.beginPath();
+      g.arc(0, -18, 10, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.moveTo(6, -20);
+      g.lineTo(16, -16);
+      g.lineTo(8, -12);
+      g.fill();
+      break;
+    }
+    default: {
+      // A badger's head: a broad snout, a stripe down the middle, small ears.
+      g.beginPath();
+      g.moveTo(-34, -20);
+      g.quadraticCurveTo(-36, 18, 0, 40);
+      g.quadraticCurveTo(36, 18, 34, -20);
+      g.quadraticCurveTo(0, -42, -34, -20);
+      g.fill();
+      for (const sx of [-1, 1]) {
+        g.beginPath();
+        g.arc(sx * 30, -26, 8, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalCompositeOperation = "destination-out";
+      g.beginPath();
+      g.moveTo(-5, -34);
+      g.lineTo(5, -34);
+      g.lineTo(3, 24);
+      g.lineTo(-3, 24);
+      g.fill();
+      for (const sx of [-1, 1]) {
+        g.beginPath();
+        g.ellipse(sx * 15, -2, 5, 3.5, sx * 0.4, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalCompositeOperation = "source-over";
+      g.beginPath();
+      g.arc(0, 32, 5, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  g.restore();
+}
 
 export function paintingTexture(subject: string, caption: string, accent: string | undefined, aspect: number): THREE.CanvasTexture {
   const key = `${subject}|${caption}|${accent}|${aspect.toFixed(2)}`;
@@ -246,6 +383,28 @@ export function paintingTexture(subject: string, caption: string, accent: string
         }
         g.stroke();
       }
+      break;
+    }
+    case "crest": {
+      // A house's shield: its color, a gilt edge, its emblem, its name.
+      const house = HOUSE_BY_NAME[caption];
+      sky("#2a2238", "#120e1a");
+      const color = house?.color ?? accent ?? "#7a1f3a";
+      const trim = house?.trim ?? "#e8c547";
+      g.beginPath();
+      g.moveTo(W * 0.15, H * 0.06);
+      g.lineTo(W * 0.85, H * 0.06);
+      g.lineTo(W * 0.85, H * 0.5);
+      g.quadraticCurveTo(W * 0.85, H * 0.78, W * 0.5, H * 0.88);
+      g.quadraticCurveTo(W * 0.15, H * 0.78, W * 0.15, H * 0.5);
+      g.closePath();
+      g.fillStyle = color;
+      g.fill();
+      g.lineWidth = 8;
+      g.strokeStyle = trim;
+      g.stroke();
+      drawEmblem(g, house?.emblem ?? "lion", W / 2, H * 0.44, Math.min(W, H) * 0.5, trim);
+      // The name goes on the plaque below (the caption).
       break;
     }
     case "blackboard": {

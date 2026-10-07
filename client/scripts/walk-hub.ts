@@ -174,9 +174,10 @@ for (const room of ["trial5", "trial6"]) {
   check(entered === null, `locked: the barrier keeps you out of ${room} (entered: ${entered})`);
 }
 
-// A new player: plaza stations yes, story areas no.
+// A new player: plaza stations yes, story areas no. (The house rolls are up
+// in the towers, reached by pad or broom: fly-houses.ts checks those.)
 player = new PlayerController(makeWorld(false), academy.killY);
-for (const id of stations.keys()) {
+for (const id of [...stations.keys()].filter((id) => !id.startsWith("house:"))) {
   const miss = reaches(id);
   if (AREAS[id]) check(miss > 2.5, `locked: ${id} can't be reached (stopped ${miss.toFixed(1)} m away)`);
   else check(miss < 2.2, `${id} station can be reached (${miss.toFixed(2)} m)`);

@@ -2,6 +2,7 @@
 // boxes into meshes and physics colliders; the server only needs the zones
 // (checkpoints, finish...) and spawn points to judge the rules.
 
+import type { HouseId } from "../houses.ts";
 import type { Vec3 } from "../protocol.ts";
 import type { BossKind } from "../bosses.ts";
 
@@ -75,10 +76,11 @@ export type Prop = {
 // Something to walk up to and press E at (hub only).
 export type Station = {
   id: string;
-  kind: "spellbook" | "wardrobe" | "chronicle" | "tablet" | "leaderboard";
+  kind: "spellbook" | "wardrobe" | "chronicle" | "tablet" | "leaderboard" | "house";
   pos: Vec3; // on the floor in front of it
   label: string;
   tablet?: string; // which lore text (shared/src/story.ts TABLETS)
+  house?: HouseId; // "house": which house's roll
 };
 
 // A floating sign. If `unlock` is set and the player doesn't have it, the

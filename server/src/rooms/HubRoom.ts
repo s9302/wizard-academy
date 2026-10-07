@@ -20,6 +20,11 @@ const ARRIVAL_DISTANCE = 3.5;
 const CAPSULE_CENTER = PLAYER_HALF_HEIGHT + PLAYER_RADIUS; // above the floor
 
 export class HubRoom extends Room {
+  // Anyone can fly about the academy on a broom (B).
+  protected override allowsBrooms(): boolean {
+    return true;
+  }
+
   private counts: () => Record<string, number>;
   private lastCounts = "";
   private nextCountsAt = 0;
@@ -54,8 +59,9 @@ export class HubRoom extends Room {
     if (!account || now - (this.lastSave.get(conn.id) ?? 0) < LOADOUT_SAVE_MS) return;
     this.lastSave.set(conn.id, now);
     // Checked against fresh unlocks: anything locked falls back to the default.
-    // The class and arena abilities aren't part of this message: keep the saved ones.
-    saveLoadout(account.id, { ...msg, cls: account.loadout.cls, abil: account.loadout.abil })
+    // The class and arena abilities aren't part of this message: keep the
+    // saved ones. A message without a house keeps yours (you can only switch).
+    saveLoadout(account.id, { ...msg, cls: account.loadout.cls, abil: account.loadout.abil, house: msg.house ?? account.loadout.house })
       .then(({ loadout, unlocked }) => {
         account.loadout = loadout;
         account.unlocked = unlocked;

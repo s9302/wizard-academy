@@ -44,7 +44,7 @@ import { BOSSES } from "../../shared/src/bosses.ts";
 import { BossView } from "./bosses/BossView.ts";
 import { CtfView } from "./ctf/CtfView.ts";
 import { ServerClock } from "./ServerClock.ts";
-import { animateAvatar, createAvatar, dieAvatar, disguiseAvatar, disposeAvatar, reviveAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
+import { animateAvatar, createAvatar, setAvatarBroom, dieAvatar, disguiseAvatar, disposeAvatar, reviveAvatar, setAvatarLook, setAvatarWeapon } from "./Avatar.ts";
 
 const DEATH_VIEW_MS = 1800; // how long your own fall takes before spectating
 import { lookOf } from "../../shared/src/unlocks.ts";
@@ -473,7 +473,7 @@ export class Game {
         break;
       case "moved":
         this.clock.note(msg.time);
-        this.remotes.push(msg.id, msg.p, msg.ry, msg.time, !!msg.c);
+        this.remotes.push(msg.id, msg.p, msg.ry, msg.time, !!msg.c, !!msg.b);
         break;
       case "leave":
         this.remotes.remove(msg.id);
@@ -678,12 +678,17 @@ export class Game {
     }
   }
 
+  // Brooms: anywhere in the academy (B gets on and off).
+  private get brooms(): boolean {
+    return this.room.mode === "hub";
+  }
+
   // Movement perks from unlocks. Not in the trials, so times stay comparable.
   private applyPerks(): void {
     const unlocked = unlocksFor(this.profile);
     const allowed = this.room.mode !== "parkour";
     this.player.perks = { doubleJump: allowed && unlocked.has("perk:doubleJump"), dash: allowed && unlocked.has("perk:dash") };
-    const extra = [HELP[this.room.mode], this.player.perks.dash ? "Q dash" : "", this.profile.isAdmin ? "F fly" : ""].filter(Boolean);
+    const extra = [HELP[this.room.mode], this.brooms ? "B broom" : "", this.player.perks.dash ? "Q dash" : "", this.profile.isAdmin ? "F fly" : ""].filter(Boolean);
     const help = [MOVE_HELP, ...extra, "V view", "Esc pause"].join(" \u00b7 ");
     document.getElementById("help")!.textContent = help;
     document.getElementById("pause-help")!.textContent = help;
@@ -877,7 +882,8 @@ export class Game {
     this.selfLast.copy(pos);
     const speed = dt > 0 && moved / dt < 30 ? moved / dt : 0;
     this.selfSpeed += (speed - this.selfSpeed) * Math.min(1, dt * 10);
-    animateAvatar(a, performance.now(), this.selfSpeed, this.player.crouched ? 1 : 0);
+    setAvatarBroom(a, this.player.broom);
+    animateAvatar(a, performance.now(), this.player.broom ? 0 : this.selfSpeed, this.player.crouched ? 1 : 0);
     const scale = performance.now() < this.giantUntil ? GIANT.scale : 1;
     a.scale.setScalar(a.scale.x + (scale - a.scale.x) * 0.15);
     a.position.y += (a.scale.x - 1) * 0.9;
@@ -974,6 +980,11 @@ export class Game {
         this.royale.ability(e ? 0 : 1, origin, dir);
       }
     }
+    if (this.input.consumeBroom() && this.brooms && !this.player.flying) {
+      this.player.setBroom(!this.player.broom);
+      sound.fx("blink", { rate: this.player.broom ? 1.3 : 0.8, volume: 0.6 });
+      this.addFeed(this.player.broom ? "On your broom: look where you want to go, Space climbs, C dives, Shift for speed. B to get off." : "Off your broom.");
+    }
     // F uses the powerup you're carrying. Admins with empty pockets: F
     // toggles flying (Space up, C down, passes through walls).
     const f = this.input.consumeFly();
@@ -1048,6 +1059,7 @@ export class Game {
       const position: Vec3 = [round(p.x), round(p.y), round(p.z)];
       const move: MoveMsg = { t: "move", p: position, ry: round(wrapAngle(this.input.yaw)), tp: this.teleportCount };
       if (this.player.crouched) move.c = true;
+      if (this.player.broom) move.b = true;
       this.net.send(move);
     }
 

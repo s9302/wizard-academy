@@ -22,6 +22,7 @@ export type Player = {
   p: Vec3; // last accepted position
   ry: number;
   crouch?: boolean; // crouching: 0.6 m shorter (p is still the standing center)
+  broom?: boolean; // riding a broom (only where the room allows them)
   tp: number; // how many times the server has teleported this player
   moveCheck: MoveCheck;
 };
@@ -186,11 +187,18 @@ export abstract class Room {
     this.relayMove(player, Date.now());
   }
 
+  // Can players ride brooms here? (The academy and ditchquid say yes.)
+  protected allowsBrooms(): boolean {
+    return false;
+  }
+
   // Movement is client-authoritative, within reason: accept the position and
   // relay it, unless it implies impossible speed. Then snap the player back.
   protected handleMove(player: Player, msg: MoveMsg): void {
     if (msg.tp !== player.tp) return; // sent before the client saw our last teleport
 
+    // On a broom only where they're allowed (the check uses its speeds).
+    player.moveCheck.broom = !!msg.b && this.allowsBrooms();
     // Admins can fly (and pass through walls), so they skip the speed check.
     if (!player.conn.isAdmin && !player.moveCheck.allow(player.p, msg.p)) {
       const conn = player.conn;
@@ -209,6 +217,7 @@ export abstract class Room {
     player.p = msg.p;
     player.ry = msg.ry;
     player.crouch = !!msg.c;
+    player.broom = player.moveCheck.broom;
     this.relayMove(player, now);
     this.onPlayerMoved(player, from, msg.p, now);
     if (player.conn.room === this && this.players.get(player.conn.id) === player && player.tp === msg.tp) this.checkFeatures(player, now);
@@ -248,6 +257,7 @@ export abstract class Room {
   protected relayMove(player: Player, now: number): void {
     const moved: MovedMsg = { t: "moved", id: player.conn.id, p: player.p, ry: player.ry, time: now };
     if (player.crouch) moved.c = true;
+    if (player.broom) moved.b = true;
     this.broadcast(moved, player.conn.id);
   }
 
