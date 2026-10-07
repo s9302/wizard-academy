@@ -29,7 +29,7 @@ export const BOSSES: Record<BossKind, BossDef> = {
   // Trial VIII: a dragon that circles overhead and swoops; Trial IX: a
   // necromancer that teleports and raises the dead. Fought like the Tyrant.
   wyrm: { name: "The Frost Wyrm", title: "Wings of the Long Winter", hp: 2600, radius: 2.4, height: 2.2, speed: 0, color: "#bfeeff", hint: "pillars stop its breath; hit it when it lands", tip: "Ice pillars stop its frost breath. Get out of the circles, and when it swoops down, that's your chance up close." },
-  lich: { name: "The Lich Sovereign", title: "King of the Hollow Dead", hp: 2400, radius: 1.3, height: 2.8, speed: 0, color: "#9a7bff", hint: "it blinks: keep moving, kill the dead", tip: "It blinks around, so don't stay put. Jump its death rings, get out of the circles, and deal with the wolves it raises." },
+  lich: { name: "The Lich Sovereign", title: "King of the Hollow Dead", hp: 3400, radius: 1.3, height: 2.8, speed: 0, color: "#9a7bff", hint: "the dead shield it: kill them first", tip: "While its raised dead live, the Lich takes far less damage, so kill the wolves first. It blinks around, so don't stay put; jump its death rings and get out of the circles." },
 };
 
 // The Storm Tyrant (Trial VII). It walks after the nearest fighter and gets

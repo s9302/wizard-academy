@@ -239,9 +239,9 @@ export class Monsters {
     return [...this.monsters.values()].filter((m) => m.owner === undefined).length;
   }
 
-  // How many of one kind are alive.
+  // How many wild ones of one kind are alive (a Druid's beasts don't count).
   countOf(kind: MonsterKind): number {
-    return [...this.monsters.values()].filter((m) => m.kind === kind).length;
+    return [...this.monsters.values()].filter((m) => m.kind === kind && m.owner === undefined).length;
   }
 
   private add(kind: MonsterKind, p: Vec3): number {

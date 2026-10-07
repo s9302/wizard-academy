@@ -53,6 +53,10 @@ export type BossHost = {
   summoned?(): number; // how many of its monsters are still alive
 };
 
+// The Lich's raised dead shield it: while any are alive it takes only this
+// share of the damage dealt to it.
+const LICH_WARD = { damageTaken: 0.35, maxDead: 6, summonMs: 14_000 };
+
 // Testing only: BOSS_HP_SCALE=0.05 makes bosses quick to beat.
 const HP_SCALE = Math.min(1, Math.max(0.01, Number(process.env.BOSS_HP_SCALE || 1)));
 const RESPAWN_MS = 12_000;
@@ -433,9 +437,10 @@ export class Boss {
   }
 
   // ---- The Lich Sovereign (Trial IX) ----
-  // Floats in place, then blinks somewhere else every few seconds; soul
-  // bolts, death rings and curses; raises the dead from phase 2; a soul
-  // storm when it's nearly beaten.
+  // Floats in place, then blinks somewhere else every few seconds and fires
+  // as it reappears; soul bolts, death rings and meteors; raises the dead
+  // from phase 2, and while they live it takes far less damage (LICH_WARD);
+  // a soul storm when it's nearly beaten.
   private nextBlink = 0;
   private thinkLich(fighters: BossFighter[], now: number): void {
     const phase = this.phaseCheck(now, ["The Lich calls the dead from their graves!", "The Lich unleashes the soul storm!"]);
@@ -453,32 +458,34 @@ export class Boss {
     // Blink to a new spot (a few meters from the fighters, never on them).
     const grid = this.host.grid?.();
     if (grid && now >= this.nextBlink) {
-      this.nextBlink = now + (phase === 3 ? 4500 : 7000) + Math.random() * 2000;
+      this.nextBlink = now + [0, 5500, 4500, 3500][phase] + Math.random() * 1500;
       for (let i = 0; i < 12; i++) {
         const [x, z] = grid.randomSpot();
         const d = Math.min(...fighters.map((f) => Math.hypot(f.p[0] - x, f.p[2] - z)));
         if (d < 7 || d > 24) continue;
         this.p = [x, grid.floorAt(x, z) + BOSSES.lich.height, z];
+        // It attacks right as it reappears.
+        this.nextAttack = Math.min(this.nextAttack, now + 350);
         break;
       }
     }
     this.p = [this.p[0], this.p[1] + Math.sin(now / 500) * 0.01, this.p[2]];
     if (now < this.nextAttack) return;
-    this.nextAttack = now + [0, 2300, 1800, 1400][phase];
-    if (phase >= 2 && now >= this.nextSummon && (this.host.summoned?.() ?? 0) < 4) {
-      this.nextSummon = now + 18_000;
+    this.nextAttack = now + [0, 1900, 1500, 1150][phase];
+    if (phase >= 2 && now >= this.nextSummon && (this.host.summoned?.() ?? 0) < LICH_WARD.maxDead) {
+      this.nextSummon = now + LICH_WARD.summonMs;
       this.windup(700, () => {
-        this.host.summon?.("wolf", this.p, 2);
-        this.host.broadcast({ t: "announce", text: "The dead rise to serve the Lich!" });
+        this.host.summon?.("wolf", this.p, phase === 3 ? 4 : 3);
+        this.host.broadcast({ t: "announce", text: "The dead rise and shield the Lich! Kill them!" });
       });
       return;
     }
     const options: [number, () => void][] = [
-      [3, () => this.orbs(near, now, phase === 1 ? 3 : 5)],
-      [2, () => this.windup(700, () => this.orbRing(now + 700, phase === 3 ? 2 : 1))],
-      [2, () => this.lightning(fighters, now, phase === 1 ? 1 : 2)],
+      [3, () => this.orbs(near, now, phase === 1 ? 4 : 6)],
+      [2, () => this.windup(650, () => this.orbRing(now + 650, phase))],
+      [2, () => this.lightning(fighters, now, phase === 1 ? 2 : 3)],
     ];
-    if (phase === 3) options.push([2, () => this.windup(800, () => this.meteors(fighters, now + 800))]);
+    if (phase >= 2) options.push([phase === 3 ? 3 : 1, () => this.windup(800, () => this.meteors(fighters, now + 800))]);
     this.pick(options);
   }
 
@@ -654,6 +661,7 @@ export class Boss {
   // Damage it (a trial's bolts, or anything in BossRoom). Returns true if that finished it.
   hit(amount: number, now = Date.now()): boolean {
     if (this.state !== "fight") return false;
+    if (this.kind === "lich" && (this.host.summoned?.() ?? 0) > 0) amount *= LICH_WARD.damageTaken;
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp > 0) return false;
     this.state = "dead";
