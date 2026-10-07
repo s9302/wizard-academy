@@ -24,6 +24,8 @@ export const XP = {
   hordeWave: 10, // Horde: per wave cleared, times the wave number (up to hordeWaveMax)
   hordeWaveMax: 120,
 
+  // Ditchquid, per finished round (plus teamWin for the winners).
+  ditchquidGoal: 10, // per goal, up to maxTagsPaid
   // Monsters (battle royale and the Tyrant's wolves), paid on the kill.
   // Capped so a room full of monsters can't be farmed: at most
   // monsterKillsPaid kills per account in any monsterWindowMs.

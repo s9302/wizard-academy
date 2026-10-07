@@ -2,6 +2,7 @@
 // boxes into meshes and physics colliders; the server only needs the zones
 // (checkpoints, finish...) and spawn points to judge the rules.
 
+import type { Hoop } from "../ditchquid.ts";
 import type { HouseId } from "../houses.ts";
 import type { Vec3 } from "../protocol.ts";
 import type { BossKind } from "../bosses.ts";
@@ -57,6 +58,7 @@ export type PropKind =
   | "globe" // a spinning globe on a floor stand
   | "orrery" // a brass orrery on a table
   | "phoenix" // a phoenix on its perch
+  | "hoop" // a ditchquid hoop: a ring at pos facing along x, size = [radius, thickness]
   | "board" // a live leaderboard at pos facing yaw, size = [width, height]; name = "xp" or "trials:1-5"
 
 export type Prop = {
@@ -205,6 +207,9 @@ export type Level = {
   bossFight?: { boss: BossKind; home: Vec3 }; // a boss room (Trial VII): where the boss starts
   // Capture the flag: each team's flag stand (red, blue) and where it spawns.
   ctf?: { flags: [Vec3, Vec3]; spawns: [Vec3[], Vec3[]] };
+  // Ditchquid: the hoops, each team's spawns, where the ball starts, and
+  // how far anyone (or the ball) can go.
+  ditchquid?: { hoops: Hoop[]; spawns: [Vec3[], Vec3[]]; ball: Vec3; bounds: { x: number; z: number; top: number } };
   noBots?: boolean; // a parkour map: bots can't get around it, so they aren't allowed
 };
 

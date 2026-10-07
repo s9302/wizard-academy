@@ -658,6 +658,16 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
         birds.push({ obj: bird, y: y + 1.85, base: rand() * 10 });
         break;
       }
+      case "hoop": {
+        // A ditchquid hoop: a glowing ring facing along x, gold-edged.
+        const [r, thick] = p.size ?? [1.7, 0.12];
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, thick, 8, 40).rotateY(Math.PI / 2), glow(p.color ?? "#ffd25a", 1.6));
+        ring.position.set(x, y, z);
+        ring.castShadow = true;
+        parent.add(ring);
+        batch.add("#e8c547", new THREE.TorusGeometry(r + thick * 1.6, thick * 0.5, 6, 40).rotateY(Math.PI / 2), at(x, y, z));
+        break;
+      }
       case "board": {
         const [w, h] = p.size ?? [6, 4];
         const canvas = document.createElement("canvas");

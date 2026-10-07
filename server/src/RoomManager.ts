@@ -2,6 +2,7 @@
 // room they asked for. Players start in the hub and switch rooms through its
 // portals (each switch is a new connection that says hello to the new room).
 
+import { DitchquidRoom } from "./rooms/DitchquidRoom.ts";
 import { LEVELS } from "../../shared/src/levels/index.ts";
 import { ROOMS, type RoomInfo } from "../../shared/src/rooms.ts";
 import type { Level } from "../../shared/src/levels/types.ts";
@@ -35,6 +36,8 @@ function createRoom(info: RoomInfo, level: Level, manager: RoomManager): Room {
       return new CtfRoom(info, level);
     case "horde":
       return new HordeRoom(info, level);
+    case "ditchquid":
+      return new DitchquidRoom(info, level);
     case "free":
       return new PlaygroundRoom(info, level);
   }

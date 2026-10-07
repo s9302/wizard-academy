@@ -79,7 +79,10 @@ export type MonstersCtlMsg = { t: "monsters"; action: "add" | "remove"; kind?: M
 // Battle royale: use the powerup you're carrying (F).
 export type UsePowerupMsg = { t: "usePowerup" };
 
-export type ClientMsg = UsePowerupMsg | HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg | ChaseSettingMsg | GrappleMsg;
+// Ditchquid: throw the ball you're carrying, or cast a Slowing Jinx.
+export type DqThrowMsg = { t: "dqThrow"; d: Vec3 };
+export type DqJinxMsg = { t: "dqJinx"; o: Vec3; d: Vec3 };
+export type ClientMsg = DqThrowMsg | DqJinxMsg | UsePowerupMsg | HelloMsg | MoveMsg | RespawnMsg | RestartMsg | TagMsg | BotsMsg | CastMsg | LoadoutMsg | AttackMsg | HandMsg | ClassMsg | VoteMsg | AbilityMsg | MonstersCtlMsg | AbilitiesMsg | ModeMsg | PickTeamMsg | BotSetMsg | ReadyMsg | ChaseMapMsg | UnstuckMsg | ChaseSettingMsg | GrappleMsg;
 
 // ---- Server -> Client ----
 
@@ -184,6 +187,13 @@ export type LineupEntry = { id: number; name: string; bot: boolean; cls: ClassId
 export type LineupMsg = { t: "lineup"; players: LineupEntry[]; mode: RoyaleMode; next: RoyaleMode };
 // Tag and infection: the maps on offer, this round's and the next one's.
 export type ChaseMapsMsg = { t: "chaseMaps"; maps: string[]; current: string; next: string };
+// Ditchquid (see shared/src/ditchquid.ts).
+export type DqTeamsMsg = { t: "dqTeams"; teams: [number[], number[]] };
+export type DqBallMsg = { t: "dqBall"; p: Vec3; carrier: number | null; time: number };
+export type DqScoreMsg = { t: "dqScore"; score: [number, number] };
+export type DqGoalMsg = { t: "dqGoal"; team: 0 | 1; by: number | null; hoop: number };
+export type DqJinxCastMsg = { t: "dqJinxCast"; id: number; by: number; o: Vec3; d: Vec3; time: number };
+export type DqJinxEndMsg = { t: "dqJinxEnd"; id: number; p: Vec3; hit: number | null };
 export type ChaseSettingsMsg = { t: "chaseSettings"; grapple: boolean; powerups: boolean };
 // Capture the flag: the score, and each team's flag (red, blue): at its
 // stand, carried by someone, or dropped somewhere.
@@ -282,6 +292,12 @@ export type ServerMsg =
   | LineupMsg
   | ChaseMapsMsg
   | ChaseSettingsMsg
+  | DqTeamsMsg
+  | DqBallMsg
+  | DqScoreMsg
+  | DqGoalMsg
+  | DqJinxCastMsg
+  | DqJinxEndMsg
   | CtfMsg
   | HordeMsg
   | RespawnInMsg

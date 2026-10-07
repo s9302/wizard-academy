@@ -15,6 +15,7 @@ import { levelInfo } from "../../shared/src/progression.ts";
 import type { MoveMsg, ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { HUB_ROOM, type RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
+import { Ditchquid } from "./ditchquid/Ditchquid.ts";
 import { Pickups } from "./royale/Pickups.ts";
 import { POWERUPS, type PowerupKind } from "../../shared/src/combat.ts";
 import type { Input } from "./Input.ts";
@@ -70,6 +71,7 @@ const HELP: Record<string, string> = {
   royale: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball \u00b7 F powerup",
   boss: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 Right-click Fireball \u00b7 F powerup",
   ctf: "Click attack \u00b7 1/2 swap \u00b7 E/R abilities \u00b7 F powerup \u00b7 grab the enemy flag",
+  ditchquid: "Look to steer \u00b7 Space up \u00b7 C down \u00b7 Click throw (or jinx without the ball)",
 };
 const STATION_REACH = 2.2; // meters, to use a hub station
 const STEP_EVERY = 2.1; // meters walked per footstep sound
@@ -130,6 +132,7 @@ export class Game {
   private markers!: CheckpointMarkers;
   private parkour: ParkourHud | null = null;
   private chase: ChaseHud | null = null;
+  private dq: Ditchquid | null = null;
   // Tag and infection's powerups (the arena's are in Royale).
   private chasePickups: Pickups | null = null;
   private chaseHeld: PowerupKind | null = null;
@@ -218,6 +221,14 @@ export class Game {
         onPowerups: (on) => this.net.send({ t: "chaseSetting", powerups: on }),
       });
       this.chasePickups = new Pickups(this.scene);
+    } else if (room.mode === "ditchquid") {
+      this.dq = new Ditchquid(this.scene, hud, this.clock, level, room.name, this.remotes, {
+        send: (msg) => this.net.send(msg),
+        myId: () => this.myId,
+        slow: (seconds, factor) => this.player.slow(seconds, factor),
+        feed: (text) => this.addFeed(text),
+      });
+      this.player.setBroom(true); // everyone's on a broom, all match
     } else if (room.mode === "royale" || room.mode === "boss" || room.mode === "ctf" || room.mode === "horde") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
@@ -446,6 +457,7 @@ export class Game {
     if (this.disposed) return; // still in flight when we left
     if (this.bossView?.onMessage(msg)) return;
     if (this.ctfView?.onMessage(msg)) return;
+    if (this.dq?.onMessage(msg)) return;
     if (msg.t === "teams") this.myTeam = msg.teams ? (msg.teams[0].includes(this.myId) ? 0 : msg.teams[1].includes(this.myId) ? 1 : null) : null;
     if (msg.t === "round" && msg.state === "playing") this.story?.hideSoon(); // Trial VII's fight begins
     if (this.royale?.onMessage(msg)) return;
@@ -689,7 +701,7 @@ export class Game {
     const allowed = this.room.mode !== "parkour";
     this.player.perks = { doubleJump: allowed && unlocked.has("perk:doubleJump"), dash: allowed && unlocked.has("perk:dash") };
     const extra = [HELP[this.room.mode], this.brooms ? "B broom" : "", this.player.perks.dash ? "Q dash" : "", this.profile.isAdmin ? "F fly" : ""].filter(Boolean);
-    const help = [MOVE_HELP, ...extra, "V view", "Esc pause"].join(" \u00b7 ");
+    const help = [this.room.mode === "ditchquid" ? "WASD fly \u00b7 Shift fast" : MOVE_HELP, ...extra, "V view", "Esc pause"].join(" \u00b7 ");
     document.getElementById("help")!.textContent = help;
     document.getElementById("pause-help")!.textContent = help;
     if (this.perkEl) {
@@ -776,6 +788,7 @@ export class Game {
 
     this.royale?.dispose();
     this.chase?.dispose();
+    this.dq?.dispose();
     this.trial?.dispose();
     this.bossView?.dispose();
     this.ctfView?.dispose();
@@ -1007,6 +1020,10 @@ export class Game {
       const { origin, dir } = this.aim();
       this.trial.attack(origin, dir, this.player.position);
     }
+    if (this.dq && clicked) {
+      const { origin, dir } = this.aim();
+      this.dq.click(origin, dir);
+    }
     if (this.royale && (clicked || rightClicked)) {
       const { origin, dir } = this.aim();
       this.royale.attack(clicked ? "primary" : "fireball", origin, dir);
@@ -1100,6 +1117,7 @@ export class Game {
     this.ctfView?.update(now / 1000);
     this.npcs?.update(now / 1000, dt, this.player.position);
     this.chasePickups?.update(now / 1000);
+    this.dq?.update(now, this.camera);
     this.features?.update(now / 1000, dt);
     this.particleSystem.update(dt);
     if (this.postfx) this.postfx.render(dt);

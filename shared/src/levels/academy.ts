@@ -1,6 +1,6 @@
 // The hub: a plaza in front of the academy, where everyone arrives. A ring of
 // portal arches leads to the games: tag, infection and capture the flag on
-// the east, the battle royale and Horde on the west. The trials are all
+// the east, the battle royale, Horde and Ditchquid on the west. The trials are all
 // inside the academy (north, its doors always open): I to III in the Hall of
 // Trials, IV to IX in the Headmaster's Sanctum behind it.
 //
@@ -339,6 +339,7 @@ const portalAngles: [string, number, string][] = [
   ["ctf", 330, "#ffd25a"],
   ["royale", 180, "#ff3d8b"],
   ["horde", 210, "#ff7a2a"],
+  ["ditchquid", 150, "#ffd25a"],
 ];
 
 const ringPortals: Portal[] = portalAngles.map(([room, degrees, color]) => {

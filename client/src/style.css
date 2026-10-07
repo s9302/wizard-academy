@@ -765,3 +765,8 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
 #chase-pocket small { font-weight: normal; opacity: 0.75; }
 #chase-pocket .pocket-dot { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
 #hub-panel canvas.house-crest { display: block; margin: 0 auto 4px; }
+
+/* Ditchquid (client/src/ditchquid/Ditchquid.ts) */
+#run .dq-score { font-weight: bold; font-size: 15px; margin: 2px 0; }
+#run .dq-sep { opacity: 0.6; }
+#dq-hold { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); padding: 7px 14px; border-radius: 10px; background: rgba(120, 40, 20, 0.75); border: 1px solid #ffb84a; font-weight: bold; color: #ffe2b0; white-space: nowrap; }

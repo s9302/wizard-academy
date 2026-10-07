@@ -77,6 +77,18 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "ready":
       return { t: "ready" };
+    case "dqThrow": {
+      if (!isVec3(msg.d)) return null;
+      const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
+      if (len < 0.5 || len > 1.5) return null;
+      return { t: "dqThrow", d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
+    }
+    case "dqJinx": {
+      if (!isVec3(msg.o) || !isVec3(msg.d)) return null;
+      const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
+      if (len < 0.5 || len > 1.5) return null;
+      return { t: "dqJinx", o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
+    }
     case "usePowerup":
       return { t: "usePowerup" };
     case "unstuck":
