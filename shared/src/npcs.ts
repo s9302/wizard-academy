@@ -20,6 +20,25 @@ export const NPCS: Record<string, Npc> = {
       "And do try the Wardrobe. A wizard should look like one.",
     ],
   },
+  inkwell: {
+    name: "Madam Inkwell",
+    look: L({ hat: "starry", robe: "midnight", skin: "light", hair: "bun", hairColor: "black", face: "calm", acc: "spectacles", outfit: "scholar" }),
+    lines: [
+      "Shh. This is a library.",
+      "Every book here was written by a wizard who thought they were very clever. Most of them were right.",
+      "The Restricted Section is restricted. The grille is not a suggestion, and the chained book stays chained.",
+      "If you want to know who's best at what, the Hall of Champions is next door. Loudly next door.",
+    ],
+  },
+  vex: {
+    name: "Professor Vex",
+    look: L({ hat: "tall", robe: "emerald", skin: "olive", hair: "long", hairColor: "ginger", face: "smirk", acc: "none", outfit: "robe" }),
+    lines: [
+      "Don't touch the green one. Or the pink one. Actually, don't touch anything.",
+      "A good brew takes patience. A great brew takes patience and a fire extinguisher.",
+      "Health potions in the arena? Mine. You're welcome.",
+    ],
+  },
   bram: {
     name: "Groundskeeper Bram",
     look: L({ hat: "classic", robe: "auto", skin: "tan", hair: "curly", hairColor: "black", face: "grin", features: ["beard"], outfit: "tunic" }),

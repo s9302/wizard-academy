@@ -1,4 +1,5 @@
-// HTTP API for accounts: /api/register, /api/login, /api/logout, /api/me.
+// HTTP API for accounts: /api/register, /api/login, /api/logout, /api/me,
+// and the hub's Hall of Champions (/api/halloffame).
 // Caddy only forwards these after the PIN check, so strangers never reach
 // them. Requests must be JSON from this site (Content-Type + Origin), which
 // also stops other websites from submitting forms here (CSRF).
@@ -9,9 +10,11 @@ import {
   accountFromRequest,
   clearAccountCookie,
   getProfile,
+  hallOfFame,
   login,
   register,
 } from "./accounts.ts";
+import type { HallOfFame } from "../../shared/src/hallOfFame.ts";
 import { clientIp, originAllowed } from "./auth.ts";
 import { rateLimitKey, SlidingWindowLimiter } from "./limits.ts";
 
@@ -72,6 +75,18 @@ const retryMessage = (ms: number) => {
   return `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
 };
 
+// The Hall of Champions changes slowly: look it up at most once a minute.
+const HALL_TTL_MS = 60_000;
+let hall: { at: number; data: Promise<HallOfFame> } | null = null;
+function cachedHallOfFame(): Promise<HallOfFame> {
+  if (!hall || Date.now() - hall.at > HALL_TTL_MS) {
+    const data = hallOfFame();
+    hall = { at: Date.now(), data };
+    data.catch(() => (hall = null)); // don't cache a failure
+  }
+  return hall.data;
+}
+
 // Returns true if it handled the request.
 export async function handleApi(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
   if (!path.startsWith("/api/")) return false;
@@ -81,6 +96,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, path:
     const profile = account && (await getProfile(account.id));
     if (!profile) json(res, 401, { error: "Not logged in." });
     else json(res, 200, profile);
+    return true;
+  }
+
+  if (path === "/api/halloffame" && req.method === "GET") {
+    if (!(await accountFromRequest(req))) json(res, 401, { error: "Not logged in." });
+    else json(res, 200, await cachedHallOfFame());
     return true;
   }
 

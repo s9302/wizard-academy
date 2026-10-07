@@ -74,7 +74,7 @@ export class Portals {
 
     // The sign, redrawn when the counts change.
     const sign = new Sign({ title: "", color: portal.color });
-    sign.sprite.position.set(...portalPoint(portal, 0, PORTAL_STEP + PORTAL_HEIGHT + 3.6, 0.6));
+    sign.sprite.position.set(...portalPoint(portal, 0, portal.signY ?? PORTAL_STEP + PORTAL_HEIGHT + 3.6, 0.6));
     scene.add(sign.sprite);
 
     const view: PortalView = { portal, sheet, rings, sign };

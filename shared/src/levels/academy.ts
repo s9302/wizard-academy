@@ -12,6 +12,7 @@
 
 import { FALL_RESPAWN_Y } from "../constants.ts";
 import type { Vec3 } from "../protocol.ts";
+import { UPPER, upperFloor } from "./academyUpper.ts";
 import { type Box, type Label, type Level, type PointLightDef, type Portal, PORTAL_HEIGHT, PORTAL_STEP, PORTAL_WIDTH, portalPoint, type Prop, type Station } from "./types.ts";
 
 const GRASS = "#6fae5c";
@@ -148,11 +149,22 @@ props.push({ kind: "cone", pos: [0, 23.5, MID], size: [6, 12], color: ROOF });
 boxes.push({ pos: [0, 0.02, HALL_Z], size: [INNER * 2, 0.04, FRONT - MID], color: STONE }); // floor
 boxes.push({ pos: [0, 0.05, HALL_Z], size: [2.6, 0.04, FRONT - MID], color: CARPET });
 for (const x of [-7, 7]) for (const z of [HALL_Z + 6, HALL_Z - 6]) boxes.push({ pos: [x, 7, z], size: [0.8, 14, 0.8], color: STONE });
-// The inner wall, with the Sanctum's doors in the middle (Chapter III).
-for (const s of [-1, 1]) boxes.push({ pos: [s * (3 + (INNER - 3) / 2), 7, MID], size: [INNER - 3, 14, 0.6], color: WALL });
-boxes.push({ pos: [0, 11, MID], size: [6, 6, 0.6], color: WALL });
-boxes.push({ pos: [0, 4, MID], size: [6, 8, 0.4], color: WOOD, gate: "area:sanctum" });
-boxes.push({ pos: [0, 8.6, MID + 0.5], size: [7, 1.2, 0.4], color: STONE });
+// The inner wall, with the Sanctum's doors in the middle (Chapter III),
+// and upstairs three doorways from the gallery to the Portrait Gallery.
+for (const s of [-1, 1]) boxes.push({ pos: [s * (3 + (INNER - 3) / 2), UPPER / 2, MID], size: [INNER - 3, UPPER, 0.6], color: WALL });
+boxes.push({ pos: [0, (6 + UPPER) / 2, MID], size: [6, UPPER - 6, 0.6], color: WALL });
+{
+  const DOOR_TOP = UPPER + 3.4;
+  let x = -INNER;
+  for (const dx of [-20, 0, 20, INNER + 1.5]) {
+    const end = Math.min(INNER, dx - 1.5);
+    boxes.push({ pos: [(x + end) / 2, (UPPER + 14) / 2, MID], size: [end - x, 14 - UPPER, 0.6], color: WALL });
+    if (dx < INNER) boxes.push({ pos: [dx, (DOOR_TOP + 14) / 2, MID], size: [3, 14 - DOOR_TOP, 0.6], color: WALL });
+    x = dx + 1.5;
+  }
+}
+boxes.push({ pos: [0, 3, MID], size: [6, 6, 0.4], color: WOOD, gate: "area:sanctum" });
+boxes.push({ pos: [0, 6.5, MID + 0.5], size: [7, 1, 0.4], color: STONE });
 for (const x of [-3.7, 3.7]) props.push({ kind: "sconce", pos: [x, 4.6, MID + 0.85], yaw: 0, light: false });
 // Bookshelves along the side walls, and Vale's statue at the east end.
 for (const s of [-1, 1]) {
@@ -172,7 +184,7 @@ props.push({ kind: "crystal", pos: [18, 5.4, MID + 2.5], color: GOLD, scale: 0.6
 
 boxes.push({ pos: [0, 0.02, (MID + BACK + 0.6) / 2], size: [INNER * 2, 0.04, MID - BACK - 0.6], color: STONE });
 boxes.push({ pos: [0, 0.05, (MID + BACK + 0.6) / 2], size: [2.6, 0.04, MID - BACK - 0.6], color: CARPET });
-for (const x of [-7, 7]) for (const z of [SANC_Z + 6, SANC_Z - 6]) boxes.push({ pos: [x, 7, z], size: [0.8, 14, 0.8], color: STONE });
+for (const x of [-7, 7]) for (const z of [SANC_Z + 6, SANC_Z - 6]) boxes.push({ pos: [x, (UPPER - 0.4) / 2, z], size: [0.8, UPPER - 0.4, 0.8], color: STONE }); // holding up the floor above
 // Bookshelves along the back wall, between the three portals (further down).
 for (const cx of [-6.75, 6.75]) {
   boxes.push({ pos: [cx, 2.2, BACK + 0.9], size: [5, 4.4, 0.6], color: WOOD });
@@ -274,7 +286,8 @@ const labels: Label[] = [
   { pos: [-22.8, 4, 27.5], title: "The Spell Garden", color: "#8fe3ff", unlock: "area:garden" },
   { pos: [22.8, 4, 27.5], title: "The Observatory", color: "#ffe066", unlock: "area:observatory" },
   { pos: [0, 10.2, FRONT + 1.2], title: "The Academy", subtitle: "The Hall of Trials", color: "#ff8fb8" },
-  { pos: [0, 9.6, MID + 1.2], title: "The Sanctum", color: "#ff8fb8", unlock: "area:sanctum" },
+  { pos: [0, 5.9, MID + 3.2], title: "The Sanctum", color: "#ff8fb8", unlock: "area:sanctum" },
+  { pos: [0, 4.2, FRONT - 6], title: "Upstairs", subtitle: "Library · Champions · Office", color: "#ffd25a" },
   { pos: [-13, 3, BACK + 2.6], title: "Trial V", color: "#7b5bd6", unlock: "area:trial5", onlyLocked: true },
   { pos: [13, 3, BACK + 2.6], title: "Trial VI", color: "#c65bd6", unlock: "area:trial6", onlyLocked: true },
   { pos: [INNER - 1.4, 3, SANC_Z], title: "Trial VII", color: "#ffcf5a", unlock: "area:trial7", onlyLocked: true },
@@ -282,14 +295,21 @@ const labels: Label[] = [
   { pos: [18, 3, MID - 2.4], title: "Trial IX", color: "#9a7bff", unlock: "area:trial9", onlyLocked: true },
 ];
 
+// (Every light costs every lit pixel, so the ground floor makes do with one
+// light per room now that the upper floor has its own.)
 const lights: PointLightDef[] = [
-  { pos: [0, 8, HALL_Z], color: "#ffd7a0", intensity: 40, distance: 22 },
-  { pos: [-18, 6, HALL_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
-  { pos: [18, 6, HALL_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
-  { pos: [0, 8, SANC_Z], color: "#ffd7a0", intensity: 40, distance: 22 },
-  { pos: [-18, 6, SANC_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
-  { pos: [18, 6, SANC_Z], color: "#ffd7a0", intensity: 28, distance: 16 },
+  { pos: [0, 6.5, HALL_Z], color: "#ffd7a0", intensity: 50, distance: 30 },
+  { pos: [0, 5.5, SANC_Z], color: "#ffd7a0", intensity: 50, distance: 30 },
 ];
+
+// ---- The upper floor (academyUpper.ts) ----
+
+{
+  const upper = upperFloor(boxes, props, { front: FRONT, mid: MID, back: BACK, inner: INNER });
+  stations.push(...upper.stations);
+  labels.push(...upper.labels);
+  lights.push(...upper.lights);
+}
 
 // ---- Central plaza ----
 
@@ -350,6 +370,9 @@ const sanctumPortals: Portal[] = [
   { room: "trial8", pos: [-INNER + 1.2, 0, SANC_Z], yaw: -Math.PI / 2, color: "#bff4ff" },
   { room: "trial9", pos: [18, 0, MID - 1.2], yaw: 0, color: "#9a7bff" },
 ];
+
+// Their signs float lower than outdoors, under the upper floor.
+for (const p of [...hallPortals, ...sanctumPortals]) p.signY = PORTAL_STEP + PORTAL_HEIGHT + 1.1;
 
 export const portals: Portal[] = [...ringPortals, ...hallPortals, ...sanctumPortals];
 

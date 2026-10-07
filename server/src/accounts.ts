@@ -5,6 +5,7 @@
 // even with GPUs) using OWASP's recommended minimum settings. The hash string
 // includes its own random salt and parameters.
 
+import type { HallOfFame } from "../../shared/src/hallOfFame.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import argon2 from "argon2";
@@ -224,4 +225,24 @@ export async function leaderboard(courseId: string, limit = 10): Promise<{ name:
     [courseId, limit],
   );
   return rows.map((r) => ({ name: r.username, time: r.time_ms }));
+}
+
+// The Hall of Champions (hub): the most XP, and the fastest few on each
+// trial.
+export async function hallOfFame(xpLimit = 10, perCourse = 5): Promise<HallOfFame> {
+  const xp = await pool.query<{ username: string; xp: number }>(
+    "SELECT username, xp FROM accounts WHERE NOT is_admin AND xp > 0 ORDER BY xp DESC, created_at LIMIT $1",
+    [xpLimit],
+  );
+  const times = await pool.query<{ course_id: string; username: string; time_ms: number }>(
+    `SELECT course_id, username, time_ms FROM (
+       SELECT b.course_id, a.username, b.time_ms,
+              row_number() OVER (PARTITION BY b.course_id ORDER BY b.time_ms, b.achieved_at) AS rank
+       FROM best_times b JOIN accounts a ON a.id = b.account_id WHERE NOT a.is_admin
+     ) ranked WHERE rank <= $1 ORDER BY course_id, rank`,
+    [perCourse],
+  );
+  const byCourse: HallOfFame["times"] = {};
+  for (const r of times.rows) (byCourse[r.course_id] ??= []).push({ name: r.username, time: r.time_ms });
+  return { xp: xp.rows.map((r) => ({ name: r.username, xp: r.xp })), times: byCourse };
 }

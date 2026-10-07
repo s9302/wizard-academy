@@ -16,6 +16,8 @@ import type { Level, Prop } from "../../../shared/src/levels/types.ts";
 import { type OgaAssets, pick, place } from "../graphics/ogaAssets.ts";
 import { particles } from "../graphics/Particles.ts";
 import { swapLook } from "../graphics/textures.ts";
+import { addBoard, resetBoards, tickBoards } from "../hub/hallOfFame.ts";
+import { paintingTexture } from "./paintings.ts";
 import { quality } from "../quality.ts";
 
 const MAX_PROP_LIGHTS = 8; // Ultra only, on top of the level's own lights
@@ -309,6 +311,11 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
   const flames: { pos: THREE.Vector3; light: THREE.PointLight | null; base: number }[] = [];
   const fountains: THREE.Vector3[] = [];
   const crystals: { mesh: THREE.Mesh; y: number; light: THREE.PointLight | null }[] = [];
+  const spinners: { obj: THREE.Object3D; speed: number }[] = [];
+  const fires: { pos: THREE.Vector3; light: THREE.PointLight | null; flames: THREE.Mesh[]; base: number }[] = [];
+  const brews: { pos: THREE.Vector3; color: string }[] = [];
+  const birds: { obj: THREE.Object3D; y: number; base: number }[] = [];
+  resetBoards();
   let lights = q === "ultra" ? Math.min(MAX_PROP_LIGHTS, opts.lightBudget) : 0;
   const glowMaterials = new Map<string, THREE.MeshBasicMaterial>();
   const glow = (color: string, k: number) => {
@@ -329,6 +336,15 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
     parent.add(l);
     return l;
   };
+  // A small still flame (candles, chandeliers): no smoke, no light of its own.
+  const candleFlame = (x: number, y: number, z: number, s = 1) => {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(0.035 * s, 0.11 * s, 5), glow("#ffc46a", 3));
+    m.position.set(x, y + 0.055 * s, z);
+    parent.add(m);
+  };
+  // Where a point at (dx, dy, dz) in a prop's own frame (front = +z) lands.
+  const local = (x: number, y: number, z: number, yaw: number, dx: number, dy: number, dz: number) =>
+    at(x + dx * Math.cos(yaw) + dz * Math.sin(yaw), y + dy, z - dx * Math.sin(yaw) + dz * Math.cos(yaw), yaw);
   const flame = (pos: THREE.Vector3, light: boolean) => {
     const m = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 6), glow("#ffb14a", 3));
     m.position.copy(pos).add(new THREE.Vector3(0, 0.12, 0));
@@ -462,6 +478,193 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
         swapped.windows.push({ p: [x, y, z], w, h, yaw });
         break;
       }
+      case "painting": {
+        const [w, h] = p.size ?? [2, 1.5];
+        const [subject, caption = ""] = (p.name ?? "landscape").split("|");
+        const fw = 0.12;
+        // A gilt frame just behind the canvas.
+        for (const [dx, dy, fw2, fh] of [[0, h / 2 + fw / 2, w + fw * 2, fw], [0, -h / 2 - fw / 2, w + fw * 2, fw], [-w / 2 - fw / 2, 0, fw, h], [w / 2 + fw / 2, 0, fw, h]]) {
+          batch.add("#b8923a", new THREE.BoxGeometry(fw2, fh, 0.1), local(x, y + dy, z, yaw, dx, 0, -0.02));
+        }
+        batch.add("#2a1e10", new THREE.BoxGeometry(w, h, 0.04), local(x, y, z, yaw, 0, 0, -0.04));
+        const m = new THREE.MeshLambertMaterial({ map: paintingTexture(subject, caption, p.color, w / h) });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m);
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = yaw;
+        mesh.receiveShadow = true;
+        parent.add(mesh);
+        break;
+      }
+      case "armor": {
+        const steel = "#b8bccb";
+        const dark = "#4a4d5c";
+        const L = (dx: number, dy: number, dz: number) => local(x, y, z, yaw, dx, dy, dz);
+        for (const sx of [-0.14, 0.14]) {
+          batch.add(steel, new THREE.CylinderGeometry(0.08, 0.07, 0.8, 6), L(sx, 0.4, 0));
+          batch.add(steel, new THREE.CylinderGeometry(0.09, 0.08, 0.5, 6), L(sx, 1.05, 0));
+          batch.add(dark, new THREE.BoxGeometry(0.16, 0.08, 0.28), L(sx, 0.04, 0.05));
+        }
+        batch.add(dark, new THREE.CylinderGeometry(0.26, 0.24, 0.22, 8), L(0, 1.32, 0));
+        batch.add(steel, new THREE.CylinderGeometry(0.28, 0.22, 0.6, 8), L(0, 1.7, 0));
+        for (const sx of [-0.36, 0.36]) {
+          batch.add(steel, new THREE.SphereGeometry(0.13, 8, 6), L(sx, 1.95, 0));
+          batch.add(steel, new THREE.CylinderGeometry(0.065, 0.06, 0.6, 6), L(sx * 1.05, 1.6, 0));
+          batch.add(dark, new THREE.BoxGeometry(0.11, 0.12, 0.12), L(sx * 1.05, 1.26, 0));
+        }
+        batch.add(steel, new THREE.CylinderGeometry(0.15, 0.16, 0.3, 8), L(0, 2.2, 0));
+        batch.add(dark, new THREE.BoxGeometry(0.2, 0.03, 0.05), L(0, 2.22, 0.15));
+        batch.add(p.color ?? "#c8323c", new THREE.ConeGeometry(0.06, 0.3, 5), L(0, 2.48, -0.03));
+        // A halberd in its right hand.
+        batch.add("#5a3e28", new THREE.CylinderGeometry(0.025, 0.025, 2.6, 5), L(0.4, 1.3, 0.12));
+        batch.add(dark, new THREE.BoxGeometry(0.03, 0.35, 0.25), L(0.4, 2.45, 0.2));
+        break;
+      }
+      case "chandelier": {
+        const [r, chain] = p.size ?? [1.8, 1.8];
+        const ringY = y - chain;
+        batch.add("#2e2b38", new THREE.TorusGeometry(r, 0.06, 6, 24).rotateX(Math.PI / 2), at(x, ringY, z));
+        batch.add("#2e2b38", new THREE.TorusGeometry(r * 0.55, 0.05, 6, 18).rotateX(Math.PI / 2), at(x, ringY + 0.3, z));
+        batch.add("#2e2b38", new THREE.CylinderGeometry(0.03, 0.03, chain, 4), at(x, y - chain / 2, z));
+        const n = Math.round(r * 5);
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const cx = x + Math.cos(a) * r;
+          const cz = z + Math.sin(a) * r;
+          batch.add("#f4efe0", new THREE.CylinderGeometry(0.045, 0.045, 0.22, 5), at(cx, ringY + 0.13, cz));
+          candleFlame(cx, ringY + 0.24, cz, 1.4);
+          if (i % 2 === 0) batch.add("#2e2b38", new THREE.CylinderGeometry(0.015, 0.015, Math.hypot(r, chain * 0.4), 3), new THREE.Matrix4().lookAt(new THREE.Vector3(cx, ringY, cz), new THREE.Vector3(x, ringY + chain * 0.4, z), new THREE.Vector3(0, 1, 0)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)).setPosition((cx + x) / 2, ringY + chain * 0.2, (cz + z) / 2));
+        }
+        if (p.light) addLight(new THREE.Vector3(x, ringY - 0.3, z), "#ffd08a", 12, 16);
+        break;
+      }
+      case "candle": {
+        batch.add("#2e2b38", new THREE.CylinderGeometry(0.07 * s, 0.09 * s, 0.03, 8), at(x, y + 0.015, z));
+        batch.add("#f4efe0", new THREE.CylinderGeometry(0.04 * s, 0.04 * s, 0.2 * s, 6), at(x, y + 0.1 * s, z));
+        candleFlame(x, y + 0.2 * s, z, s);
+        break;
+      }
+      case "fire": {
+        batch.add("#4a2e1c", new THREE.CylinderGeometry(0.1, 0.1, 1.1, 6).rotateZ(Math.PI / 2), at(x, y + 0.1, z, 0.4));
+        batch.add("#4a2e1c", new THREE.CylinderGeometry(0.1, 0.1, 1.1, 6).rotateZ(Math.PI / 2), at(x, y + 0.1, z, -0.4));
+        const flames: THREE.Mesh[] = [];
+        for (const [dx, dz, h, color] of [[0, 0, 0.9, "#ffb14a"], [-0.25, 0.1, 0.6, "#ff7a2a"], [0.25, -0.1, 0.65, "#ff7a2a"], [0.05, 0.15, 0.45, "#ffe08a"]] as const) {
+          const m = new THREE.Mesh(new THREE.ConeGeometry(0.16, h, 6), glow(color, 3));
+          m.position.set(x + dx, y + 0.15 + h / 2, z + dz);
+          parent.add(m);
+          flames.push(m);
+        }
+        fires.push({ pos: new THREE.Vector3(x, y + 0.5, z), light: p.light ? addLight(new THREE.Vector3(x, y + 0.8, z), "#ff9a4a", 10, 9) : null, flames, base: rand() * 10 });
+        break;
+      }
+      case "cauldron": {
+        const color = p.color ?? "#7dff5a";
+        batch.add("#1d1a22", new THREE.SphereGeometry(0.5 * s, 10, 8, 0, Math.PI * 2, Math.PI * 0.25, Math.PI * 0.75), at(x, y + 0.42 * s, z));
+        batch.add("#2e2b38", new THREE.TorusGeometry(0.36 * s, 0.05 * s, 6, 16).rotateX(Math.PI / 2), at(x, y + 0.78 * s, z));
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2;
+          batch.add("#1d1a22", new THREE.BoxGeometry(0.07 * s, 0.2 * s, 0.07 * s), at(x + Math.cos(a) * 0.3 * s, y + 0.1 * s, z + Math.sin(a) * 0.3 * s));
+        }
+        const brew = new THREE.Mesh(new THREE.CircleGeometry(0.33 * s, 16).rotateX(-Math.PI / 2), glow(color, 1.8));
+        brew.position.set(x, y + 0.74 * s, z);
+        parent.add(brew);
+        brews.push({ pos: new THREE.Vector3(x, y + 0.76 * s, z), color });
+        break;
+      }
+      case "globe": {
+        batch.add("#4e3322", new THREE.CylinderGeometry(0.35, 0.45, 0.1, 8), at(x, y + 0.05, z));
+        batch.add("#4e3322", new THREE.CylinderGeometry(0.05, 0.07, 0.8, 6), at(x, y + 0.5, z));
+        batch.add("#b8923a", new THREE.TorusGeometry(0.5, 0.025, 4, 20, Math.PI), at(x, y + 1.3, z, Math.PI / 2));
+        const c = document.createElement("canvas");
+        c.width = 128;
+        c.height = 64;
+        const g = c.getContext("2d")!;
+        g.fillStyle = "#2f6fa8";
+        g.fillRect(0, 0, 128, 64);
+        for (let i = 0; i < 12; i++) {
+          g.fillStyle = ["#6fae5c", "#c9b27a", "#4f7d45"][i % 3];
+          g.beginPath();
+          g.ellipse(rand() * 128, 10 + rand() * 44, 6 + rand() * 14, 4 + rand() * 8, rand() * 3, 0, Math.PI * 2);
+          g.fill();
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.45, 20, 14), new THREE.MeshLambertMaterial({ map: tex }));
+        ball.position.set(x, y + 1.3, z);
+        ball.rotation.z = 0.4;
+        ball.castShadow = true;
+        parent.add(ball);
+        spinners.push({ obj: ball, speed: 0.25 });
+        break;
+      }
+      case "orrery": {
+        batch.add("#b8923a", new THREE.CylinderGeometry(0.3, 0.35, 0.08, 10), at(x, y + 0.04, z));
+        batch.add("#b8923a", new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), at(x, y + 0.3, z));
+        const sun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), glow("#ffd25a", 2.4));
+        sun.position.set(x, y + 0.6, z);
+        parent.add(sun);
+        const brass = new THREE.MeshLambertMaterial({ color: "#b8923a" });
+        [[0.3, "#9ad0ff", 0.06, 1.1], [0.5, "#ff8a5a", 0.08, 0.7], [0.7, "#c58fff", 0.07, 0.45]].forEach(([r, color, size, speed]) => {
+          const pivot = new THREE.Group();
+          pivot.position.set(x, y + 0.6, z);
+          pivot.rotation.y = rand() * 6;
+          const arm = new THREE.Mesh(new THREE.BoxGeometry(r as number, 0.015, 0.015), brass);
+          arm.position.x = (r as number) / 2;
+          const planet = new THREE.Mesh(new THREE.SphereGeometry(size as number, 10, 8), new THREE.MeshLambertMaterial({ color: color as string }));
+          planet.position.x = r as number;
+          pivot.add(arm, planet);
+          parent.add(pivot);
+          spinners.push({ obj: pivot, speed: speed as number });
+        });
+        break;
+      }
+      case "phoenix": {
+        batch.add("#b8923a", new THREE.CylinderGeometry(0.04, 0.05, 1.6, 6), at(x, y + 0.8, z));
+        batch.add("#b8923a", new THREE.CylinderGeometry(0.3, 0.35, 0.06, 8), at(x, y + 0.03, z));
+        batch.add("#b8923a", new THREE.CylinderGeometry(0.025, 0.025, 0.7, 5).rotateZ(Math.PI / 2), at(x, y + 1.6, z, yaw));
+        const bird = new THREE.Group();
+        bird.position.set(x, y + 1.85, z);
+        bird.rotation.y = yaw;
+        const red = glow("#ff5a2a", 1.6);
+        const gold = glow("#ffb84a", 1.8);
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), red);
+        body.scale.set(1, 1.2, 1.3);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), red);
+        head.position.set(0, 0.22, 0.1);
+        const beak = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 4).rotateX(Math.PI / 2), gold);
+        beak.position.set(0, 0.2, 0.22);
+        const crest = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.14, 4), gold);
+        crest.position.set(0, 0.34, 0.06);
+        crest.rotation.x = -0.4;
+        const tail = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.6, 4), gold);
+        tail.position.set(0, -0.25, -0.22);
+        tail.rotation.x = -2.4;
+        bird.add(body, head, beak, crest, tail);
+        for (const sx of [-1, 1]) {
+          const wing = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.42, 4), red);
+          wing.position.set(sx * 0.17, 0, -0.05);
+          wing.rotation.set(-2.2, 0, sx * 0.25);
+          bird.add(wing);
+        }
+        parent.add(bird);
+        birds.push({ obj: bird, y: y + 1.85, base: rand() * 10 });
+        break;
+      }
+      case "board": {
+        const [w, h] = p.size ?? [6, 4];
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = Math.round((1024 * h) / w);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: texture }));
+        mesh.position.set(x, y, z);
+        mesh.rotation.y = yaw;
+        parent.add(mesh);
+        batch.add("#4e3322", new THREE.BoxGeometry(w + 0.3, h + 0.3, 0.1), local(x, y, z, yaw, 0, 0, -0.06));
+        addBoard({ canvas, kind: p.name ?? "xp", texture });
+        break;
+      }
       default:
         break; // students and NPCs are drawn elsewhere
     }
@@ -480,6 +683,20 @@ export function addProps(parent: THREE.Object3D, level: Level, opts: PropOptions
       for (const f of flames) {
         if (f.light) f.light.intensity = 8 + Math.sin(t * 13 + f.base) * 1.2 + Math.sin(t * 7.3 + f.base * 2) * 1.5;
         if (tick) particles.emit({ at: f.pos, count: 1, color: "#ffb347", color2: "#ff5a1f", up: 1.4, speed: 0.25, spread: 0.12, life: 0.55, size: 0.22, drag: 1 });
+      }
+      tickBoards(Date.now());
+      for (const sp of spinners) sp.obj.rotation.y += sp.speed * dt;
+      for (const b of birds) {
+        b.obj.position.y = b.y + Math.sin(t * 1.3 + b.base) * 0.03;
+        if (tick && Math.random() < 0.15) particles.emit({ at: b.obj.position, count: 1, color: "#ffb84a", color2: "#ff5a1f", up: 0.4, speed: 0.3, spread: 0.2, life: 0.8, size: 0.08, gravity: -0.2 });
+      }
+      for (const f of fires) {
+        f.flames.forEach((m, i) => (m.scale.y = 0.85 + Math.sin(t * (9 + i * 2.3) + f.base + i) * 0.15));
+        if (f.light) f.light.intensity = 9 + Math.sin(t * 11 + f.base) * 1.5 + Math.sin(t * 6.1) * 1.2;
+        if (tick) particles.emit({ at: f.pos, count: 1, color: "#ffb347", color2: "#ff5a1f", up: 1.6, speed: 0.3, spread: 0.3, life: 0.7, size: 0.3, drag: 1 });
+      }
+      if (tick) {
+        for (const b of brews) if (Math.random() < 0.12) particles.emit({ at: b.pos, count: 1, color: b.color, speed: 0.15, spread: 0.2, up: 0.6, life: 0.9, size: 0.12, gravity: -0.4 });
       }
       for (const c of crystals) {
         c.mesh.rotation.y = t * 0.7;

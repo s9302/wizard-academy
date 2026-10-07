@@ -157,6 +157,22 @@ export const TABLETS: Record<string, { title: string; lines: string[] }> = {
       "Look after the academy until I return. The crown on the stand is yours. Wear it badly. (Orrin Vale)",
     ],
   },
+  library: {
+    title: "A book chained to a lectern",
+    lines: [
+      "Whoever built this academy wrote its first rules in this book, and the first rule is crossed out so hard the page is torn: \"A Headmaster serves for one lifetime.\"",
+      "In the margin, in a careful, very old hand: \"Why only one?\"",
+      "Madam Inkwell has added a note underneath: \"Return this book to the Restricted Section. That means you.\"",
+    ],
+  },
+  office: {
+    title: "Vale's journal, open on his desk",
+    lines: [
+      "Day 41. The storm grows louder at night. Thorne said the first Headmaster heard it too, before he stopped coming down to dinner.",
+      "Day 43. I have had his portrait's face scratched out. The students said its eyes followed them. They were right.",
+      "Day 44. If I don't come back, the Hall of Champions will tell you who's ready to finish what I started. Be on that board.",
+    ],
+  },
 };
 
 // Which chapters a player has completed: a chapter is done once its trial

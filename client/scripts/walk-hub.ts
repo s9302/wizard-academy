@@ -138,6 +138,8 @@ check(touching() === null, "spawn is outside every portal");
 // Routes from the spawn: the garden and observatory gates face the plaza
 // side of each corner; the sanctum is through the academy doors and on
 // through the Hall of Trials' inner doors.
+const upEast: [number, number][] = [...toHall, [4, -33], [4.4, -30.2], [17, -30.2], [20, -30.2], [13, -33], [13, -48.4]];
+const upWest: [number, number][] = [...toHall, [-4, -33], [-4.4, -30.2], [-17, -30.2], [-20, -30.2], [-13, -33], [-13, -48.4]];
 const stations = new Map(academy.stations!.map((st) => [st.id, st]));
 const routes: Record<string, [number, number][]> = {
   spellbook: [[0, 12]],
@@ -146,6 +148,11 @@ const routes: Record<string, [number, number][]> = {
   garden: [[-6, 18], [-20, 27.5], [-27, 27.5]],
   observatory: [[6, 18], [20, 27.5], [28, 27.5], [32, 22], [32, 29.5]],
   sanctum: [...toHall, [0, -47], [0, -56], [-6.5, -56]],
+  // Upstairs: round the open door, up the east or west flight, across the
+  // gallery and through the inner wall's upper doorways.
+  office: [...upEast, [20, -48.4], [20, -53], [19, -57], [19, -66.8]],
+  champions: [...upEast, [13, -48.4], [0, -48.4], [0, -53], [0, -57], [3.6, -67], [3.6, -73]],
+  library: [...upWest, [-20, -48.4], [-20, -53], [-18, -57], [-17, -64.5], [-10, -64.5], [-10, -69.4]],
 };
 const AREAS: Record<string, string> = { garden: "area:garden", observatory: "area:observatory", sanctum: "area:sanctum" };
 

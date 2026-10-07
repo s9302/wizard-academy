@@ -45,7 +45,18 @@ export type PropKind =
   | "crystal" // a glowing, slowly spinning crystal
   | "window" // stained glass at pos facing yaw, size = [width, height]
   | "student" // an academy student wandering near pos (client-side only)
-  | "npc"; // someone to talk to (see `talk`)
+  | "npc" // someone to talk to (see `talk`)
+  // The academy's upper floor:
+  | "painting" // a framed painting at pos facing yaw, size = [width, height]; name = "subject|caption"
+  | "armor" // a suit of armor standing on pos, facing yaw; color = its plume
+  | "chandelier" // hangs from pos (the ceiling), size = [radius, chain length]
+  | "candle" // a lit candle standing on pos
+  | "fire" // a log fire on pos (a fireplace's)
+  | "cauldron" // a bubbling cauldron standing on pos; color = the brew
+  | "globe" // a spinning globe on a floor stand
+  | "orrery" // a brass orrery on a table
+  | "phoenix" // a phoenix on its perch
+  | "board" // a live leaderboard at pos facing yaw, size = [width, height]; name = "xp" or "trials:1-5"
 
 export type Prop = {
   kind: PropKind;
@@ -64,7 +75,7 @@ export type Prop = {
 // Something to walk up to and press E at (hub only).
 export type Station = {
   id: string;
-  kind: "spellbook" | "wardrobe" | "chronicle" | "tablet";
+  kind: "spellbook" | "wardrobe" | "chronicle" | "tablet" | "leaderboard";
   pos: Vec3; // on the floor in front of it
   label: string;
   tablet?: string; // which lore text (shared/src/story.ts TABLETS)
@@ -156,6 +167,7 @@ export type Portal = {
   pos: Vec3; // center of the opening, at floor level
   yaw: number; // the way its front faces, radians (same convention as spawnYaw)
   color: string;
+  signY?: number; // how high its sign floats (default PORTAL_STEP + PORTAL_HEIGHT + 3.6); lower indoors
 };
 
 // Opening size, shared by the level geometry, the visuals and inPortal().

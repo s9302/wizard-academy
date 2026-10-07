@@ -752,3 +752,10 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
 #horde-maps .picker-title { grid-column: 1 / -1; }
 #horde-maps button { background: rgba(255, 255, 255, 0.06); color: var(--ink); font-weight: 400; font-size: 0.85em; padding: 6px 8px; }
 #horde-maps button.on { border-color: #7dffb0; box-shadow: 0 0 0 1px #7dffb0 inset; font-weight: 700; }
+
+/* The Hall of Champions' lectern (HubPanel.champions) */
+#hub-panel table.champions { width: 100%; border-collapse: collapse; font-size: 14px; }
+#hub-panel table.champions td { padding: 3px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+#hub-panel table.champions td.rank { width: 2.5em; opacity: 0.7; }
+#hub-panel table.champions td.value { text-align: right; white-space: nowrap; }
+#hub-panel table.champions tr.me td { color: #ffe58a; font-weight: bold; }

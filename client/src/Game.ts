@@ -277,6 +277,7 @@ export class Game {
         (loadout) => this.net.send({ t: "loadout", ...loadout }),
         () => this.input.lock(),
         () => this.myId,
+        () => this.name,
       );
       this.stationHint = document.createElement("div");
       this.stationHint.id = "station-hint";

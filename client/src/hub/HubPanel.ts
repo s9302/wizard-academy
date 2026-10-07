@@ -23,7 +23,10 @@ import {
   FEATURES,
   FEATURE_NAMES,
 } from "../../../shared/src/appearance.ts";
+import { getHallOfFame, TRIALS } from "./hallOfFame.ts";
 import { WardrobePreview } from "./WardrobePreview.ts";
+import { formatTime } from "../ParkourHud.ts";
+import { levelInfo } from "../../../shared/src/progression.ts";
 import type { Station } from "../../../shared/src/levels/types.ts";
 import { CHAPTERS, chaptersDone, TABLETS } from "../../../shared/src/story.ts";
 import {
@@ -65,6 +68,7 @@ export class HubPanel {
   private body: HTMLElement;
   private station: Station | null = null;
   private profile: PanelProfile;
+  private myName: () => string;
   private sendLoadout: (loadout: Loadout) => void;
   private onClose: () => void;
   private myId: () => number;
@@ -76,7 +80,8 @@ export class HubPanel {
   private preview: WardrobePreview | null = null;
   private tab = "outfit";
 
-  constructor(profile: PanelProfile, save: (loadout: Loadout) => void, onClose: () => void, myId: () => number = () => 1) {
+  constructor(profile: PanelProfile, save: (loadout: Loadout) => void, onClose: () => void, myId: () => number = () => 1, myName: () => string = () => "") {
+    this.myName = myName;
     this.profile = profile;
     this.sendLoadout = save;
     this.onClose = onClose;
@@ -156,6 +161,7 @@ export class HubPanel {
     if (s.kind === "spellbook") this.spellbook();
     else if (s.kind === "wardrobe") this.wardrobe();
     else if (s.kind === "chronicle") this.chronicle();
+    else if (s.kind === "leaderboard") this.champions();
     else this.tablet(s.tablet ?? "");
   }
 
@@ -310,6 +316,40 @@ export class HubPanel {
       const rewards = unlocksForChapter(c.id).map((u) => u.name).join(", ");
       el("p", section, `${done.includes(c.id) ? "Unlocked" : "Unlocks"}: ${rewards}`, "panel-hint");
     }
+  }
+
+  // The Hall of Champions' lectern: the full leaderboards.
+  private champions(): void {
+    const b = this.body;
+    el("h2", b, "Hall of Champions");
+    const status = el("p", b, "Reading the ledger…", "panel-hint");
+    void getHallOfFame().then((data) => {
+      if (this.station?.kind !== "leaderboard" || !status.isConnected) return; // closed meanwhile
+      if (!data) {
+        status.textContent = "The ledger can't be read right now. Try again in a moment.";
+        return;
+      }
+      status.textContent = "Updated every minute. Your own name is highlighted.";
+      const me = this.myName();
+      const table = (title: string, rows: [string, string, string][]) => {
+        el("h3", b, title);
+        if (!rows.length) {
+          el("p", b, "Nobody yet. It could be you.", "panel-hint");
+          return;
+        }
+        const t = el("table", b, "", "champions");
+        rows.forEach(([rank, name, value]) => {
+          const tr = el("tr", t, "", name === me ? "me" : "");
+          el("td", tr, rank, "rank");
+          el("td", tr, name);
+          el("td", tr, value, "value");
+        });
+      };
+      table("Most experience", data.xp.map((r, i) => [`${i + 1}.`, r.name, `Level ${levelInfo(r.xp).level} · ${r.xp.toLocaleString()} XP`]));
+      for (const t of TRIALS) {
+        table(`${t.short}: ${t.title}`, (data.times[t.id] ?? []).map((e, i) => [`${i + 1}.`, e.name, formatTime(e.time)]));
+      }
+    });
   }
 
   private tablet(id: string): void {
