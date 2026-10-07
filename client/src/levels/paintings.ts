@@ -1,7 +1,7 @@
 // Canvas-painted pictures for the academy's walls: portraits, landscapes,
-// a seascape, a dragon, the academy by night, a starfield, and the Potions
-// Classroom's blackboard. Each is drawn once, from a seeded random, so the
-// same painting looks the same for everyone.
+// a seascape, a dragon, the academy by night, a starfield, the Potions
+// Classroom's blackboard, house crests and common-room notice boards. Each
+// is drawn once, from a seeded random, so it looks the same for everyone.
 
 import * as THREE from "three";
 import { HOUSES } from "../../../shared/src/houses.ts";
@@ -407,6 +407,56 @@ export function paintingTexture(subject: string, caption: string, accent: string
       // The name goes on the plaque below (the caption).
       break;
     }
+    case "notices": {
+      // A cork board with notes pinned up (the caption is the house's name).
+      g.fillStyle = "#a8794a";
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = "rgba(0,0,0,0.12)";
+      for (let i = 0; i < 300; i++) g.fillRect(rand() * W, rand() * H, 2, 2);
+      const notes = [
+        `${caption} common room rules: 1. No hexing the furniture.`,
+        "Ditchquid tryouts! Bring your own broom.",
+        "LOST: one toad. Answers to 'Gerald'.",
+        "Study group for Trial IV, Thursdays",
+        "Whoever took my socks: I know.",
+        "House points this week: we're winning (probably)",
+      ];
+      const spots = [[0.05, 0.08], [0.52, 0.06], [0.08, 0.5], [0.55, 0.45], [0.3, 0.27], [0.32, 0.7]];
+      g.font = `${Math.round(H * 0.055)}px Georgia, serif`;
+      g.textBaseline = "top";
+      notes.forEach((text, i) => {
+        const [fx, fy] = spots[i];
+        const x = fx * W;
+        const y = fy * H;
+        const w = W * 0.42;
+        const h = H * 0.24;
+        g.save();
+        g.translate(x + w / 2, y + h / 2);
+        g.rotate((rand() - 0.5) * 0.12);
+        g.fillStyle = ["#f4efe0", "#fff3a8", "#dff0ff", "#ffe0e8"][i % 4];
+        g.fillRect(-w / 2, -h / 2, w, h);
+        g.fillStyle = "#2a2230";
+        // Wrap the note's words onto lines.
+        const words = text.split(" ");
+        let line = "";
+        let ly = -h / 2 + 6;
+        for (const word of words) {
+          const next = line ? `${line} ${word}` : word;
+          if (g.measureText(next).width > w - 12 && line) {
+            g.fillText(line, -w / 2 + 6, ly);
+            line = word;
+            ly += H * 0.065;
+          } else line = next;
+        }
+        g.fillText(line, -w / 2 + 6, ly);
+        g.fillStyle = accent ?? "#c8323c";
+        g.beginPath();
+        g.arc(0, -h / 2 + 4, 4, 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+      });
+      return finish(c, key);
+    }
     case "blackboard": {
       g.fillStyle = "#1f3a2c";
       g.fillRect(0, 0, W, H);
@@ -458,6 +508,10 @@ export function paintingTexture(subject: string, caption: string, accent: string
     g.textBaseline = "middle";
     g.fillText(caption, W / 2, H - ph / 2 - 6);
   }
+  return finish(c, key);
+}
+
+function finish(c: HTMLCanvasElement, key: string): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   cache.set(key, t);

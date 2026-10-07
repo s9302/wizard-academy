@@ -45,7 +45,7 @@ const props: Prop[] = [];
 // Ground and a boundary wall.
 const MIDZ = (HALF + NORTH) / 2;
 const DEPTH = HALF - NORTH;
-boxes.push({ pos: [0, -0.5, MIDZ], size: [HALF * 2 + 4, 1, DEPTH + 4], color: GRASS });
+boxes.push({ pos: [0, -0.5, MIDZ], size: [HALF * 2 + 8, 1, DEPTH + 4], color: GRASS }); // (the house towers stand out over the side walls)
 for (const [x, z, w, d] of [
   [0, NORTH, HALF * 2, 1],
   [0, HALF, HALF * 2, 1],

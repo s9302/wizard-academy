@@ -8,7 +8,7 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import * as THREE from "three";
 import { academy } from "../../shared/src/levels/academy.ts";
-import { HOUSE_TOWERS, TOWER_FLOOR } from "../../shared/src/levels/academyHouses.ts";
+import { HOUSE_TOWERS, TOWER_FLOOR, TOWER_UPPER } from "../../shared/src/levels/academyHouses.ts";
 import { PlayerController } from "../src/PlayerController.ts";
 import type { Input } from "../src/Input.ts";
 
@@ -52,9 +52,10 @@ for (const t of HOUSE_TOWERS) {
   player.teleport(...academy.spawn);
   player.setBroom(true);
   const y = TOWER_FLOOR + 1.6;
-  flyTo(0, y + 6, 25); // up over the plaza
-  flyTo(t.x, y + 6, t.z + t.face * 10); // out in front of the arch
-  flyTo(t.x, y, t.z + t.face * 10);
+  const cruise = 42; // above the spires
+  flyTo(0, cruise, 25); // up over the plaza
+  flyTo(t.x, cruise, t.z + t.face * 11, 40); // out in front of the arch
+  flyTo(t.x, y, t.z + t.face * 11);
   flyTo(t.x, y, t.z); // in through the arch
   const p = pos();
   check(Math.abs(p.x - t.x) < 4 && Math.abs(p.z - t.z) < 4 && p.y > TOWER_FLOOR, `${t.house}: flew in through the arch (at ${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})`);
@@ -74,6 +75,27 @@ for (const t of HOUSE_TOWERS) {
   input.forward = 0;
   const miss = Math.hypot(st.pos[0] - pos().x, st.pos[2] - pos().z);
   check(miss < 1.5, `${t.house}: walked to the house roll (${miss.toFixed(2)} m)`);
+  // Up the stairs to the dormitory: walk to the foot of the flight (by the
+  // arch, along the outer wall) and up it.
+  const sx = Math.sign(t.x);
+  const stairX = t.x + sx * 4.1; // the middle of the flight, across
+  const zAt = (w: number) => t.z + t.face * (6 - 0.5 - w);
+  const walkTo = (x: number, z: number, seconds = 8) => {
+    for (let s = 0; s < seconds; s += DT) {
+      const p = pos();
+      if (Math.hypot(x - p.x, z - p.z) < 0.3) break;
+      input.yaw = Math.atan2(-(x - p.x), -(z - p.z));
+      input.forward = 1;
+      player.step(DT, input as unknown as Input);
+    }
+    input.forward = 0;
+  };
+  walkTo(stairX - sx * 2.5, zAt(0.6));
+  walkTo(stairX, zAt(0.6));
+  walkTo(stairX, zAt(9.8));
+  check(Math.abs(pos().y - (TOWER_UPPER + 0.9)) < 0.3, `${t.house}: walked up the stairs to the dormitory (y ${pos().y.toFixed(2)})`);
+  walkTo(t.x - sx * 1, zAt(5));
+  check(Math.abs(pos().y - (TOWER_UPPER + 0.9)) < 0.3, `${t.house}: ...and across it (y ${pos().y.toFixed(2)})`);
 }
 
 // A broom doesn't go through walls: fly at the academy's facade.
