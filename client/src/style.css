@@ -759,3 +759,8 @@ body.in-royale #feed { max-width: max(160px, calc(50vw - 240px)); }
 #hub-panel table.champions td.rank { width: 2.5em; opacity: 0.7; }
 #hub-panel table.champions td.value { text-align: right; white-space: nowrap; }
 #hub-panel table.champions tr.me td { color: #ffe58a; font-weight: bold; }
+
+/* Tag and infection: the powerup in your pocket (ChaseHud.powerup) */
+#chase-pocket { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 10px; background: rgba(15, 10, 30, 0.72); border: 1px solid rgba(255, 255, 255, 0.18); font-weight: bold; white-space: nowrap; }
+#chase-pocket small { font-weight: normal; opacity: 0.75; }
+#chase-pocket .pocket-dot { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }

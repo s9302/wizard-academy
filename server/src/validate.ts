@@ -79,8 +79,10 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case "unstuck":
       return { t: "unstuck" };
     case "chaseSetting":
-      if (typeof msg.grapple !== "boolean") return null;
-      return { t: "chaseSetting", grapple: msg.grapple };
+      if (msg.grapple !== undefined && typeof msg.grapple !== "boolean") return null;
+      if (msg.powerups !== undefined && typeof msg.powerups !== "boolean") return null;
+      if (msg.grapple === undefined && msg.powerups === undefined) return null;
+      return { t: "chaseSetting", grapple: msg.grapple as boolean | undefined, powerups: msg.powerups as boolean | undefined };
     case "grapple": {
       if (!isVec3(msg.d)) return null;
       const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);

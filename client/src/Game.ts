@@ -15,6 +15,8 @@ import { levelInfo } from "../../shared/src/progression.ts";
 import type { MoveMsg, ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { HUB_ROOM, type RoomInfo } from "../../shared/src/rooms.ts";
 import { ChaseHud } from "./ChaseHud.ts";
+import { Pickups } from "./royale/Pickups.ts";
+import { POWERUPS, type PowerupKind } from "../../shared/src/combat.ts";
 import type { Input } from "./Input.ts";
 import { buildLevel, type CheckpointMarkers } from "./levels/buildLevel.ts";
 import { SPELLS } from "../../shared/src/combat.ts";
@@ -128,6 +130,9 @@ export class Game {
   private markers!: CheckpointMarkers;
   private parkour: ParkourHud | null = null;
   private chase: ChaseHud | null = null;
+  // Tag and infection's powerups (the arena's are in Royale).
+  private chasePickups: Pickups | null = null;
+  private chaseHeld: PowerupKind | null = null;
   private portals: Portals | null = null;
   private royale: Royale | null = null;
   private profile: PanelProfile;
@@ -210,7 +215,9 @@ export class Game {
         onMap: (map) => this.net.send({ t: "chaseMap", map }),
         onUnstuck: () => this.net.send({ t: "unstuck" }),
         onGrapple: (on) => this.net.send({ t: "chaseSetting", grapple: on }),
+        onPowerups: (on) => this.net.send({ t: "chaseSetting", powerups: on }),
       });
+      this.chasePickups = new Pickups(this.scene);
     } else if (room.mode === "royale" || room.mode === "boss" || room.mode === "ctf" || room.mode === "horde") {
       const send = (msg: Parameters<Net["send"]>[0]) => this.net.send(msg);
       const slowFactor = SPELLS.frost.slowFactor!;
@@ -532,6 +539,15 @@ export class Game {
         break;
       case "chaseSettings":
         this.chase?.setGrapple(msg.grapple);
+        this.chase?.setPowerups(msg.powerups);
+        break;
+      case "pickups":
+        this.chasePickups?.set(msg.items);
+        break;
+      case "held":
+        if (msg.kind) sound.play("pickup", { volume: 0.7, rate: 1.3 });
+        this.chaseHeld = msg.kind;
+        this.chase?.powerup(msg.kind);
         break;
       case "knock":
         // Pulled by a grapple (the arena's knocks go through Royale).
@@ -539,6 +555,7 @@ export class Game {
         break;
       case "effect":
         if (msg.kind === "chain" && msg.from && msg.to) this.drawChain(msg.from, msg.to, msg.ms, msg.id === this.myId);
+        else this.chasePowerupEffect(msg.id, msg.kind, msg.ms);
         break;
       case "chasers":
         if (msg.ids.includes(this.myId) && !this.chase?.isChaser) sound.fx("sting");
@@ -588,6 +605,41 @@ export class Game {
 
   // Tag / infection: who would a click tag right now? (null if nobody, or if
   // you're not a chaser in a live round.)
+  // A powerup someone used in tag or infection.
+  private chaseHasteUntil = 0;
+  private chasePowerupEffect(id: number, kind: string, ms: number): void {
+    if (!this.chase) return;
+    const mine = id === this.myId;
+    const at = mine ? null : this.remotes.positionOf(id);
+    const color = { haste: "#ffe14a", quadjump: "#dff3ff", stealth: "#9a6cff" }[kind];
+    if (!color) return;
+    if (kind === "stealth") {
+      if (ms > 0) sound.fx("stealth", { at });
+      if (mine) {
+        this.chase.cloaked(ms > 0);
+        if (ms > 0) this.addFeed("You're invisible! Tagging someone gives you away.");
+      } else this.remotes.setVisible(id, ms === 0);
+      return;
+    }
+    sound.fx("blink", { at, rate: kind === "haste" ? 1.5 : 1.1 });
+    if (at) particles.emit({ at, count: 35, color, color2: "#ffffff", speed: 3, up: 2, life: 0.7, size: 0.18 });
+    if (!mine) {
+      this.remotes.glow(id, color, ms);
+      return;
+    }
+    if (kind === "haste") {
+      this.chaseHasteUntil = performance.now() + ms;
+      this.player.speedMul = POWERUPS.haste.speed;
+      setTimeout(() => {
+        if (this.chase && performance.now() >= this.chaseHasteUntil - 20) this.player.speedMul = 1;
+      }, ms + 20);
+      this.addFeed("Haste! You run faster for a few seconds.");
+    } else if (kind === "quadjump") {
+      this.player.multiJump(ms / 1000, POWERUPS.quadjump.jumps);
+      this.addFeed("Cloud Boots! Jump four times in a row.");
+    }
+  }
+
   private tagTarget(): number | null {
     if (!this.chase?.playing || !this.chase.isChaser) return null;
     const skip = this.room.mode === "tag" ? "it" : "cursed";
@@ -926,6 +978,7 @@ export class Game {
     // toggles flying (Space up, C down, passes through walls).
     const f = this.input.consumeFly();
     if (f && this.royale?.heldPowerup) this.royale.usePowerup();
+    else if (f && this.chaseHeld && this.chase?.playing) this.net.send({ t: "usePowerup" });
     else if (f && this.profile.isAdmin) {
       this.player.flying = !this.player.flying;
       this.addFeed(this.player.flying ? "Flying (F to land)" : "Flying off");
@@ -1034,6 +1087,7 @@ export class Game {
     this.bossView?.update(now / 1000);
     this.ctfView?.update(now / 1000);
     this.npcs?.update(now / 1000, dt, this.player.position);
+    this.chasePickups?.update(now / 1000);
     this.features?.update(now / 1000, dt);
     this.particleSystem.update(dt);
     if (this.postfx) this.postfx.render(dt);

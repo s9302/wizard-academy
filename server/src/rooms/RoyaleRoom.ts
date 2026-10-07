@@ -1240,7 +1240,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   private spawnPickup(spot: number): void {
     const p = this.level.pickupSpots?.[spot];
     if (!p) return;
-    const kinds = PICKUP_KINDS.length ? PICKUP_KINDS : (Object.keys(PICKUPS) as PickupKind[]);
+    // (Powerups are only in tag and infection now: ChaseRoom.)
+    const kinds = (PICKUP_KINDS.length ? PICKUP_KINDS : (Object.keys(PICKUPS) as PickupKind[])).filter((k) => !isPowerup(k));
     let roll = Math.random() * kinds.reduce((sum, k) => sum + PICKUPS[k].weight, 0);
     const kind = kinds.find((k) => (roll -= PICKUPS[k].weight) < 0) ?? "tome";
     const id = nextPickupId++;

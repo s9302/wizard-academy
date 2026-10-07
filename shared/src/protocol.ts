@@ -67,7 +67,7 @@ export type ReadyMsg = { t: "ready" };
 export type ChaseMapMsg = { t: "chaseMap"; map: string };
 export type UnstuckMsg = { t: "unstuck" };
 // Tag and infection: turn the Knight's grapple on or off for the room, and use it (E).
-export type ChaseSettingMsg = { t: "chaseSetting"; grapple: boolean };
+export type ChaseSettingMsg = { t: "chaseSetting"; grapple?: boolean; powerups?: boolean };
 export type GrappleMsg = { t: "grapple"; d: Vec3 };
 // Vote for the next arena (a level id from the options offered).
 export type VoteMsg = { t: "vote"; arena: string };
@@ -183,7 +183,7 @@ export type LineupEntry = { id: number; name: string; bot: boolean; cls: ClassId
 export type LineupMsg = { t: "lineup"; players: LineupEntry[]; mode: RoyaleMode; next: RoyaleMode };
 // Tag and infection: the maps on offer, this round's and the next one's.
 export type ChaseMapsMsg = { t: "chaseMaps"; maps: string[]; current: string; next: string };
-export type ChaseSettingsMsg = { t: "chaseSettings"; grapple: boolean };
+export type ChaseSettingsMsg = { t: "chaseSettings"; grapple: boolean; powerups: boolean };
 // Capture the flag: the score, and each team's flag (red, blue): at its
 // stand, carried by someone, or dropped somewhere.
 export type CtfFlag = { state: "home" | "carried" | "dropped"; p: Vec3; carrier: number | null };

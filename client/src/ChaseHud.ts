@@ -2,6 +2,7 @@
 // banners when you're tagged, and the results panel at the end of a round.
 // Like the parkour HUD, it only shows what the server decided.
 
+import { PICKUPS, type PowerupKind } from "../../shared/src/combat.ts";
 import type { RoundState } from "../../shared/src/protocol.ts";
 import type { RoomMode } from "../../shared/src/rooms.ts";
 import { BotControls } from "./BotControls.ts";
@@ -39,6 +40,9 @@ export class ChaseHud {
   private onMap: (map: string) => void;
   private grappleButton: HTMLButtonElement;
   private grapple = false;
+  private powerupsButton: HTMLButtonElement;
+  private powerupsOn = true;
+  private pocketEl: HTMLElement;
 
   // onBots: ask the server to add or remove a bot.
   // onMap: pick the next round's map; onUnstuck: back to a spawn point (also R).
@@ -48,7 +52,7 @@ export class ChaseHud {
     mode: RoomMode,
     roomName: string,
     onBots: (action: "add" | "remove") => void,
-    extra: { onMap: (map: string) => void; onUnstuck: () => void; onGrapple: (on: boolean) => void },
+    extra: { onMap: (map: string) => void; onUnstuck: () => void; onGrapple: (on: boolean) => void; onPowerups: (on: boolean) => void },
   ) {
     this.clock = clock;
     this.mode = mode;
@@ -69,7 +73,13 @@ export class ChaseHud {
     this.grappleButton.className = "secondary";
     this.grappleButton.onclick = () => extra.onGrapple(!this.grapple);
     this.setGrapple(false);
-    this.extras.append(respawn, this.grappleButton, this.mapBox);
+    // Powerups lying about the map: also a room setting.
+    this.powerupsButton = document.createElement("button");
+    this.powerupsButton.type = "button";
+    this.powerupsButton.className = "secondary";
+    this.powerupsButton.onclick = () => extra.onPowerups(!this.powerupsOn);
+    this.setPowerups(true);
+    this.extras.append(respawn, this.grappleButton, this.powerupsButton, this.mapBox);
     document.querySelector("#overlay .panel")!.appendChild(this.extras);
 
     // Bot controls live in the pause panel (press Esc), where the mouse is free.
@@ -81,6 +91,34 @@ export class ChaseHud {
     this.bannerEl = el("div", "banner", hud);
     this.resultsEl = el("div", "results", hud);
     this.resultsEl.hidden = true;
+    this.pocketEl = el("div", "chase-pocket", hud);
+    this.pocketEl.hidden = true;
+  }
+
+  setPowerups(on: boolean): void {
+    this.powerupsOn = on;
+    this.powerupsButton.textContent = `Powerups (walk into one, F to use it): ${on ? "ON" : "off"}`;
+    this.powerupsButton.classList.toggle("on", on);
+  }
+
+  // The powerup in your pocket, if any.
+  powerup(kind: PowerupKind | null): void {
+    this.pocketEl.hidden = !kind;
+    if (!kind) return;
+    const def = PICKUPS[kind];
+    this.pocketEl.replaceChildren();
+    const dot = document.createElement("span");
+    dot.className = "pocket-dot";
+    dot.style.background = def.color;
+    const text = document.createElement("span");
+    text.textContent = `F · ${def.name}`;
+    const detail = document.createElement("small");
+    detail.textContent = def.description ?? "";
+    this.pocketEl.append(dot, text, detail);
+  }
+
+  cloaked(on: boolean): void {
+    document.body.classList.toggle("stealthed", on); // the same dark edges as the arena's Vanish
   }
 
   // The map picker: one button per map; the next round's is highlighted.
@@ -112,6 +150,7 @@ export class ChaseHud {
 
   dispose(): void {
     this.extras.remove();
+    this.cloaked(false);
   }
 
   get isChaser(): boolean {

@@ -1,5 +1,6 @@
-// Powerups (carried, one at a time, used with F) and crouching (a smaller
-// target). Two test players fight in the arena.
+// Crouching (a smaller target, in the arena), and powerups (carried, one at
+// a time, used with F): only in tag and infection, where anyone can switch
+// them off and on. None in the arena any more.
 //
 //   ROYALE_ARENA=arena ROYALE_STORM=off ROYALE_PICKUPS=all ROUND_TIME_SCALE=0.25 ... node server/src/index.ts
 //   GAME_PIN=... node server/scripts/powerups-check.ts http://localhost:3000
@@ -31,10 +32,10 @@ async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   return cond();
 }
 
-async function enter(cookie: string) {
+async function enter(cookie: string, room = "royale") {
   const ws = new WebSocket(base.replace(/^http/, "ws") + "/ws", { headers: { cookie } });
   const msgs: ServerMsg[] = [];
-  const me = { id: 0, pos: [0, 0, 0] as Vec3, tp: 0, state: "", held: null as string | null, pickups: [] as PickupInfo[], hp: new Map<number, number>() };
+  const me = { id: 0, pos: [0, 0, 0] as Vec3, tp: 0, state: "", held: null as string | null, pickups: [] as PickupInfo[], hp: new Map<number, number>(), powerupsOn: false };
   ws.on("message", (d) => {
     const m = JSON.parse(d.toString()) as ServerMsg;
     msgs.push(m);
@@ -50,9 +51,10 @@ async function enter(cookie: string) {
     if (m.t === "held") me.held = m.kind;
     if (m.t === "pickups") me.pickups = m.items;
     if (m.t === "health") me.hp.set(m.id, m.hp);
+    if (m.t === "chaseSettings") me.powerupsOn = m.powerups;
   });
   await new Promise((r) => ws.on("open", r));
-  ws.send(JSON.stringify({ t: "hello", room: "royale" }));
+  ws.send(JSON.stringify({ t: "hello", room }));
   await waitFor(() => me.id > 0, 5000);
   const send = (m: object) => ws.send(JSON.stringify(m));
   const aimAt = (p: Vec3): Vec3 => {
@@ -129,55 +131,77 @@ check("a bolt at your middle still hits you crouched", (await bolt([b.me.pos[0],
 b.send({ t: "move", p: b.me.pos, ry: 0, tp: b.me.tp });
 await sleep(200);
 
-// ---- Powerups ----
-const nearest = (who: typeof a, kinds: (k: string) => boolean) =>
-  who.me.pickups.filter((p) => kinds(p.kind)).sort((p, q) => Math.hypot(p.p[0] - who.me.pos[0], p.p[2] - who.me.pos[2]) - Math.hypot(q.p[0] - who.me.pos[0], q.p[2] - who.me.pos[2]))[0];
-const first = nearest(a, (k) => isPowerup(k as never));
-check("powerups are on the map", !!first, a.me.pickups.map((p) => p.kind).join(","));
-if (first) {
-  await a.walkTo([first.p[0], first.p[1], first.p[2]]);
-  check("walking into a powerup puts it in your pocket", await waitFor(() => a.me.held === first.kind, 2000), `${a.me.held}`);
-  check("...and takes it off the map", !a.me.pickups.some((p) => p.id === first.id));
-  const second = nearest(a, (k) => isPowerup(k as never));
-  if (second) {
-    await a.walkTo([second.p[0], second.p[1], second.p[2]]);
-    await sleep(300);
-    check("you can only carry one: a second stays where it is", a.me.held === first.kind && a.me.pickups.some((p) => p.id === second.id));
-  }
-  // Use them until we've seen every kind (or run out).
-  const seen = new Set<string>();
-  for (let i = 0; i < 12 && seen.size < 4; i++) {
-    if (!a.me.held) {
-      const next = nearest(a, (k) => isPowerup(k as never) && !seen.has(k)) ?? nearest(a, (k) => isPowerup(k as never));
-      if (!next) break;
-      await a.walkTo([next.p[0], next.p[1], next.p[2]]);
-      await waitFor(() => !!a.me.held, 1500);
-      if (!a.me.held) continue;
-    }
-    const kind = a.me.held!;
-    mark = a.msgs.length;
-    a.send({ t: "usePowerup" });
-    await waitFor(() => a.me.held === null, 1500);
-    const effect = kind === "cloak" ? "stealth" : kind;
-    const got = a.since(mark).find((m) => m.t === "effect" && m.id === a.me.id && m.kind === effect);
-    check(`F uses a ${kind} once (empty pocket, effect "${effect}")`, a.me.held === null && got?.t === "effect" && got.ms === POWERUPS[kind as keyof typeof POWERUPS].ms);
-    seen.add(kind);
-    mark = a.msgs.length;
-    a.send({ t: "usePowerup" });
-    await sleep(300);
-    check(`...and pressing F again does nothing`, !a.since(mark).some((m) => m.t === "effect" && m.id === a.me.id));
-    if (kind === "fury") {
-      await b.walkTo([a.me.pos[0], a.me.pos[1], a.me.pos[2] - 5]);
-      const before = a.me.hp.get(b.me.id) ?? 0;
-      const hit = await bolt([b.me.pos[0], b.me.pos[1], b.me.pos[2]]);
-      const after = a.me.hp.get(b.me.id) ?? 0;
-      check("Fury: a 20-damage bolt does 30", hit === b.me.id && before - after === 30, `${before} -> ${after}`);
-    }
-  }
-  check("every kind of powerup came up", seen.size === 4, [...seen].join(","));
-}
-
+check("no powerups in the arena", a.me.pickups.length > 0 && !a.me.pickups.some((p) => isPowerup(p.kind)), a.me.pickups.map((p) => p.kind).join(","));
 a.ws.close();
 b.ws.close();
+await sleep(500);
+
+// ---- Powerups in tag ----
+const ta = await enter(await signIn(base, pin, "test_pw_a"), "tag");
+const tb = await enter(await signIn(base, pin, "test_pw_b"), "tag");
+check("tag: a round starts", await waitFor(() => ta.me.state === "playing", 40000), ta.me.state);
+check("powerups are on by default", ta.me.powerupsOn);
+await waitFor(() => ta.me.pickups.length > 0, 3000);
+check("powerups lie about the map", ta.me.pickups.length >= 3 && ta.me.pickups.every((p) => isPowerup(p.kind)), ta.me.pickups.map((p) => p.kind).join(","));
+check("...and no Fury Rune (nobody takes damage in tag)", !ta.me.pickups.some((p) => p.kind === "fury"));
+const nearest = (who: typeof ta, ok: (k: string) => boolean = () => true) =>
+  who.me.pickups.filter((p) => ok(p.kind)).sort((p, q) => Math.hypot(p.p[0] - who.me.pos[0], p.p[2] - who.me.pos[2]) - Math.hypot(q.p[0] - who.me.pos[0], q.p[2] - who.me.pos[2]))[0];
+const first = nearest(ta);
+if (first) {
+  await ta.walkTo([first.p[0], first.p[1], first.p[2]]);
+  check("walking into one puts it in your pocket", await waitFor(() => ta.me.held === first.kind, 2000), `${ta.me.held}`);
+  check("...and takes it off the map", !ta.me.pickups.some((p) => p.id === first.id));
+  const second = nearest(ta);
+  if (second) {
+    await ta.walkTo([second.p[0], second.p[1], second.p[2]]);
+    await sleep(300);
+    check("you can only carry one: a second stays where it is", ta.me.held === first.kind && ta.me.pickups.some((p) => p.id === second.id));
+  }
+  const seen = new Set<string>();
+  for (let i = 0; i < 10 && seen.size < 3; i++) {
+    if (!ta.me.held) {
+      const next = nearest(ta, (k) => !seen.has(k)) ?? nearest(ta);
+      if (!next) break;
+      await ta.walkTo([next.p[0], next.p[1], next.p[2]]);
+      await waitFor(() => !!ta.me.held, 1500);
+      if (!ta.me.held) continue;
+    }
+    const kind = ta.me.held!;
+    let mark = ta.msgs.length;
+    const markB = tb.msgs.length;
+    ta.send({ t: "usePowerup" });
+    await waitFor(() => ta.me.held === null, 1500);
+    const effect = kind === "cloak" ? "stealth" : kind;
+    const got = ta.since(mark).find((m) => m.t === "effect" && m.id === ta.me.id && m.kind === effect);
+    check(`F uses a ${kind} once (effect "${effect}")`, ta.me.held === null && got?.t === "effect" && got.ms === POWERUPS[kind as keyof typeof POWERUPS].ms);
+    if (kind === "cloak") {
+      await ta.walkTo([ta.me.pos[0] + 1.5, ta.me.pos[1], ta.me.pos[2]]);
+      check("cloaked: the other player isn't told where you are", !tb.since(markB).some((m) => m.t === "moved" && m.id === ta.me.id));
+    }
+    seen.add(kind);
+    mark = ta.msgs.length;
+    ta.send({ t: "usePowerup" });
+    await sleep(300);
+    // (a cloak lifting, ms 0, when the round ends meanwhile, is fine)
+    const again = ta.since(mark).filter((m) => m.t === "effect" && m.id === ta.me.id && m.ms > 0);
+    check("...and pressing F again does nothing", !again.length, JSON.stringify(again));
+  }
+  check("every tag powerup came up (haste, boots, cloak)", seen.size === 3, [...seen].join(","));
+}
+// Anyone can switch them off (the map empties) and back on.
+const pick = nearest(ta);
+if (pick) {
+  await ta.walkTo([pick.p[0], pick.p[1], pick.p[2]]);
+  await waitFor(() => !!ta.me.held, 1500);
+}
+tb.send({ t: "chaseSetting", powerups: false });
+check("switched off: everyone hears", await waitFor(() => ta.me.powerupsOn === false, 2000));
+check("...the map is cleared", await waitFor(() => ta.me.pickups.length === 0, 2000));
+check("...and pockets are emptied", await waitFor(() => ta.me.held === null, 2000));
+ta.send({ t: "usePowerup" });
+tb.send({ t: "chaseSetting", powerups: true });
+check("switched back on: they're back", await waitFor(() => ta.me.powerupsOn && ta.me.pickups.length > 0, 2000));
+ta.ws.close();
+tb.ws.close();
 console.log(failures ? `${failures} check(s) failed` : "all checks passed");
 process.exit(failures ? 1 : 0);

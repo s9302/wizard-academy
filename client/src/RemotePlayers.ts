@@ -207,6 +207,7 @@ export class RemotePlayers {
     let bestDist = Infinity;
     for (const [id, remote] of this.remotes) {
       if ((this.statuses.get(id) ?? "runner") === skip) continue;
+      if (!remote.avatar.visible) continue; // cloaked (or out of the round)
       const p = remote.avatar.position;
       const dist = p.distanceTo(from);
       if (dist > range || dist >= bestDist) continue;
