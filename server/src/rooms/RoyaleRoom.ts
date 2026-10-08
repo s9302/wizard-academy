@@ -2036,7 +2036,20 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const hurts = field.kind === "hellpit" || field.kind === "entangle" || field.kind === "blackhole";
       if (field.kind === "tornado") {
         this.stepTornado(field, owner, now);
-      } else if (hurts && now >= field.nextTick) {
+        continue;
+      }
+      // Pits and black holes drag monsters in every tick (players get a
+      // knock each field tick, below). Not the caster's own beasts.
+      if (field.kind === "hellpit" || field.kind === "blackhole") {
+        const pull = field.kind === "blackhole" ? BLACKHOLE.pull : HELLPIT.pull;
+        for (const m of this.monsters.bodies()) {
+          const beastOf = this.monsters.ownerOf(m.id);
+          const keeper = beastOf === undefined ? undefined : this.players.get(beastOf);
+          if (beastOf === field.owner || (keeper && this.allies(owner, keeper))) continue;
+          if (inField(field, m.p, now) && !this.shielded(m.p, now)) this.monsters.drag(m.id, field.p, pull, dt);
+        }
+      }
+      if (hurts && now >= field.nextTick) {
         field.nextTick = now + FIELD_TICK_MS;
         const dps = field.kind === "entangle" ? ENTANGLE.dps : field.kind === "blackhole" ? BLACKHOLE.dps : HELLPIT.dps;
         const amount = Math.round((dps * FIELD_TICK_MS) / 1000);
@@ -2062,12 +2075,6 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         for (const m of this.bodies()) {
           if (!inField(field, m.p, now) || this.shielded(m.p, now)) continue;
           this.hitMonster(m.id, amount, owner);
-          if (field.kind === "blackhole" && this.monsters.has(m.id)) {
-            const dx = field.p[0] - m.p[0];
-            const dz = field.p[2] - m.p[2];
-            const dist = Math.hypot(dx, dz) || 1;
-            if (dist > 0.8) this.monsters.shove(m.id, [(dx / dist) * BLACKHOLE.pull, 1, (dz / dist) * BLACKHOLE.pull], FIELD_TICK_MS / 1000);
-          }
         }
       }
     }

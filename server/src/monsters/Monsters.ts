@@ -49,6 +49,8 @@ type Monster = {
   dmgMul?: number; // ...and how much harder it hits
   // Thrown (a shockwave, a tornado): moving at v until then, helpless.
   push: { v: Vec3; until: number } | null;
+  // In a pit or a black hole: walks at a crawl until then.
+  slowUntil?: number;
 };
 
 const SPAWN_CLEARANCE = 12; // meters from any player
@@ -365,6 +367,28 @@ export class Monsters {
     }
   }
 
+  // Dragged toward a spot (a pit, a black hole) at `speed` m/s for this
+  // tick, slowed while it lasts. It keeps fighting; walls and edges stop it.
+  drag(id: number, to: Vec3, speed: number, dt: number): void {
+    const m = this.monsters.get(id);
+    if (!m || m.push) return;
+    m.slowUntil = Date.now() + 500;
+    const dx = to[0] - m.p[0];
+    const dz = to[2] - m.p[2];
+    const dist = Math.hypot(dx, dz);
+    if (dist < 0.6) return;
+    const step = Math.min(speed * dt, dist - 0.5);
+    const grid = this.host.grid();
+    // Straight in, or sliding along whatever's in the way.
+    const tries: [number, number][] = [[(dx / dist) * step, (dz / dist) * step], [Math.sign(dx) * step, 0], [0, Math.sign(dz) * step]];
+    const ok = tries.find(([sx, sz]) => grid.isWalkable(m.p[0] + sx, m.p[2] + sz));
+    if (!ok) return;
+    const nx = m.p[0] + ok[0];
+    const nz = m.p[2] + ok[1];
+    const floor = grid.floorAt(nx, nz);
+    m.p = [nx, Number.isNaN(floor) ? m.p[1] : floor + rideHeight(MONSTERS[m.kind]), nz];
+  }
+
   // Being thrown: move with the push, fall with gravity, land on the floor.
   private fly(m: Monster, now: number, dt: number): void {
     const push = m.push!;
@@ -396,6 +420,7 @@ export class Monsters {
   // Follow the path; the last stretch stops short of whoever it's chasing.
   private walk(m: Monster, speed: number, dt: number, chasing: boolean): void {
     const def = MONSTERS[m.kind];
+    if (m.slowUntil !== undefined && Date.now() < m.slowUntil) speed *= 0.4;
     // (A ranged one comes right in: it stops on its own once it has a clear shot.)
     const stop = chasing ? (def.ranged ? 1.5 : def.reach * 0.7) : 0;
     const moved = followPath(this.host.grid(), m.p, m.path, speed, dt, stop, rideHeight(def));
