@@ -237,7 +237,12 @@ export abstract class ChaseRoom extends RoundRoom<ChaseBot> {
     let bestT = segmentHitsLevel(from, end, this.level.boxes, 0.05) ?? 1;
     for (const target of this.players.values()) {
       if (target === player) continue;
-      const t = segmentHitsPlayer(from, end, target.p, 0.7);
+      // Now, or anywhere they've been lately (lag compensation, like tags).
+      let t: number | null = null;
+      for (const p of [target.p, ...(this.history.get(target.conn.id) ?? []).filter((h) => now - h.time <= HISTORY_MS).map((h) => h.p)]) {
+        const u = segmentHitsPlayer(from, end, p, 0.7);
+        if (u !== null && (t === null || u < t)) t = u;
+      }
       if (t !== null && t < bestT) {
         bestT = t;
         best = target;

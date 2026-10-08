@@ -928,7 +928,9 @@ export class Game {
     if (!this.thirdPerson) return { origin, dir: camDir };
     const handle = this.player.colliderHandle;
     const hit = this.world.castRay(new RAPIER.Ray(this.camera.position, camDir), 120, true, undefined, undefined, undefined, undefined, (c) => c.handle !== handle);
-    const target = this.camera.position.clone().addScaledVector(camDir, hit ? hit.timeOfImpact : 120);
+    // Up to the first wall, or the first person in the way if that's nearer.
+    const wall = hit ? hit.timeOfImpact : 120;
+    const target = this.camera.position.clone().addScaledVector(camDir, Math.min(wall, this.remotes.firstAlong(this.camera.position, camDir, wall) ?? wall));
     const dir = target.sub(origin);
     // Something between you and the camera: aim straight ahead instead.
     if (dir.dot(camDir) <= 0.1) return { origin, dir: camDir };

@@ -162,6 +162,7 @@ type Fighter = {
   ascendUntil: number; // Transcendence (Monk, level 25)
   rallyUntil: number; // War Cry (Knight): takes less damage
   frozenUntil: number; // Frost Nova: can't move
+  invertedUntil: number; // Inversion, on a bot (a person's own screen flips instead)
   chargeDamage: number; // what this rush does to whoever it hits (Charge, Flurry Dash)
   chargeKnocks: boolean; // ...and whether it shoves them aside (Charge only)
 };
@@ -720,6 +721,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       ascendUntil: 0,
       rallyUntil: 0,
       frozenUntil: 0,
+      invertedUntil: 0,
       chargeDamage: CHARGE_DAMAGE,
       chargeKnocks: true,
     };
@@ -1471,6 +1473,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         if (!target) return "Missed: nobody there.";
         if (this.shielded(target.p, now)) return "A Null Zone protects them.";
         this.broadcast({ t: "effect", id: target.conn.id, kind: "invert", ms });
+        const tf = this.fighters.get(target.conn.id);
+        if (tf && target.conn.isBot) tf.invertedUntil = now + ms;
         return null;
       }
       case "chain": {
@@ -1887,11 +1891,25 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     for (const target of this.players.values()) {
       if (target === player || !this.canBeHit(target.conn.id) || target.conn.isAdmin) continue;
       if (this.allies(player, target)) continue;
-      const t = segmentHitsPlayer(from, end, target.p, 0.7, target.crouch);
+      const t = this.aimHits(from, end, target, 0.7);
       if (t !== null && t < bestT) {
         bestT = t;
         best = target;
       }
+    }
+    return best;
+  }
+
+  // Where along from -> end the aim passes within `radius` of `target`, now
+  // or anywhere they've been in the last 300 ms (you see others a little in
+  // the past, so aiming right at someone moving would otherwise miss; bots
+  // strafe all the time, so they were nearly impossible to hit). Null if not.
+  private aimHits(from: Vec3, end: Vec3, target: Player, radius: number): number | null {
+    const now = Date.now();
+    let best: number | null = null;
+    for (const p of [target.p, ...(this.history.get(target.conn.id) ?? []).filter((h) => now - h.time <= MELEE_HISTORY_MS).map((h) => h.p)]) {
+      const t = segmentHitsPlayer(from, end, p, radius, target.crouch);
+      if (t !== null && (best === null || t < best)) best = t;
     }
     return best;
   }
@@ -1904,7 +1922,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     let bestT = segmentHitsLevel(from, end, this.allBoxes(), 0.05) ?? 1;
     for (const target of this.players.values()) {
       if (!this.allies(player, target) || !this.alive.has(target.conn.id)) continue;
-      const t = segmentHitsPlayer(from, end, target.p, 0.9, target.crouch);
+      const t = this.aimHits(from, end, target, 0.9);
       if (t !== null && t < bestT) {
         bestT = t;
         best = target;
@@ -2175,7 +2193,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     let under: Vec3 | null = null;
     const target = this.aimedPlayer(player, d, range);
     if (target && !this.unseen(target.conn.id)) {
-      bestT = segmentHitsPlayer(from, end, target.p, 0.7, target.crouch) ?? bestT;
+      bestT = this.aimHits(from, end, target, 0.7) ?? bestT;
       under = target.p;
     }
     for (const m of this.monsters.bodies()) {
@@ -2452,6 +2470,22 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       pickups: this.pickupList(),
       objective: this.botObjective(me),
     });
+    // Inverted (a bot has no screen to turn upside down): it walks the wrong
+    // way and its aim goes wild, like a person fighting their own controls.
+    const inverted = now < (f?.invertedUntil ?? 0);
+    if (inverted) {
+      const grid = navGridFor(this.level);
+      const [bx, bz] = [2 * me.p[0] - action.p[0], 2 * me.p[2] - action.p[2]];
+      const floor = grid.isWalkable(bx, bz) ? grid.floorAt(bx, bz) : NaN;
+      action.p = Number.isNaN(floor) ? me.p : [bx, floor + 0.95, bz];
+      const wild = (d: Vec3): Vec3 => {
+        const a = (Math.random() - 0.5) * 1.6; // up to ~45 degrees off
+        return [d[0] * Math.cos(a) - d[2] * Math.sin(a), d[1], d[0] * Math.sin(a) + d[2] * Math.cos(a)];
+      };
+      if (action.cast) action.cast = { ...action.cast, d: wild(action.cast.d) };
+      if (action.attack) action.attack = wild(action.attack);
+      action.ability = null;
+    }
     if (now >= (f?.frozenUntil ?? 0)) this.moveBot(me, action.p, action.ry, now); // (frozen bots stay put)
     if (action.hand) this.setHand(me, action.hand);
     if (action.cast) this.cast(me, { ...action.cast, o: eye(me.p), seq: 0 });

@@ -8,6 +8,7 @@
 
 import * as THREE from "three";
 import type { PlayerInfo, Vec3 } from "../../shared/src/protocol.ts";
+import { segmentHitsPlayer } from "../../shared/src/levels/geometry.ts";
 import type { Look } from "../../shared/src/unlocks.ts";
 import type { WeaponId } from "../../shared/src/classes.ts";
 import {
@@ -221,6 +222,22 @@ export class RemotePlayers {
       bestDist = dist;
     }
     return best;
+  }
+
+  // How far along a ray (from, unit dir) it first passes through someone you
+  // can see, or null. Third-person aim stops there, like at a wall: other
+  // players have no physics colliders, so the aim used to go right past them.
+  firstAlong(from: THREE.Vector3, dir: THREE.Vector3, range: number): number | null {
+    const a: Vec3 = [from.x, from.y, from.z];
+    const b: Vec3 = [from.x + dir.x * range, from.y + dir.y * range, from.z + dir.z * range];
+    let best: number | null = null;
+    for (const remote of this.remotes.values()) {
+      if (!remote.avatar.visible) continue;
+      const p = remote.avatar.position;
+      const t = segmentHitsPlayer(a, b, [p.x, p.y, p.z], 0.1);
+      if (t !== null && (best === null || t < best)) best = t;
+    }
+    return best === null ? null : best * range;
   }
 
   // Where a player is drawn right now (for positional sound), or null.
