@@ -111,7 +111,7 @@ const field = (k: string) => (m: ServerMsg[]) => m.some((x) => x.t === "field" &
 const effect = (k: string) => (m: ServerMsg[]) => m.some((x) => x.t === "effect" && x.kind === k);
 const shots = (spell: string, n: number) => (m: ServerMsg[]) => m.filter((x) => x.t === "spell" && x.spell === spell).length === n;
 const tests: Test[] = [
-  { cls: "wizard", e: "meteor", r: "wall", slot: 0, aim: ahead, label: "Meteor marks a spot", ok: field("meteor") },
+  { cls: "wizard", e: "meteor", r: "wall", slot: 0, aim: ahead, label: "Meteor aimed at B lands at B's feet", ok: (m) => m.some((x) => x.t === "field" && x.field.kind === "meteor" && Math.hypot(x.field.p[0] - b.me.pos[0], x.field.p[2] - b.me.pos[2]) < 1) },
   { cls: "wizard", e: "frostnova", r: "wall", slot: 0, label: "Frost Nova freezes B", ok: (m) => m.some((x) => x.t === "effect" && x.kind === "freeze" && x.id === b.me.id) },
   { cls: "wizard", e: "blackhole", r: "wall", slot: 0, aim: ahead, label: "Black Hole opens", ok: field("blackhole") },
   { cls: "knight", e: "whirlwind", r: "charge", slot: 0, label: "Whirlwind", ok: effect("whirlwind") },

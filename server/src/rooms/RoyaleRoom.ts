@@ -1535,7 +1535,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       }
       case "smite": {
-        const spot = this.aimedFloor(player, d, SMITE.range);
+        const spot = this.strikeSpot(player, d, SMITE.range);
         if (!spot) return "Nothing to smite there.";
         this.addField({ kind: "smite", owner: pid, p: spot, r: SMITE.radius }, SMITE.delayMs, now);
         return null;
@@ -1577,7 +1577,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       }
       case "entangle": {
-        const spot = this.aimedFloor(player, d, ENTANGLE.range) ?? this.groundAhead(player, d, ENTANGLE.range);
+        const spot = this.strikeSpot(player, d, ENTANGLE.range) ?? this.groundAhead(player, d, ENTANGLE.range);
         this.addField({ kind: "entangle", owner: pid, p: spot, r: ENTANGLE.radius }, ms, now);
         return null;
       }
@@ -1633,7 +1633,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       // ---- Levels 15, 20 and 25 ----
       case "meteor": {
-        const spot = this.aimedFloor(player, d, METEOR.range) ?? this.groundAhead(player, d, METEOR.range);
+        const spot = this.strikeSpot(player, d, METEOR.range) ?? this.groundAhead(player, d, METEOR.range);
         this.addField({ kind: "meteor", owner: pid, p: spot, r: METEOR.radius }, METEOR.delayMs, now);
         return null;
       }
@@ -1642,7 +1642,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "frostnova", ms: 0, from: player.p });
         return null;
       case "blackhole": {
-        const spot = this.aimedFloor(player, d, BLACKHOLE.range) ?? this.groundAhead(player, d, BLACKHOLE.range);
+        const spot = this.strikeSpot(player, d, BLACKHOLE.range) ?? this.groundAhead(player, d, BLACKHOLE.range);
         this.addField({ kind: "blackhole", owner: pid, p: spot, r: BLACKHOLE.radius }, ms, now);
         return null;
       }
@@ -2161,6 +2161,34 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const at: Vec3 = [from[0] + d[0] * dist, from[1] + d[1] * dist, from[2] + d[2] * dist];
     const floor = floorBelow(at[0], at[2], at[1] + 0.2, this.allBoxes());
     return floor === null ? null : [at[0], floor, at[2]];
+  }
+
+  // Where an area spell aimed at enemies lands: under the first enemy (or
+  // monster) your aim passes close to, else where your aim meets the ground.
+  // (Aim used to go straight through people, so aiming at someone's chest put
+  // the spot far behind them.)
+  private strikeSpot(player: Player, d: Vec3, range: number): Vec3 | null {
+    const from = eye(player.p);
+    const end: Vec3 = [from[0] + d[0] * range, from[1] + d[1] * range, from[2] + d[2] * range];
+    const boxes = this.allBoxes();
+    let bestT = segmentHitsLevel(from, end, boxes, 0.05) ?? 1;
+    let under: Vec3 | null = null;
+    const target = this.aimedPlayer(player, d, range);
+    if (target && !this.unseen(target.conn.id)) {
+      bestT = segmentHitsPlayer(from, end, target.p, 0.7, target.crouch) ?? bestT;
+      under = target.p;
+    }
+    for (const m of this.monsters.bodies()) {
+      if (this.monsters.ownerOf(m.id) === player.conn.id) continue;
+      const t = segmentHitsCapsule(from, end, m.p, Math.max(0, m.height - m.radius), m.radius, 0.7);
+      if (t !== null && t < bestT) {
+        bestT = t;
+        under = m.p;
+      }
+    }
+    if (!under) return this.aimedFloor(player, d, range);
+    const floor = floorBelow(under[0], under[2], under[1], boxes);
+    return [under[0], floor ?? under[1] - 0.95, under[2]];
   }
 
   // The ground under a point `range` meters ahead along your aim (flat), or
