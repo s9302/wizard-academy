@@ -1392,9 +1392,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
           const at: Vec3 = [from[0] + d[0] * dist, from[1] + d[1] * dist, from[2] + d[2] * dist];
           const floor = floorBelow(at[0], at[2], at[1], this.allBoxes());
           if (floor === null) continue;
-          const spot: Vec3 = [at[0], floor + 0.95, at[2]];
+          const spot: Vec3 = [at[0], floor + 1.0, at[2]];
           if ((this.level.pits ?? []).some((pit) => inPit(spot, pit))) continue; // never into lava or the void
-          if (!this.allBoxes().some((b) => boxTouchesPlayer(b, [spot[0], spot[1] + 0.05, spot[2]]))) to = spot;
+          if (!this.allBoxes().some((b) => boxTouchesPlayer(b, spot))) to = spot;
         }
         if (!to) return "No room to step there.";
         const before = player.p;
@@ -1851,21 +1851,29 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     }
   }
 
-  // Teleport right behind someone at `p` facing `ry` (or in front, if
-  // there's no room behind). False if neither works.
+  // Teleport right behind someone at `p` facing `ry`; if there's no room
+  // there, beside them, then in front. False if nowhere works. The spot must
+  // be on the same side of every wall as they are (a wall at their back used
+  // to put you through it), and you land exactly where the room was checked.
   private stepBehind(player: Player, p: Vec3, ry: number, effect = true): boolean {
     const before = player.p;
-    for (const side of [1, -1]) {
-      const spot: Vec3 = [p[0] + Math.sin(ry) * 1.3 * side, p[1] + 0.6, p[2] + Math.cos(ry) * 1.3 * side];
-      const floor = floorBelow(spot[0], spot[2], spot[1], this.allBoxes());
-      if (floor === null) continue;
-      const at: Vec3 = [spot[0], floor + 0.95, spot[2]];
-      if ((this.level.pits ?? []).some((pit) => inPit(at, pit))) continue;
-      if (this.allBoxes().some((b) => boxTouchesPlayer(b, [at[0], at[1] + 0.05, at[2]]))) continue;
-      this.falls.delete(player.conn.id);
-      this.teleport(player, at, side > 0 ? ry : ry + Math.PI);
-      if (effect) this.broadcast({ t: "effect", id: player.conn.id, kind: "blink", ms: 0, from: before, to: at });
-      return true;
+    const boxes = this.allBoxes();
+    for (const turn of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+      for (const dist of [1.3, 1.0]) {
+        const a = ry + turn;
+        const spot: Vec3 = [p[0] + Math.sin(a) * dist, p[1] + 0.6, p[2] + Math.cos(a) * dist];
+        const floor = floorBelow(spot[0], spot[2], spot[1], boxes);
+        if (floor === null) continue;
+        const at: Vec3 = [spot[0], floor + 1.0, spot[2]];
+        if ((this.level.pits ?? []).some((pit) => inPit(at, pit))) continue;
+        if (boxes.some((b) => boxTouchesPlayer(b, at))) continue;
+        // Chest height, them to you: nothing in between (a step is fine).
+        if (!lineOfSight([p[0], p[1] + 0.4, p[2]], [at[0], at[1] + 0.4, at[2]], boxes)) continue;
+        this.falls.delete(player.conn.id);
+        this.teleport(player, at, a); // facing them
+        if (effect) this.broadcast({ t: "effect", id: player.conn.id, kind: "blink", ms: 0, from: before, to: at });
+        return true;
+      }
     }
     return false;
   }
