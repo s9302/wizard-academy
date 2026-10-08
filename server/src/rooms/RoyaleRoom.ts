@@ -104,7 +104,7 @@ import {
 } from "../../../shared/src/combat.ts";
 import { EYE_HEIGHT, GRAVITY, PLAYER_RADIUS, RUN_SPEED } from "../../../shared/src/constants.ts";
 import { abilitiesFor, abilityAllowed, CLASS_LOOK } from "../../../shared/src/unlocks.ts";
-import { boxTouchesPlayer, floorBelow, lerp3, lineOfSight, segmentHitsCapsule, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
+import { boxTouchesPlayer, floorBelow, groundTarget, lerp3, lineOfSight, segmentHitsCapsule, segmentHitsLevel, segmentHitsPlayer } from "../../../shared/src/levels/geometry.ts";
 import { isMonsterId, MAX_MONSTERS, type MonsterKind, MONSTERS } from "../../../shared/src/monsters.ts";
 import { Monsters } from "../monsters/Monsters.ts";
 import type { CastMsg, ClientMsg, DecoyState, PickupInfo, RoyaleMode, Vec3, ZoneState } from "../../../shared/src/protocol.ts";
@@ -820,7 +820,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     else if (msg.t === "mode") this.setMode(player, msg.mode);
     else if (msg.t === "pickTeam") this.pickTeam(player, msg.team);
     else if (msg.t === "botSet") this.setBot(player, msg);
-    else if (msg.t === "ability") this.ability(player, msg.slot, msg.d);
+    else if (msg.t === "ability") this.ability(player, msg.slot, msg.d, msg.at);
     else if (msg.t === "usePowerup") this.usePowerup(player);
     else if (msg.t === "abilities") this.setAbilities(player, msg.cls, msg.e, msg.r);
     else if (msg.t === "monsters" && !player.conn.isBot) {
@@ -1326,7 +1326,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   // E (slot 0) or R (slot 1): whatever this player's class has there.
-  ability(player: Player, slot: 0 | 1, d: Vec3): void {
+  ability(player: Player, slot: 0 | 1, d: Vec3, at?: Vec3): void {
     const now = Date.now();
     const f = this.fighters.get(player.conn.id);
     if (!this.canAct(player, f) || now < f.abilityReady[slot]) return;
@@ -1336,7 +1336,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       player.conn.send({ t: "abilityFailed", slot, reason: "Magic doesn't work in a Null Zone." });
       return;
     }
-    const failed = this.useAbility(player, f, id, d, now);
+    const failed = this.useAbility(player, f, id, d, now, at);
     if (failed) {
       player.conn.send({ t: "abilityFailed", slot, reason: failed });
       return;
@@ -1347,7 +1347,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   // Returns why it didn't work, or null.
-  private useAbility(player: Player, f: Fighter, id: string, d: Vec3, now: number): string | null {
+  private useAbility(player: Player, f: Fighter, id: string, d: Vec3, now: number, at?: Vec3): string | null {
     const pid = player.conn.id;
     switch (id) {
       case "wall": {
@@ -1428,14 +1428,14 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "charge", ms: CHARGE_TIME * 1000 });
         return null;
       default:
-        return this.useMastery(player, f, id as AbilityId, d, now);
+        return this.useMastery(player, f, id as AbilityId, d, now, at);
     }
     return "Not available.";
   }
 
   // ---- Level 11+ abilities ----
 
-  private useMastery(player: Player, f: Fighter, id: AbilityId, d: Vec3, now: number): string | null {
+  private useMastery(player: Player, f: Fighter, id: AbilityId, d: Vec3, now: number, at?: Vec3): string | null {
     const pid = player.conn.id;
     const flat = norm2(d);
     const ms = ABILITIES[id].durationMs ?? 0;
@@ -1454,12 +1454,12 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       case "hellpit": {
         // Anywhere: where your aim meets the ground, or (aiming at the sky or
         // over an edge) the ground at the end of your aim.
-        const spot = this.aimedFloor(player, d) ?? this.groundAhead(player, d, CONJURE_RANGE);
+        const spot = this.strikeSpot(player, d, CONJURE_RANGE, at) ?? this.groundAhead(player, d, CONJURE_RANGE);
         this.addField({ kind: "hellpit", owner: pid, p: spot, r: HELLPIT.radius }, ms, now);
         return null;
       }
       case "smoke": {
-        const spot = this.aimedFloor(player, d) ?? [player.p[0], player.p[1] - 0.95, player.p[2]];
+        const spot = (at && groundTarget(eye(player.p), at, CONJURE_RANGE, this.allBoxes())) || this.aimedFloor(player, d) || [player.p[0], player.p[1] - 0.95, player.p[2]];
         this.addField({ kind: "smoke", owner: pid, p: spot, r: SMOKE_RADIUS }, ms, now);
         return null;
       }
@@ -1539,7 +1539,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       }
       case "smite": {
-        const spot = this.strikeSpot(player, d, SMITE.range);
+        const spot = this.strikeSpot(player, d, SMITE.range, at);
         if (!spot) return "Nothing to smite there.";
         this.addField({ kind: "smite", owner: pid, p: spot, r: SMITE.radius }, SMITE.delayMs, now);
         return null;
@@ -1581,7 +1581,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       }
       case "entangle": {
-        const spot = this.strikeSpot(player, d, ENTANGLE.range) ?? this.groundAhead(player, d, ENTANGLE.range);
+        const spot = this.strikeSpot(player, d, ENTANGLE.range, at) ?? this.groundAhead(player, d, ENTANGLE.range);
         this.addField({ kind: "entangle", owner: pid, p: spot, r: ENTANGLE.radius }, ms, now);
         return null;
       }
@@ -1637,7 +1637,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       // ---- Levels 15, 20 and 25 ----
       case "meteor": {
-        const spot = this.strikeSpot(player, d, METEOR.range) ?? this.groundAhead(player, d, METEOR.range);
+        const spot = this.strikeSpot(player, d, METEOR.range, at) ?? this.groundAhead(player, d, METEOR.range);
         this.addField({ kind: "meteor", owner: pid, p: spot, r: METEOR.radius }, METEOR.delayMs, now);
         return null;
       }
@@ -1646,7 +1646,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "frostnova", ms: 0, from: player.p });
         return null;
       case "blackhole": {
-        const spot = this.strikeSpot(player, d, BLACKHOLE.range) ?? this.groundAhead(player, d, BLACKHOLE.range);
+        const spot = this.strikeSpot(player, d, BLACKHOLE.range, at) ?? this.groundAhead(player, d, BLACKHOLE.range);
         this.addField({ kind: "blackhole", owner: pid, p: spot, r: BLACKHOLE.radius }, ms, now);
         return null;
       }
@@ -1856,23 +1856,28 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   // Teleport right behind someone at `p` facing `ry`; if there's no room
-  // there, beside them, then in front. False if nowhere works. The spot must
-  // be on the same side of every wall as they are (a wall at their back used
-  // to put you through it), and you land exactly where the room was checked.
+  // there, around them (sides, the back corners, the front ones, the front).
+  // False if nowhere works. The spot must be on the floor they're on (a step
+  // up or down at most: behind someone on a roof used to drop you to the
+  // ground under it, inside the building) and on their side of every wall,
+  // and you land exactly where the room was checked.
   private stepBehind(player: Player, p: Vec3, ry: number, effect = true): boolean {
     const before = player.p;
     const boxes = this.allBoxes();
-    for (const turn of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+    const theirFloor = floorBelow(p[0], p[2], p[1], boxes) ?? p[1] - 0.95;
+    const turns = [0, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, (3 * Math.PI) / 4, (-3 * Math.PI) / 4, Math.PI];
+    for (const turn of turns) {
       for (const dist of [1.3, 1.0]) {
         const a = ry + turn;
-        const spot: Vec3 = [p[0] + Math.sin(a) * dist, p[1] + 0.6, p[2] + Math.cos(a) * dist];
-        const floor = floorBelow(spot[0], spot[2], spot[1], boxes);
-        if (floor === null) continue;
-        const at: Vec3 = [spot[0], floor + 1.0, spot[2]];
+        const x = p[0] + Math.sin(a) * dist;
+        const z = p[2] + Math.cos(a) * dist;
+        const floor = floorBelow(x, z, theirFloor + 0.5, boxes);
+        if (floor === null || Math.abs(floor - theirFloor) > 0.5) continue;
+        const at: Vec3 = [x, floor + 1.0, z];
         if ((this.level.pits ?? []).some((pit) => inPit(at, pit))) continue;
         if (boxes.some((b) => boxTouchesPlayer(b, at))) continue;
         // Chest height, them to you: nothing in between (a step is fine).
-        if (!lineOfSight([p[0], p[1] + 0.4, p[2]], [at[0], at[1] + 0.4, at[2]], boxes)) continue;
+        if (!lineOfSight([p[0], theirFloor + 1.4, p[2]], [at[0], at[1] + 0.4, at[2]], boxes)) continue;
         this.falls.delete(player.conn.id);
         this.teleport(player, at, a); // facing them
         if (effect) this.broadcast({ t: "effect", id: player.conn.id, kind: "blink", ms: 0, from: before, to: at });
@@ -2185,7 +2190,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // monster) your aim passes close to, else where your aim meets the ground.
   // (Aim used to go straight through people, so aiming at someone's chest put
   // the spot far behind them.)
-  private strikeSpot(player: Player, d: Vec3, range: number): Vec3 | null {
+  private strikeSpot(player: Player, d: Vec3, range: number, at?: Vec3): Vec3 | null {
     const from = eye(player.p);
     const end: Vec3 = [from[0] + d[0] * range, from[1] + d[1] * range, from[2] + d[2] * range];
     const boxes = this.allBoxes();
@@ -2204,7 +2209,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         under = m.p;
       }
     }
-    if (!under) return this.aimedFloor(player, d, range);
+    // Else the ground under your crosshair (the client says where that is;
+    // the reach is checked from where we have you). Bots don't send one.
+    if (!under) return (at && groundTarget(from, at, range, boxes)) || this.aimedFloor(player, d, range);
     const floor = floorBelow(under[0], under[2], under[1], boxes);
     return [under[0], floor ?? under[1] - 0.95, under[2]];
   }

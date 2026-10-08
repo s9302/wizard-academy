@@ -73,7 +73,9 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       if (!isVec3(msg.o) || !isVec3(msg.d)) return null;
       const len = Math.hypot(msg.d[0], msg.d[1], msg.d[2]);
       if (len < 0.9 || len > 1.1) return null;
-      return { t: "ability", slot: msg.slot, o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len] };
+      if (msg.at !== undefined && !isVec3(msg.at)) return null;
+      const at: Vec3 | undefined = msg.at ? [msg.at[0], msg.at[1], msg.at[2]] : undefined;
+      return { t: "ability", slot: msg.slot, o: [msg.o[0], msg.o[1], msg.o[2]], d: [msg.d[0] / len, msg.d[1] / len, msg.d[2] / len], ...(at ? { at } : {}) };
     }
     case "ready":
       return { t: "ready" };

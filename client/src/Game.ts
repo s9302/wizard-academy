@@ -921,20 +921,24 @@ export class Game {
 
   // Where spells and attacks come from (your eyes) and go (where the
   // crosshair points: in third person, toward what the camera's ray hits).
-  private aim(): { origin: THREE.Vector3; dir: THREE.Vector3 } {
+  // Where you're aiming from (your eyes), which way, and the point your
+  // crosshair is on: the first wall, floor or person along the camera's line
+  // (ground-aimed abilities land under it). In third person the camera is
+  // behind your shoulder, so the direction is from your eyes to that point.
+  private aim(): { origin: THREE.Vector3; dir: THREE.Vector3; at: THREE.Vector3 } {
     const camDir = this.camera.getWorldDirection(new THREE.Vector3());
     const p = this.player.interpolate(this.accumulator / FIXED_DT);
     const origin = new THREE.Vector3(p.x, p.y + this.eyeHeight(), p.z);
-    if (!this.thirdPerson) return { origin, dir: camDir };
     const handle = this.player.colliderHandle;
     const hit = this.world.castRay(new RAPIER.Ray(this.camera.position, camDir), 120, true, undefined, undefined, undefined, undefined, (c) => c.handle !== handle);
     // Up to the first wall, or the first person in the way if that's nearer.
     const wall = hit ? hit.timeOfImpact : 120;
-    const target = this.camera.position.clone().addScaledVector(camDir, Math.min(wall, this.remotes.firstAlong(this.camera.position, camDir, wall) ?? wall));
-    const dir = target.sub(origin);
+    const at = this.camera.position.clone().addScaledVector(camDir, Math.min(wall, this.remotes.firstAlong(this.camera.position, camDir, wall) ?? wall));
+    if (!this.thirdPerson) return { origin, dir: camDir, at };
+    const dir = at.clone().sub(origin);
     // Something between you and the camera: aim straight ahead instead.
-    if (dir.dot(camDir) <= 0.1) return { origin, dir: camDir };
-    return { origin, dir: dir.normalize() };
+    if (dir.dot(camDir) <= 0.1) return { origin, dir: camDir, at };
+    return { origin, dir: dir.normalize(), at };
   }
 
   // Footsteps, jumps and landings: only your own (others' would be noise).
@@ -991,8 +995,8 @@ export class Game {
     if (this.royale) {
       const e = this.input.consumeInteract();
       if (e || r) {
-        const { origin, dir } = this.aim();
-        this.royale.ability(e ? 0 : 1, origin, dir);
+        const { origin, dir, at } = this.aim();
+        this.royale.ability(e ? 0 : 1, origin, dir, at);
       }
     }
     if (this.input.consumeBroom() && this.brooms && !this.player.flying) {
@@ -1086,6 +1090,10 @@ export class Game {
     this.markers.update(now / 1000);
     this.portals?.update(now / 1000);
     this.royale?.update(now / 1000, this.player.position, this.clock.now(), this.input.forward !== 0 || this.input.strafe !== 0);
+    if (this.royale?.wantsAimPreview()) {
+      const { origin, at } = this.aim();
+      this.royale.aimPreview(origin, at);
+    }
     this.animateConjured();
     // 1 / 2 / mouse wheel: switch hands (battle royale).
     const hand = this.input.consumeHand();

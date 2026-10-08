@@ -138,6 +138,20 @@ export function floorBelow(x: number, z: number, maxY: number, boxes: Box[]): nu
   return best;
 }
 
+// Where a spell aimed at a spot lands: the floor under `at` (what your
+// crosshair is on), or, past `range` meters from `eye`, under the point that
+// far along the same line. Pulled 0.3 m back toward you first, so a point on
+// a wall's face lands at the foot of the wall, not on top of it. Shared, so
+// the client's landing circle and the server agree.
+export function groundTarget(eye: Vec3, at: Vec3, range: number, boxes: Box[]): Vec3 | null {
+  const dist = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+  let p = dist > range ? lerp3(eye, at, range / dist) : at;
+  const flat = Math.hypot(p[0] - eye[0], p[2] - eye[2]);
+  if (flat > 0.6) p = [p[0] - ((p[0] - eye[0]) / flat) * 0.3, p[1], p[2] - ((p[2] - eye[2]) / flat) * 0.3];
+  const floor = floorBelow(p[0], p[2], p[1] + 0.3, boxes);
+  return floor === null ? null : [p[0], floor, p[2]];
+}
+
 // Height of a box's top surface at (x, z), or null if (x, z) isn't over it.
 function topOf(box: Box, x: number, z: number): number | null {
   const [w, h, d] = box.size;

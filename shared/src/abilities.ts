@@ -222,7 +222,7 @@ export const WINDSTEP_SPEED = 1.5;
 export const PALM = { range: 6, arcDeg: 70, damage: 26, push: 16 };
 
 // Levels 15, 20 and 25.
-export const METEOR = { range: 30, radius: 4.5, damage: 60, delayMs: 1200, push: 14, lift: 10 };
+export const METEOR = { range: 45, radius: 4.5, damage: 60, delayMs: 1200, push: 14, lift: 10 };
 export const FROSTNOVA = { radius: 9, damage: 20 };
 export const BLACKHOLE = { range: 25, radius: 8, dps: 25, pull: 7 };
 export const WHIRLWIND = { radius: 4.2, damage: 32, push: 13 };
@@ -265,3 +265,14 @@ export function inField(f: FieldInfo, p: Vec3, now: number): boolean {
 // Rogue copies are hittable bodies; their ids sit in the monster range (so a
 // hit on one reads like a monster hit to clients) but apart from monsters'.
 export const DECOY_ID_BASE = 2_000_000;
+
+// Abilities that land where your crosshair is (on the ground under it): how
+// far they reach and how big a circle to show while you aim.
+export const GROUND_AIMED: Partial<Record<AbilityId, { range: number; radius: number }>> = {
+  meteor: { range: METEOR.range, radius: METEOR.radius },
+  blackhole: { range: BLACKHOLE.range, radius: BLACKHOLE.radius },
+  smite: { range: SMITE.range, radius: SMITE.radius },
+  entangle: { range: ENTANGLE.range, radius: ENTANGLE.radius },
+  hellpit: { range: CONJURE_RANGE, radius: HELLPIT.radius },
+  smoke: { range: CONJURE_RANGE, radius: SMOKE_RADIUS },
+};

@@ -52,7 +52,8 @@ export type AttackMsg = { t: "attack"; o: Vec3; d: Vec3; seq: number };
 export type HandMsg = { t: "hand"; hand: Hand };
 export type ClassMsg = { t: "class"; cls: ClassId };
 // Use a class ability: slot 0 is E, 1 is R. o and d: your eyes and aim.
-export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3 };
+// at: the point your crosshair is on (ground-aimed abilities land under it).
+export type AbilityMsg = { t: "ability"; slot: 0 | 1; o: Vec3; d: Vec3; at?: Vec3 };
 // Choose a class's E and R abilities (level 11+ gives more to choose from).
 export type AbilitiesMsg = { t: "abilities"; cls: ClassId; e: AbilityId; r: AbilityId };
 // The battle royale's mode, set for the next round by anyone (a toggle).

@@ -6,8 +6,10 @@
 //   ADMIN_USER=... ADMIN_PASSWORD=... GAME_PIN=... node server/scripts/legend-check.ts http://localhost:3000
 
 import WebSocket from "ws";
-import type { AbilityId } from "../../shared/src/abilities.ts";
+import { type AbilityId, METEOR } from "../../shared/src/abilities.ts";
 import { EYE_HEIGHT } from "../../shared/src/constants.ts";
+import { floorBelow, groundTarget, lineOfSight } from "../../shared/src/levels/geometry.ts";
+import { LEVELS } from "../../shared/src/levels/index.ts";
 import type { ServerMsg, Vec3 } from "../../shared/src/protocol.ts";
 import { signIn } from "./signIn.ts";
 
@@ -141,6 +143,33 @@ for (const t of tests) {
   const fail = got.find((m) => m.t === "abilityFailed");
   check(t.label, t.ok(got) && !fail, fail?.t === "abilityFailed" ? fail.reason : "");
   await b.walkTo([a.me.pos[0], a.me.pos[1], a.me.pos[2] - 5]);
+}
+
+// ---- Meteor at a far spot: lands under the crosshair point, past the old 30 m ----
+{
+  await a.become("wizard");
+  await a.equip("wizard", "meteor", "wall");
+  const eyeA: Vec3 = [a.me.pos[0], a.me.pos[1] + EYE_HEIGHT, a.me.pos[2]];
+  const boxes = LEVELS.arena.boxes;
+  let at: Vec3 | null = null;
+  for (let k = 0; k < 32 && !at; k++) {
+    const ang = (k / 32) * Math.PI * 2;
+    const x = eyeA[0] + Math.sin(ang) * 38;
+    const z = eyeA[2] + Math.cos(ang) * 38;
+    const floor = floorBelow(x, z, eyeA[1] + 5, boxes);
+    if (floor !== null && lineOfSight(eyeA, [x, floor + 0.2, z], boxes)) at = [x, floor, z];
+  }
+  if (!at) check("Meteor 38 m away (found a clear spot to aim at)", false);
+  else {
+    const want = groundTarget(eyeA, at, METEOR.range, boxes)!;
+    const mark = a.msgs.length;
+    const d = a.aimAt(at);
+    a.send({ t: "ability", slot: 0, o: eyeA, d, at });
+    await sleep(500);
+    const fld = a.since(mark).find((m) => m.t === "field" && m.field.kind === "meteor");
+    const off = fld?.t === "field" ? Math.hypot(fld.field.p[0] - want[0], fld.field.p[2] - want[2]) : Infinity;
+    check("Meteor aimed at a spot 38 m away lands there", off < 0.5, fld?.t === "field" ? `${off.toFixed(2)} m off, ${Math.hypot(fld.field.p[0] - eyeA[0], fld.field.p[2] - eyeA[2]).toFixed(1)} m from you` : "no meteor");
+  }
 }
 
 // ---- Null Aura moves with the Knight: walk off, and bolts still fizzle at its edge ----
