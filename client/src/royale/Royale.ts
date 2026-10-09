@@ -16,7 +16,6 @@ import {
   FLURRY,
   FROSTNOVA,
   GIANT,
-  GROUND_AIMED,
   HOLYNOVA,
   ROCK,
   SHOCKWAVE,
@@ -25,7 +24,6 @@ import {
 } from "../../../shared/src/abilities.ts";
 import { type ClassId, type Hand, moveSpeed, SWAP_MS, WEAPONS, type WeaponId, weaponOf } from "../../../shared/src/classes.ts";
 import { castDirections, MAX_SHIELD, POWERUPS, type PowerupKind, type SpellId, type SpellSlot, SPELLS } from "../../../shared/src/combat.ts";
-import { groundTarget } from "../../../shared/src/levels/geometry.ts";
 import type { Box, Level } from "../../../shared/src/levels/types.ts";
 import type { ClientMsg, RoundState, ServerMsg, Vec3 } from "../../../shared/src/protocol.ts";
 import type { RemotePlayers } from "../RemotePlayers.ts";
@@ -112,20 +110,8 @@ export class Royale {
   private myHealth = { hp: -1, shield: 0 };
   private inStorm = false;
 
-  // Where a ground-aimed ability (Meteor, Black Hole...) will land: a faint
-  // circle on the ground while it's ready.
-  private boxes: Box[];
-  private landing: THREE.Mesh;
 
   constructor(scene: THREE.Scene, camera: THREE.Camera, hudEl: HTMLElement, clock: ServerClock, level: Level, roomName: string, remotes: RemotePlayers, primary: SpellId, cls: ClassId, hooks: RoyaleHooks) {
-    this.boxes = level.boxes;
-    this.landing = new THREE.Mesh(
-      new THREE.RingGeometry(0.93, 1, 48).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: "#ffd27a", transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }),
-    );
-    this.landing.visible = false;
-    this.landing.renderOrder = 2;
-    scene.add(this.landing);
     this.primary = primary;
     this.cls = cls;
     this.hooks = hooks;
@@ -424,33 +410,6 @@ export class Royale {
 
   // E (slot 0) / R (slot 1): this class's ability. The server does the work
   // (and says if it didn't); a Knight's charge is our own movement.
-  // The ground-aimed ability to show a landing circle for: the first one on
-  // E or R that's ready.
-  private previewed(): { range: number; radius: number } | null {
-    if (!this.hud.canAct) return null;
-    const now = performance.now();
-    for (const slot of [0, 1] as const) {
-      const g = GROUND_AIMED[this.chosen[slot]];
-      if (g && now >= this.abilityReadyAt[slot]) return g;
-    }
-    return null;
-  }
-
-  wantsAimPreview(): boolean {
-    const want = this.previewed() !== null;
-    if (!want) this.landing.visible = false;
-    return want;
-  }
-
-  aimPreview(origin: THREE.Vector3, at: THREE.Vector3): void {
-    const g = this.previewed();
-    const spot = g && groundTarget([origin.x, origin.y, origin.z], [at.x, at.y, at.z], g.range, this.boxes);
-    this.landing.visible = !!spot;
-    if (!g || !spot) return;
-    this.landing.position.set(spot[0], spot[1] + 0.06, spot[2]);
-    this.landing.scale.setScalar(g.radius);
-  }
-
   ability(slot: 0 | 1, origin: THREE.Vector3, dir: THREE.Vector3, at?: THREE.Vector3): void {
     const now = performance.now();
     if (!this.hud.canAct || now < this.abilityReadyAt[slot]) return;
@@ -916,20 +875,16 @@ export class Royale {
 
   // A new arena: spells stop at its walls.
   setLevel(level: Level): void {
-    this.boxes = level.boxes;
     this.spells.setBoxes(level.boxes);
   }
 
   // The level plus conjured walls (spells stop at those too).
   setBoxes(boxes: Box[]): void {
-    this.boxes = boxes;
     this.spells.setBoxesKeepFlying(boxes);
   }
 
   dispose(): void {
     window.removeEventListener("keydown", this.onKey);
-    this.landing.removeFromParent();
-    this.landing.geometry.dispose();
     this.spells.clear();
     this.monsters.clear();
     this.fields.clear();

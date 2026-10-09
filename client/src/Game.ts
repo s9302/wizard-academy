@@ -1090,10 +1090,6 @@ export class Game {
     this.markers.update(now / 1000);
     this.portals?.update(now / 1000);
     this.royale?.update(now / 1000, this.player.position, this.clock.now(), this.input.forward !== 0 || this.input.strafe !== 0);
-    if (this.royale?.wantsAimPreview()) {
-      const { origin, at } = this.aim();
-      this.royale.aimPreview(origin, at);
-    }
     this.animateConjured();
     // 1 / 2 / mouse wheel: switch hands (battle royale).
     const hand = this.input.consumeHand();
