@@ -124,6 +124,9 @@ const LAVA_EVERY_MS = 400;
 const STORM_CENTER_LIMIT = 16; // the safe circle's center stays this close to the middle (medium arena)
 const RESULTS_MS = 12_000 * SCALE; // long enough to vote for the next arena
 
+// The client's crosshair ray reaches 120 m; a point that far out is the sky.
+const SKY_AIM = 110;
+
 // Falling never hurts. Landing on someone (a "stomp": coming down faster
 // than STOMP_SPEED onto their head) hurts them, and you bounce off.
 const STOMP_SPEED = 6; // m/s
@@ -1481,9 +1484,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "rock", ms });
         return null;
       case "hellpit": {
-        // Anywhere: where your aim meets the ground, or (aiming at the sky or
-        // over an edge) the ground at the end of your aim.
-        const spot = this.strikeSpot(player, d, CONJURE_RANGE, at) ?? this.groundAhead(player, d, CONJURE_RANGE);
+        // Anywhere in reach: where your aim meets the ground, or (aiming at
+        // the sky) the ground at the end of your aim.
+        const spot = this.areaSpot(player, d, CONJURE_RANGE, at);
+        if (typeof spot === "string") return spot;
         this.addField({ kind: "hellpit", owner: pid, p: spot, r: HELLPIT.radius }, ms, now);
         return null;
       }
@@ -1610,7 +1614,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       }
       case "entangle": {
-        const spot = this.strikeSpot(player, d, ENTANGLE.range, at) ?? this.groundAhead(player, d, ENTANGLE.range);
+        const spot = this.areaSpot(player, d, ENTANGLE.range, at);
+        if (typeof spot === "string") return spot;
         this.addField({ kind: "entangle", owner: pid, p: spot, r: ENTANGLE.radius }, ms, now);
         return null;
       }
@@ -1666,7 +1671,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         return null;
       // ---- Levels 15, 20 and 25 ----
       case "meteor": {
-        const spot = this.strikeSpot(player, d, METEOR.range, at) ?? this.groundAhead(player, d, METEOR.range);
+        const spot = this.areaSpot(player, d, METEOR.range, at);
+        if (typeof spot === "string") return spot;
         this.addField({ kind: "meteor", owner: pid, p: spot, r: METEOR.radius }, METEOR.delayMs, now);
         return null;
       }
@@ -1675,7 +1681,8 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
         this.broadcast({ t: "effect", id: pid, kind: "frostnova", ms: 0, from: player.p });
         return null;
       case "blackhole": {
-        const spot = this.strikeSpot(player, d, BLACKHOLE.range, at) ?? this.groundAhead(player, d, BLACKHOLE.range);
+        const spot = this.areaSpot(player, d, BLACKHOLE.range, at);
+        if (typeof spot === "string") return spot;
         this.addField({ kind: "blackhole", owner: pid, p: spot, r: BLACKHOLE.radius }, ms, now);
         return null;
       }
@@ -2226,7 +2233,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   // monster) your aim passes close to, else where your aim meets the ground.
   // (Aim used to go straight through people, so aiming at someone's chest put
   // the spot far behind them.)
-  private strikeSpot(player: Player, d: Vec3, range: number, at?: Vec3): Vec3 | null {
+  private strikeSpot(player: Player, d: Vec3, range: number, at?: Vec3, groundToo = true): Vec3 | null {
     const from = eye(player.p);
     const end: Vec3 = [from[0] + d[0] * range, from[1] + d[1] * range, from[2] + d[2] * range];
     const boxes = this.allBoxes();
@@ -2247,19 +2254,34 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     }
     // Else the ground under your crosshair (the client says where that is;
     // the reach is checked from where we have you). Bots don't send one.
-    if (!under) return (at && groundTarget(from, at, range, boxes)) || this.aimedFloor(player, d, range);
+    if (!under) return groundToo ? (at && groundTarget(from, at, range, boxes)) || this.aimedFloor(player, d, range) : null;
     const floor = floorBelow(under[0], under[2], under[1], boxes);
     return [under[0], floor ?? under[1] - 0.95, under[2]];
   }
 
   // The ground under a point `range` meters ahead along your aim (flat), or
-  // your own feet's height if there's nothing under it.
-  private groundAhead(player: Player, d: Vec3, range: number): Vec3 {
+  // null if there's nothing under it (the void).
+  private groundAhead(player: Player, d: Vec3, range: number): Vec3 | null {
     const flat = norm2(d);
     const x = player.p[0] + flat[0] * range;
     const z = player.p[2] + flat[1] * range;
     const floor = floorBelow(x, z, player.p[1] + 20, this.allBoxes());
-    return [x, floor ?? player.p[1] - 0.95, z];
+    return floor === null ? null : [x, floor, z];
+  }
+
+  // Where a ground-aimed area spell (Pit to Hell, Black Hole...) lands, or
+  // why it can't. Crosshair on something past its reach: only an enemy in
+  // reach along the way counts; it used to land short, wherever the ground
+  // happened to be (even the floor under the void). Aiming at the sky still drops
+  // it on the ground at the end of your aim.
+  private areaSpot(player: Player, d: Vec3, range: number, at?: Vec3): Vec3 | string {
+    const from = eye(player.p);
+    const dist = at ? Math.hypot(at[0] - from[0], at[1] - from[1], at[2] - from[2]) : 0;
+    if (dist > range + 1 && dist < SKY_AIM) return this.strikeSpot(player, d, range, undefined, false) ?? `Out of range (${range} m).`;
+    const spot = this.strikeSpot(player, d, range, at) ?? this.groundAhead(player, d, range);
+    // The floor under the void isn't ground you can aim at.
+    const sunk = spot && (this.level.pits ?? []).some((pit) => pit.kind === "void" && Math.abs(spot[0] - pit.pos[0]) < pit.size[0] / 2 && Math.abs(spot[2] - pit.pos[2]) < pit.size[1] / 2 && spot[1] <= pit.pos[1] + 0.05);
+    return spot && !sunk ? spot : "No ground there.";
   }
 
   private conjure(box: Box, ms: number, now: number): void {
