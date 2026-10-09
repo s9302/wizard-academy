@@ -18,6 +18,7 @@ export interface Peer {
   look: Look; // hat and robe, shown to everyone
   readonly isAdmin: boolean;
   room: Room | null;
+  rtt: number; // round trip to the client in ms (0 for bots)
   send(msg: ServerMsg): void;
   sendRaw(text: string): void; // an already-serialized message (broadcasts)
   kick(message: string): void;
@@ -48,6 +49,9 @@ export class Connection implements Peer {
   readonly isAdmin: boolean;
   room: Room | null = null;
   alive = true; // flipped by the heartbeat in index.ts
+  pingAt = 0; // when the last heartbeat ping went out
+  rtt = 100; // round trip in ms, smoothed over pings (a guess until the first)
+  measured = false;
 
   constructor(socket: WebSocket, ip: string, account: Account) {
     this.id = nextId++;
@@ -85,6 +89,7 @@ export class BotPeer implements Peer {
   look: Look;
   readonly isAdmin = false;
   room: Room | null = null;
+  readonly rtt = 0;
 
   constructor(name: string) {
     this.id = nextId++;

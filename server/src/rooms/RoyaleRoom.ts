@@ -131,6 +131,12 @@ const STOMP_DAMAGE = 25;
 const STOMP_PER_METER = 3;
 const COOLDOWN_SLACK = 0.85; // accept casts a bit early: messages arrive unevenly
 const MELEE_HISTORY_MS = 300; // lag compensation for swings, like tag's
+// Shots are tested against where the target was on the shooter's screen:
+// others are drawn this far in the past (client RemotePlayers), plus the
+// round trip. Never more than MAX_REWIND_MS back.
+const VIEW_DELAY_MS = 120;
+const MAX_REWIND_MS = 400;
+const HISTORY_KEEP_MS = MAX_REWIND_MS + 100;
 const MELEE_HEIGHT = 1.8; // how far above or below you a swing reaches
 const BACKSTAB_ARC = 120; // degrees: hitting someone from within this arc behind them
 const ROUND_MS = (STORM_STAGES.reduce((ms, s) => ms + s.holdMs + s.shrinkMs, 0) + 30_000) * SCALE;
@@ -179,7 +185,7 @@ let nextDecoyId = DECOY_ID_BASE;
 
 // Flown by time since launch, so arrows can arc (see projectileAt).
 // caster: a player, or a monster (a Fire Imp's bolt; `power` scales its damage).
-type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3; power?: number; owner?: number };
+type Projectile = { id: number; caster: number; spell: SpellId; o: Vec3; d: Vec3; t: number; p: Vec3; power?: number; owner?: number; rewind?: number };
 type Pickup = PickupInfo & { spot: number };
 
 let nextSpellId = 1;
@@ -892,21 +898,24 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     } else if (def.melee) {
       if (now < f.nextCast.primary) return;
       f.nextCast.primary = now + def.melee.cooldownMs * COOLDOWN_SLACK;
-      this.swing(player, weapon, d, now);
+      this.swing(player, weapon, o, d, now);
     }
   }
 
   // A melee swing. The server finds who's in reach and in front of you,
   // using where they were over the last moment (you see others slightly in
   // the past, like in tag).
-  private swing(attacker: Player, weapon: WeaponId, d: Vec3, now: number): void {
+  private swing(attacker: Player, weapon: WeaponId, clientO: Vec3, d: Vec3, now: number): void {
     const base = WEAPONS[weapon].melee!;
     // Giant Form: more reach, harder hits.
     const af = this.fighters.get(attacker.conn.id);
     const giant = now < (af?.giantUntil ?? 0);
     let m = giant ? { ...base, reach: base.reach * GIANT.reach, damage: base.damage * GIANT.damage } : base;
     if (now < (af?.ascendUntil ?? 0)) m = { ...m, damage: m.damage * ASCEND.damage }; // Transcendence
-    const from = eye(attacker.p);
+    // From where the client says its eyes are, if believable (our copy of
+    // someone running lags behind them, and their swing fell short).
+    const from = this.castOrigin(attacker, clientO);
+    const y = from[1] - EYE_HEIGHT; // their center, like target.p
     const yaw = Math.atan2(-d[0], -d[2]);
     const candidates: { target: Player; dist: number }[] = [];
     for (const target of this.players.values()) {
@@ -915,9 +924,10 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       let best = Infinity;
       for (const p of recent) {
         const flat = Math.hypot(p[0] - from[0], p[2] - from[2]) - PLAYER_RADIUS;
-        if (flat > m.reach || Math.abs(p[1] - attacker.p[1]) > MELEE_HEIGHT) continue;
+        if (flat > m.reach || Math.abs(p[1] - y) > MELEE_HEIGHT) continue;
         if (!inFront(yaw, [p[0] - from[0], p[2] - from[2]], m.arcDeg) && flat > 0.4) continue;
-        if (!lineOfSight(from, p, this.allBoxes())) continue;
+        // Their middle or their head: a low wall or a step can hide one.
+        if (!lineOfSight(from, p, this.allBoxes()) && !lineOfSight(from, eye(p), this.allBoxes())) continue;
         best = Math.min(best, flat);
       }
       if (best < Infinity) candidates.push({ target, dist: best });
@@ -929,7 +939,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const backstabs: number[] = [];
     for (const { target } of struck) {
       // Backstab: the attacker is behind the target.
-      const behind = !!m.backstab && inFront(target.ry + Math.PI, [attacker.p[0] - target.p[0], attacker.p[2] - target.p[2]], BACKSTAB_ARC);
+      const behind = !!m.backstab && inFront(target.ry + Math.PI, [from[0] - target.p[0], from[2] - target.p[2]], BACKSTAB_ARC);
       if (behind) backstabs.push(target.conn.id);
       hits.push(target.conn.id);
       if (this.state === "playing" && this.damage(target, m.damage * (behind ? m.backstab! : 1), attacker, attacker.p)) blocked.push(target.conn.id);
@@ -939,9 +949,9 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const hitDamage = m.damage;
     for (const m of this.bodies()) {
       const flat = Math.hypot(m.p[0] - from[0], m.p[2] - from[2]) - m.radius;
-      if (flat > reach || Math.abs(m.p[1] - attacker.p[1]) > MELEE_HEIGHT + m.height) continue;
+      if (flat > reach || Math.abs(m.p[1] - y) > MELEE_HEIGHT + m.height) continue;
       if (!inFront(yaw, [m.p[0] - from[0], m.p[2] - from[2]], WEAPONS[weapon].melee!.arcDeg) && flat > 0.4) continue;
-      if (!lineOfSight(from, m.p, this.allBoxes())) continue;
+      if (!lineOfSight(from, m.p, this.allBoxes()) && !lineOfSight(from, [m.p[0], m.p[1] + m.height, m.p[2]], this.allBoxes())) continue;
       hits.push(m.id);
       this.hitMonster(m.id, hitDamage, attacker);
       if (!WEAPONS[weapon].melee!.cleave) break;
@@ -1016,14 +1026,19 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
   }
 
   // Send projectiles flying (checks done by the caller).
-  private launch(player: Player, spell: SpellId, clientO: Vec3, aim: Vec3, seq: number, now: number): void {
-    // Start from where the client says its eyes are, if that's believable:
-    // close to where we think they are, and not through a wall.
+  // Where the client says its eyes are, if that's believable: close to
+  // where we think they are, and not through a wall.
+  private castOrigin(player: Player, clientO: Vec3): Vec3 {
     const expected = eye(player.p);
-    const o = dist3(clientO, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, clientO, this.allBoxes()) ? clientO : expected;
+    return dist3(clientO, expected) <= CAST_ORIGIN_SLACK && lineOfSight(expected, clientO, this.allBoxes()) ? clientO : expected;
+  }
+
+  private launch(player: Player, spell: SpellId, clientO: Vec3, aim: Vec3, seq: number, now: number): void {
+    const o = this.castOrigin(player, clientO);
     const caster = player.conn.id;
+    const rewind = player.conn.isBot ? 0 : Math.min(MAX_REWIND_MS, VIEW_DELAY_MS + player.conn.rtt);
     castDirections(spell, aim).forEach((d, k) => {
-      const p: Projectile = { id: nextSpellId++, caster, spell, o, d, t: 0, p: o };
+      const p: Projectile = { id: nextSpellId++, caster, spell, o, d, t: 0, p: o, rewind };
       this.projectiles.set(p.id, p);
       this.broadcast({ t: "spell", id: p.id, caster, seq, k, spell, o, d, time: now });
     });
@@ -1052,7 +1067,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
       const casterPlayer = this.players.get(byMonster ? (owner ?? -1) : spell.caster) ?? null;
       for (const target of this.players.values()) {
         if (target.conn.id === spell.caster || target.conn.id === owner || !this.canBeHit(target.conn.id) || this.allies(casterPlayer, target) || (byMonster && target.conn.isAdmin)) continue;
-        const t = segmentHitsPlayer(spell.p, to, target.p, def.radius, target.crouch);
+        const t = segmentHitsPlayer(spell.p, to, spell.rewind ? this.seenAt(target, spell.rewind) : target.p, def.radius, target.crouch);
         if (t !== null && (hitT === null || t < hitT)) {
           hitT = t;
           hitPlayer = target;
@@ -1258,10 +1273,24 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     this.broadcast({ t: "pickups", items: this.pickupList() });
   }
 
+  // Where a player was `ago` ms back (between the moves we heard).
+  private seenAt(target: Player, ago: number): Vec3 {
+    const list = this.history.get(target.conn.id);
+    if (!list?.length) return target.p;
+    const when = Date.now() - ago;
+    if (when >= list[list.length - 1].time) return target.p;
+    for (let i = list.length - 1; i > 0; i--) {
+      const a = list[i - 1];
+      const b = list[i];
+      if (a.time <= when) return lerp3(a.p, b.p, (when - a.time) / (b.time - a.time || 1));
+    }
+    return list[0].p;
+  }
+
   protected override onPlayerMoved(player: Player, from: Vec3, to: Vec3, now: number): void {
     const list = this.history.get(player.conn.id) ?? [];
     list.push({ time: now, p: to });
-    while (list.length && now - list[0].time > MELEE_HISTORY_MS) list.shift();
+    while (list.length && now - list[0].time > HISTORY_KEEP_MS) list.shift();
     this.history.set(player.conn.id, list);
     if (this.state !== "playing" || !this.alive.has(player.conn.id)) return;
     this.trackFall(player, from, to, now);

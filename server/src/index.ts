@@ -180,7 +180,14 @@ function onConnection(conn: Connection): void {
   const helloTimer = setTimeout(() => conn.kick("No hello received."), HELLO_TIMEOUT_MS);
   let saidHello = false;
 
-  socket.on("pong", () => (conn.alive = true));
+  socket.on("pong", () => {
+    conn.alive = true;
+    const sample = Date.now() - conn.pingAt;
+    if (conn.pingAt && sample < 5000) conn.rtt = conn.measured ? conn.rtt * 0.6 + sample * 0.4 : sample;
+    conn.measured = true;
+  });
+  conn.pingAt = Date.now();
+  socket.ping(); // a first round-trip time right away
 
   socket.on("message", (data, isBinary) => {
     if (!conn.floodBudget.take()) return conn.kick("Too many messages.");
@@ -226,6 +233,7 @@ setInterval(() => {
       continue;
     }
     conn.alive = false;
+    conn.pingAt = Date.now();
     conn.socket.ping();
   }
 }, HEARTBEAT_MS);
