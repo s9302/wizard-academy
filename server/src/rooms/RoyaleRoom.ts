@@ -624,6 +624,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
 
   protected setArena(level: Level): void {
     this.level = level;
+    this.boxCache = null; // the old arena's walls (spells were landing on its floors)
     this.projectiles.clear();
     this.pickups.clear();
     this.respawnAt.clear();
