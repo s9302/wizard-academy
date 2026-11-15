@@ -19,3 +19,6 @@ FROM caddy:2-alpine
 RUN cp /usr/bin/caddy /tmp/caddy && mv /tmp/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/client/dist /srv
+# Non-root in the image itself too, not just via docker-compose's `user:`,
+# so it stays unprivileged however it's started.
+USER 65534:65534

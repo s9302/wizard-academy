@@ -58,7 +58,7 @@ export class BossRoom extends RoyaleRoom {
       },
       summoned: () => this.monsters.countOf("wolf"),
     });
-    this.refreshLeaderboard().catch((err) => console.error(`[${this.name}] leaderboard load failed:`, err));
+    this.refreshLeaderboard().catch((err) => console.error("[%s] leaderboard load failed:", this.name, err));
   }
 
   private async refreshLeaderboard(): Promise<void> {
@@ -190,7 +190,7 @@ export class BossRoom extends RoyaleRoom {
             this.broadcast({ t: "leaderboard", entries: this.board });
           }
         })
-        .catch((err) => console.error(`[${this.name}] saving the clear for ${account.username} failed:`, err));
+        .catch((err) => console.error("[%s] saving the clear for %s failed:", this.name, account.username, err));
     }
   }
 }

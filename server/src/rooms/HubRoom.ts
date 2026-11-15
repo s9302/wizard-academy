@@ -69,7 +69,7 @@ export class HubRoom extends Room {
         conn.send({ t: "loadoutSaved", ...loadout });
         if (conn.room === this) this.broadcast({ t: "look", id: conn.id, look: conn.look }, conn.id);
       })
-      .catch((err) => console.error(`saving loadout for ${account.username} failed:`, err));
+      .catch((err) => console.error("saving loadout for %s failed:", account.username, err));
   }
 
   protected override onTick(now: number): void {

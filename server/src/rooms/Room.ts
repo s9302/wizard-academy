@@ -174,7 +174,7 @@ export abstract class Room {
     if (!account || account.isAdmin || xp <= 0) return; // admins don't level
     awardXp(account.id, xp, reason)
       .then((total) => player.conn.send({ t: "xp", amount: xp, reason, total }))
-      .catch((err) => console.error(`XP award failed for ${account.username}:`, err));
+      .catch((err) => console.error("XP award failed for %s:", account.username, err));
   }
 
   // Move a player. The client applies it and starts tagging its moves with

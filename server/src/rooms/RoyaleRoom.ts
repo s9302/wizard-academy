@@ -782,7 +782,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     if (!account || player.conn.isBot) return;
     if (!abilityAllowed(cls, e, account.unlocked) || !abilityAllowed(cls, r, account.unlocked)) return;
     account.loadout = { ...account.loadout, abil: { ...account.loadout.abil, [cls]: [e, r] } };
-    saveLoadout(account.id, account.loadout).catch((err) => console.error(`saving abilities for ${account.username} failed:`, err));
+    saveLoadout(account.id, account.loadout).catch((err) => console.error("saving abilities for %s failed:", account.username, err));
     if (this.fighters.get(player.conn.id)?.cls === cls) player.conn.send({ t: "abilitySet", e, r });
   }
 
@@ -853,7 +853,7 @@ export class RoyaleRoom extends RoundRoom<RoyaleBot> {
     const account = player.conn.account;
     if (account) {
       account.loadout = { ...account.loadout, cls };
-      saveLoadout(account.id, account.loadout).catch((err) => console.error(`saving class for ${account.username} failed:`, err));
+      saveLoadout(account.id, account.loadout).catch((err) => console.error("saving class for %s failed:", account.username, err));
     }
     const fighting = this.state === "playing" && this.alive.has(id);
     if (!fighting) this.resetFighter(player);

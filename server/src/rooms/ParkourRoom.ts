@@ -58,7 +58,7 @@ export class ParkourRoom extends Room {
     super(info, level);
     if (!level.course) throw new Error(`${level.id} has no course`);
     this.course = level.course;
-    this.refreshLeaderboard().catch((err) => console.error(`[${this.name}] leaderboard load failed:`, err));
+    this.refreshLeaderboard().catch((err) => console.error("[%s] leaderboard load failed:", this.name, err));
     const bossTask = this.course.tasks?.find((t) => t.kind === "boss");
     if (bossTask && bossTask.kind === "boss") {
       this.bossTask = bossTask;
@@ -289,7 +289,7 @@ export class ParkourRoom extends Room {
         }
       })
       .catch((err) => {
-        console.error(`[${this.name}] saving finish for ${account.username} failed:`, err);
+        console.error("[%s] saving finish for %s failed:", this.name, account.username, err);
         player.conn.send({ t: "finish", time, best: time, newBest: false, firstClear: false });
       });
   }

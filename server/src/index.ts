@@ -221,7 +221,7 @@ function onConnection(conn: Connection): void {
     rooms.disconnect(conn);
   });
 
-  socket.on("error", (err) => console.warn(`socket error #${conn.id}:`, err.message));
+  socket.on("error", (err) => console.warn("socket error #%s:", conn.id, err.message));
 }
 
 // Heartbeat: ping every client; any that didn't answer the previous ping is gone
