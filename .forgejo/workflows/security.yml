@@ -1,0 +1,61 @@
+# Security scans, run on the self-hosted Forgejo runner (ci).
+#   gitleaks: secrets anywhere in git history
+#   semgrep:  static analysis for bug classes (injection, XSS, unsafe crypto, ...)
+#   trivy:    known-vulnerable dependencies and IaC/Dockerfile misconfigurations
+# Tool versions, checksums and the checkout action's commit are pinned so a
+# compromised "latest" or a moved tag can't run here.
+name: security
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"   # weekly, so new CVEs in old dependencies still surface
+
+jobs:
+  gitleaks:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks 8.30.1
+        run: |
+          curl -fsSLo /tmp/gl.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gl.tgz" | sha256sum -c -
+          tar -xzf /tmp/gl.tgz -C /usr/local/bin gitleaks
+      - name: Scan full history
+        run: gitleaks git --redact --verbose --no-banner .
+
+  semgrep:
+    runs-on: docker
+    container:
+      image: semgrep/semgrep:1.185.0
+    steps:
+      - name: Checkout
+        # Values go through env, never ${{ }} inside the script, so a crafted
+        # branch name can't inject shell commands.
+        env:
+          TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          git -c http.extraHeader="Authorization: token $TOKEN" clone --depth 1 \
+            --branch "$REF" -- "$SERVER/$REPO.git" src
+      - name: Scan
+        working-directory: src
+        run: semgrep scan --config p/default --metrics=off --error --exclude-rule generic.secrets.security.detected-generic-secret
+
+  trivy:
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install trivy 0.76.2
+        run: |
+          curl -fsSLo /tmp/trivy.tgz https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  /tmp/trivy.tgz" | sha256sum -c -
+          tar -xzf /tmp/trivy.tgz -C /usr/local/bin trivy
+      - name: Dependencies and misconfigurations
+        run: trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress .
