@@ -961,3 +961,10 @@ npm run typecheck
 The dev server doesn't gate the page, but the API and WebSocket still need a
 session: open `http://localhost:5173/auth/check` once and enter the PIN, then
 log in on the game page.
+
+## Music
+
+The background music (`client/public/audio/music/`) isn't included in the
+public copy of this repo, only in the private one. Without it the game still
+runs, just without music. Sound effects are CC0 and are included (see
+`client/public/audio/CREDITS.md`).
